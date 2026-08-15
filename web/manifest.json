@@ -1,6 +1,6 @@
 {
-    "name": "smartcommute_backend",
-    "short_name": "smartcommute_backend",
+    "name": "smartcommute_app",
+    "short_name": "smartcommute_app",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,122 +1,88 @@
+// lib/main.dart
+//
+// Emae D. Calonia — UI preview entry point.
+//
+// This is a MOCK ROUTER, not the real F4 App Router & Navigation Guards
+// (lib/router/app_router.dart) from the system layout spec. It exists so the
+// four auth screens can be clicked through and previewed with no backend,
+// no provider package, and no AuthProvider.checkSession() gate.
+//
+// TODO(Francis): replace this file's routing with the real F4 app_router.dart
+// (go_router or Navigator 2.0 + role/guest guards), and replace every
+// `// TODO(Francis)` callback below with the matching F1 ApiService / F3
+// AuthProvider call. Nothing in lib/widgets or lib/screens needs to change to
+// do that — the screens only expose plain callback params, they don't know
+// about ApiService, Provider, or Dio.
+
 import 'package:flutter/material.dart';
+import 'config/theme_config.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/verify_otp_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const SmartCommuteApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SmartCommuteApp extends StatelessWidget {
+  const SmartCommuteApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      title: 'Smart Commute',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      // TODO(Francis): swap `home:` for SplashScreen -> AuthProvider.checkSession()
+      // once the real router + auth state exist. For this UI preview we go
+      // straight to LoginScreen.
+      initialRoute: '/login',
+      routes: {
+        '/login': (context) => LoginScreen(
+              // TODO(Francis): onLogin -> AuthProvider.login(usernameOrEmail, password)
+              onLogin: null,
+              // TODO(Francis): onGoogleSignIn -> AuthProvider.loginWithGoogle(idToken)
+              onGoogleSignIn: null,
+              // TODO(Francis): onGuestContinue -> AuthProvider.continueAsGuest()
+              onGuestContinue: null,
+              onForgotPassword: () =>
+                  Navigator.of(context).pushNamed('/forgot-password'),
+              onCreateAccount: () => Navigator.of(context).pushNamed('/register'),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+        '/register': (context) => RegisterScreen(
+              // TODO(Francis): onRegister -> ApiService.register(UserCreate(...))
+              onRegister: null,
+              // TODO(Francis): onGoogleSignIn -> ApiService.loginWithGoogle(idToken)
+              onGoogleSignIn: null,
+              onBack: () => Navigator.of(context).pop(),
+            ),
+        '/forgot-password': (context) => ForgotPasswordScreen(
+              onBack: () => Navigator.of(context).pop(),
+              // Preview-only: pretend the OTP send succeeded and jump straight to
+              // VerifyOtpScreen so the click-through flow stays demoable.
+              // TODO(Francis): replace with a real await ApiService call; only
+              // navigate to /verify-otp on success, and surface failures (e.g.
+              // "This email is not registered" per the Web_Forgot_Password /
+              // Web_Error mockups) via the screen's built-in ErrorBanner instead.
+              onSendOtp: (email) async {
+                await Navigator.of(context)
+                    .pushNamed('/verify-otp', arguments: email);
+              },
+            ),
+        '/verify-otp': (context) {
+          final email =
+              ModalRoute.of(context)?.settings.arguments as String? ??
+                  'account@gmail.com';
+          return VerifyOtpScreen(
+            email: email,
+            onBack: () => Navigator.of(context).pop(),
+            // TODO(Francis): onVerifyOtp -> AuthService.verify_otp() +
+            // reset_password() flow, then Navigator back to /login on success.
+            onVerifyOtp: null,
+          );
+        },
+      },
     );
   }
 }
