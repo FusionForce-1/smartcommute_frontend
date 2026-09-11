@@ -1,12 +1,12 @@
 // lib/widgets/auth/auth_text_field.dart
 //
-// NOT one of the 11 official E3 reusable widgets — screen-composition helper
-// used by all four auth screens: a "Label" caption above a pill/rounded
-// TextFormField, matching the mockups. Purely presentational — validation
-// hooks are exposed via [validator] but no network/service calls happen here.
+// Label + rounded TextFormField matching the auth mockups.
+// Visibility icons come from AppIcons.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../config/theme_config.dart';
+import '../../constants/app_icons.dart';
 
 class AuthTextField extends StatefulWidget {
   const AuthTextField({
@@ -19,6 +19,8 @@ class AuthTextField extends StatefulWidget {
     this.keyboardType,
     this.validator,
     this.pill = false,
+    this.maxLength,
+    this.inputFormatters,
   });
 
   final String label;
@@ -28,10 +30,9 @@ class AuthTextField extends StatefulWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
-
-  /// Use the fuller pill radius (Forgot Password / Verify OTP screens) vs the
-  /// standard field radius (Login / Register screens).
   final bool pill;
+  final int? maxLength;
+  final List<TextInputFormatter>? inputFormatters;
 
   @override
   State<AuthTextField> createState() => _AuthTextFieldState();
@@ -53,7 +54,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
           obscureText: _obscured,
           keyboardType: widget.keyboardType,
           validator: widget.validator,
+          maxLength: widget.maxLength,
+          inputFormatters: widget.inputFormatters,
           decoration: InputDecoration(
+            counterText: '',
             hintText: widget.hint,
             prefixIcon: widget.prefixIcon != null
                 ? Icon(widget.prefixIcon, color: Colors.grey.shade500)
@@ -62,8 +66,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
                 ? IconButton(
                     icon: Icon(
                       _obscured
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
+                          ? AppIcons.passwordHidden
+                          : AppIcons.passwordVisible,
                       color: Colors.grey.shade500,
                     ),
                     onPressed: () => setState(() => _obscured = !_obscured),
@@ -71,11 +75,17 @@ class _AuthTextFieldState extends State<AuthTextField> {
                 : null,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
-              borderSide: const BorderSide(color: AppColors.secondary, width: 1.2),
+              borderSide:
+                  const BorderSide(color: AppColors.secondary, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
-              borderSide: const BorderSide(color: AppColors.primary, width: 1.6),
+              borderSide:
+                  const BorderSide(color: AppColors.primary, width: 1.6),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radius),
+              borderSide: const BorderSide(color: AppColors.error),
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
@@ -88,10 +98,11 @@ class _AuthTextFieldState extends State<AuthTextField> {
   }
 }
 
-/// "── or ──" divider used between the Google button and the email/password
-/// form on Login and Register.
+/// "── OR ──" divider used between email/password actions and Google.
 class OrDivider extends StatelessWidget {
-  const OrDivider({super.key});
+  const OrDivider({super.key, this.label = 'OR'});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +111,14 @@ class OrDivider extends StatelessWidget {
         Expanded(child: Divider(color: Colors.grey.shade300)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-          child: Text('or', style: TextStyle(color: Colors.grey.shade500)),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
         Expanded(child: Divider(color: Colors.grey.shade300)),
       ],

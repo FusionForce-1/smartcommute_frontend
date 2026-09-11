@@ -1,0 +1,75 @@
+/* css/layout.css
+ *
+ * Page-level layout: the two-tone (light top / teal bottom, big rounded
+ * corner cut) background used behind every auth screen, plus the centered
+ * card that straddles the boundary — matching Web_Login / Web_Register
+ * (full-bleed) and Web_Forgot_Password / Web_Enter_OTP (inset "windowed"
+ * frame with drop shadow) mockups.
+ */
+
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Full-bleed variant: Login / Register ---------- */
+
+.split-bg {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-secondary);
+  overflow: hidden;
+}
+
+.split-bg__top {
+  position: absolute;
+  inset: 0;
+  height: 75%; /* pixel-measured: boundary sits at 74.8% of full page height */
+  background: var(--color-bg-white);
+  /* Pixel-measured: BOTH bottom corners get a modest rounded cut (the curve
+     fully resolves within ~5% of the width from each edge) — not one large
+     radius on the left only. */
+  border-bottom-left-radius: 130px;
+  border-bottom-right-radius: 130px;
+}
+
+.split-bg__content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-bg__center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg) var(--space-md) var(--space-xl);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 640px) {
+  .brand-header {
+    padding: var(--space-sm);
+  }
+
+  .brand-header__tagline {
+    font-size: 15px;
+  }
+
+  .auth-card {
+    padding: var(--space-md);
+    border-radius: 20px;
+  }
+
+  .split-bg__top {
+    border-bottom-left-radius: 60px;
+    border-bottom-right-radius: 60px;
+  }
+}

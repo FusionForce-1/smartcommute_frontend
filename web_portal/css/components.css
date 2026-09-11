@@ -1,0 +1,400 @@
+/* css/components.css
+ *
+ * Reusable component styles for the auth screens. These are the web-portal
+ * equivalent of Emae's Flutter widget catalog (§E3), but scoped to what the
+ * Login/Register/Forgot-Password/Verify-OTP screens actually need — the
+ * official §E3 (11 widgets: VehicleMarker, RouteCard, ETAPanel, ...) and §E4
+ * (12 Operator/Admin portal components: Fleet Map Panel, User Management
+ * Table, ...) catalogs are both for screens outside this request's scope
+ * (map/fleet/admin dashboards), so they aren't reproduced here — building
+ * fake versions of e.g. VehicleMarker for a login page wouldn't mean
+ * anything. What's below is param-only / stateless-by-default the same way
+ * those widgets are: no fetch calls live inside any of these classes or the
+ * JS builder functions in js/components.js.
+ */
+
+/* ---------- Brand header (logo + tagline) ---------- */
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.brand-header__lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 72px;
+  height: 52px;
+  display: block;
+}
+
+.brand-wordmark {
+  display: flex;
+  flex-direction: column;
+  line-height: 0.95;
+}
+
+.brand-wordmark__smart {
+  font-weight: 800;
+  color: var(--color-primary);
+  font-size: 22px;
+  letter-spacing: 0.2px;
+}
+
+.brand-wordmark__commute {
+  font-weight: 600;
+  color: var(--color-secondary);
+  font-size: 15px;
+  letter-spacing: 0.6px;
+}
+
+.brand-header__logo {
+  height: 76px;
+  width: auto;
+  display: block;
+}
+
+.brand-header__tagline {
+  color: var(--color-text-secondary);
+  font-size: 18px;
+  font-weight: 500;
+  text-align: right;
+  max-width: 42%;
+}
+
+/* ---------- Card ---------- */
+
+.auth-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 440px;
+  background: var(--color-bg-white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-lg);
+  margin: 0 auto;
+}
+
+.auth-card--register {
+  max-width: 480px;
+}
+
+.google-g {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.sc-icon {
+  display: inline-flex;
+  width: 1.25em;
+  height: 1.25em;
+}
+
+.sc-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.google-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1.5px solid #E1E4E8;
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-bottom: var(--space-md);
+}
+
+.google-account-chip__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.google-account-chip__text span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.google-account-chip__text strong {
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border: none;
+  background: none;
+  color: var(--color-secondary);
+  padding: 4px;
+  display: flex;
+}
+
+.modal-close .sc-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.auth-card__title {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--color-text-primary);
+}
+
+.auth-card__subtitle {
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  margin: 0 0 var(--space-md);
+}
+
+/* Centered variant used by ForgotPassword / VerifyOtp (icon badge + heading) */
+.auth-card--centered {
+  text-align: center;
+}
+
+.popup-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto var(--space-sm);
+}
+
+.popup-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.popup-icon .sc-icon {
+  width: 56px;
+  height: 56px;
+}
+
+/* ---------- Inputs ---------- */
+
+.field-group {
+  margin-bottom: var(--space-sm);
+  text-align: left;
+}
+
+.field-group__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--color-text-primary);
+}
+
+.field-group__input-wrap {
+  position: relative;
+}
+
+.field-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-button);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-white);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.field-input:focus {
+  border-color: var(--color-primary);
+}
+
+.field-input::placeholder {
+  color: #9AA0A6;
+}
+
+.field-input--with-toggle {
+  padding-right: 44px;
+}
+
+.field-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 4px;
+  color: #9AA0A6;
+  display: flex;
+}
+
+.field-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Two-column row (First name / Last name) */
+.field-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.field-row .field-group {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 15px 20px;
+  border-radius: var(--radius-button);
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  transition: filter 0.15s ease;
+}
+
+.btn:hover {
+  filter: brightness(0.95);
+}
+
+.btn-primary {
+  background: var(--color-secondary);
+  color: #fff;
+}
+
+.btn-outline {
+  background: #fff;
+  color: var(--color-text-secondary);
+  border: 1.5px solid #E1E4E8;
+  font-weight: 500;
+}
+
+.btn-google {
+  background: #fff;
+  border: 1.5px solid #E1E4E8;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.btn-google svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- "or" divider ---------- */
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+  color: #9AA0A6;
+  font-size: 14px;
+}
+
+.or-divider::before,
+.or-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #E1E4E8;
+}
+
+/* ---------- Error banner ---------- */
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border-radius: var(--radius-button);
+  padding: 12px 16px;
+  font-size: 14px;
+  margin: var(--space-sm) 0;
+}
+
+/* Higher specificity than `.error-banner` alone so the native `hidden`
+   attribute (toggled via el.hidden = true/false in main.js) actually wins
+   instead of being silently overridden by the display:flex above. */
+.error-banner[hidden] {
+  display: none;
+}
+
+.error-banner svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* ---------- Options row (Remember me / Forgot password) ---------- */
+
+.options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+  font-size: 14px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-secondary);
+}
+
+.link-inline {
+  color: var(--color-secondary);
+  font-weight: 500;
+}
+
+/* ---------- Bottom link row ("Don't have an account? Register") ---------- */
+
+.bottom-link-row {
+  text-align: center;
+  margin-top: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: 15px;
+}
+
+.bottom-link-row a {
+  font-weight: 600;
+}
+
+/* Stacked button group (e.g. Send OTP + Cancel, Verify OTP + Back) */
+.btn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Utility */
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }

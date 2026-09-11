@@ -114,6 +114,70 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------
+  // REGISTER (commuter) — POST /auth/register
+  // ---------------------------------------------------------------
+  Future<void> registerCommuter({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      final parts = fullName.trim().split(RegExp(r'\s+'));
+      final firstName = parts.isNotEmpty ? parts.first : fullName;
+      final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+      await _apiService.register(
+        UserCreate(
+          username: email.trim().split('@').first,
+          email: email.trim(),
+          password: password,
+          firstName: firstName,
+          lastName: lastName,
+        ),
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // FORGOT PASSWORD — POST /auth/forgot-password
+  // ---------------------------------------------------------------
+  Future<void> sendPasswordResetOtp(String email) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _apiService.sendPasswordResetOtp(email);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // VERIFY OTP / RESET — POST /auth/reset-password
+  // ---------------------------------------------------------------
+  // VerifyOtpScreen only collects the 6-digit code. A new-password step
+  // is not in Emae's mockups; the mock adapter accepts an empty password
+  // for preview. TODO: Velez — collect new_password before calling live API.
+  Future<void> verifyOtpAndResetPassword({
+    required String email,
+    required String otp,
+    String newPassword = '',
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _apiService.verifyOtpAndResetPassword(email, otp, newPassword);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
   // LOGOUT
   // ---------------------------------------------------------------
   Future<void> logout() async {

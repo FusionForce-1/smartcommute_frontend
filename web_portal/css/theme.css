@@ -1,0 +1,95 @@
+/* css/theme.css
+ *
+ * Emae D. Calonia — E1. Visual Style Guide, ported to CSS custom properties.
+ * Source: SmartCommute_System_Layout.docx §E1 (config/theme_config.dart + css/main.css)
+ *
+ * This is the single source of truth for color / type / radius / spacing /
+ * shadow tokens across the web portal. Component and layout CSS should
+ * reference var(--...) here rather than hard-coding values.
+ */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/InterVariable.ttf') format('truetype-variations');
+  font-weight: 100 900; /* variable font: one file covers every weight we use */
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* --- Color tokens ---
+     Pixel-sampled directly from Web_Login.png / Web_Forgot_Password.png /
+     Web_Enter_OTP.png / Web_Error.png / the source logo file — not eyeballed,
+     not carried over from the §E1 doc token guesses (which were off). */
+  --color-primary: #1A3C6E;      /* Deep Navy — Visual Style Guide */
+  --color-secondary: #2E86AB;    /* Teal Blue — Visual Style Guide */
+  --color-accent: #F5A623;       /* Amber — Visual Style Guide */
+  --color-success: #27AE60;      /* Not present in these 4 screens; kept from §E1 doc pending a real sample */
+  --color-error: #D72F33;        /* Sampled from Web_Error.png error text */
+  --color-error-bg: #FEE2E1;     /* Sampled from Web_Error.png error banner background */
+
+  --color-bg-ice-blue: #EBF4FA;
+  --color-bg-white: #FFFFFF;
+  --color-bg-page-gray: #CFCFCF; /* Sampled from the Forgot Password / Verify OTP panel background */
+
+  --color-text-primary: #1A1A1A;   /* Sampled from "Login Now" / "Register Now" titles */
+  --color-text-secondary: #666666; /* Sampled from subtitle + tagline text (avg of #6B6A6A / #5C5C5C) */
+  --color-border: var(--color-secondary);
+
+  /* --- Typography (E1: Font (Web) = Inter, 400/600/700) --- */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* --- Radius tokens ---
+     NOTE: documented spec says 12px cards / 8px buttons / 24px chips, but the
+     finalized Web_* mockups render a larger card radius (~28px) and a
+     moderate (not full-pill) button radius (~12px) — this file follows the
+     mockups; flag to the team so §E1 can be reconciled either direction. */
+  --radius-card: 28px;
+  --radius-button: 12px;
+  --radius-chip: 24px;
+
+  /* --- Spacing (8px grid) --- */
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
+  --space-lg: 32px;
+  --space-xl: 48px;
+
+  /* --- Elevation (E1: 0 2px 8px rgba(0,0,0,0.12)) --- */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: var(--font-family);
+  color: var(--color-text-primary);
+  background: var(--color-bg-white);
+}
+
+#app {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: var(--font-family);
+  cursor: pointer;
+}
+
+input {
+  font-family: var(--font-family);
+}

@@ -1,15 +1,11 @@
 // lib/widgets/auth/google_signin_button.dart
 //
-// NOT one of the 11 official E3 reusable widgets — screen-composition helper
-// for the "Continue with Google" button shown on Login and Register.
-//
-// This widget only renders the button and fires [onPressed]. The actual
-// google_sign_in flow + POST /auth/google call belongs to Francis
-// (F1 ApiService.loginWithGoogle / F3 AuthProvider.loginWithGoogle) — see the
-// TODO markers in the screens that use this button.
+// Presentational "Continue with Google" control. The google_sign_in SDK
+// flow + POST /auth/google belongs to Velez (ApiService / AuthProvider).
 
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
+import '../../constants/app_icons.dart';
 
 class GoogleSignInButton extends StatelessWidget {
   const GoogleSignInButton({super.key, required this.onPressed});
@@ -29,23 +25,44 @@ class GoogleSignInButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.button),
         ),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // "G" glyph approximation so this widget needs no image asset.
-          // Swap for the official Google "G" logo asset if brand guidelines require it.
-          Text(
-            'G',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF4285F4),
-            ),
+          Image.asset(
+            AppIcons.googleAsset,
+            width: 20,
+            height: 20,
+            errorBuilder: (_, __, ___) => const _GoogleG(),
           ),
-          SizedBox(width: 10),
-          Text('Continue with Google',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 10),
+          const Text(
+            'Continue with Google',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _GoogleG extends StatelessWidget {
+  const _GoogleG();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 20,
+      height: 20,
+      child: Center(
+        child: Text(
+          'G',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF4285F4),
+            height: 1,
+          ),
+        ),
       ),
     );
   }

@@ -1,15 +1,7 @@
 // lib/screens/auth/register_screen.dart
 //
-// E2. Flutter Mobile App Screens — RegisterScreen
-// File: screens/auth/register_screen.dart · Role: New commuters
-// "Teal header banner 'CREATE YOUR ACCOUNT'. Scrollable form: username,
-// first name, last name, email, password, confirm password. 'Register' CTA,
-// 'Continue with Google' alternative. Commuter role only — no role selector
-// on this public screen."
-//
-// UI-only.TODO:
-//   onRegister       -> ApiService.register(UserCreate) -> POST /auth/register
-//   onGoogleSignIn    -> ApiService.loginWithGoogle(idToken) -> POST /auth/google
+// Emae D. Calonia — Flutter Register (Commuter only).
+// Fields: Full Name, Email, Password, Repeat Password. No role selector.
 
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
@@ -28,17 +20,16 @@ class RegisterScreen extends StatefulWidget {
     this.onBack,
   });
 
-  /// TODO: wire to ApiService.register(UserCreate{username, email,
-  /// password, first_name, last_name, role: "commuter"}).
+  /// TODO: Velez — AuthProvider.registerCommuter(fullName, email, password)
+  /// → ApiService.register(UserCreate{..., role: "commuter"})
+  /// → POST /auth/register
   final Future<void> Function(
-    String username,
-    String firstName,
-    String lastName,
+    String fullName,
     String email,
     String password,
   )? onRegister;
 
-  /// TODO: wire to ApiService.loginWithGoogle(idToken).
+  /// TODO: Velez — AuthProvider.loginWithGoogle(idToken) → POST /auth/google
   final Future<void> Function()? onGoogleSignIn;
 
   final VoidCallback? onBack;
@@ -49,9 +40,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController();
-  final _firstName = TextEditingController();
-  final _lastName = TextEditingController();
+  final _fullName = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _repeatPassword = TextEditingController();
@@ -61,9 +50,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    _username.dispose();
-    _firstName.dispose();
-    _lastName.dispose();
+    _fullName.dispose();
     _email.dispose();
     _password.dispose();
     _repeatPassword.dispose();
@@ -82,37 +69,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _errorMessage = null;
     });
 
-    if (widget.onRegister != null) {
-      try {
-        await widget.onRegister!(
-          _username.text.trim(),
-          _firstName.text.trim(),
-          _lastName.text.trim(),
-          _email.text.trim(),
-          _password.text,
-        );
-      } catch (e) {
-        setState(() => _errorMessage = 'Registration failed. Please try again.');
-      }
-    } else {
-      await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      // TODO: Velez — after 201, route to Login and notifyListeners()
+      await widget.onRegister?.call(
+        _fullName.text.trim(),
+        _email.text.trim(),
+        _password.text,
+      );
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Preview only — Register not wired yet.')),
+        setState(
+          () => _errorMessage = 'Registration failed. Please try again.',
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _handleGoogle() async {
-    if (widget.onGoogleSignIn != null) {
-      await widget.onGoogleSignIn!();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preview only — Google sign-in not wired yet.')),
-      );
+    try {
+      await widget.onGoogleSignIn?.call();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Google sign-in failed. Try again.');
+      }
     }
   }
 
@@ -126,50 +107,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AuthHeaderBanner(title: 'CREATE YOUR ACCOUNT', onBack: widget.onBack),
+              AuthHeaderBanner(
+                title: 'CREATE YOUR ACCOUNT',
+                onBack: widget.onBack,
+                centerTitle: true,
+              ),
               Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                ),
                 child: Form(
                   key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Center(child: SmartCommuteLogo(height: 110)),
+                      const Center(child: SmartCommuteLogo(height: 120)),
                       const SizedBox(height: AppSpacing.md),
                       if (_errorMessage != null) ...[
                         ErrorBanner(message: _errorMessage!),
                         const SizedBox(height: AppSpacing.sm),
                       ],
                       AuthTextField(
-                        label: 'Username',
-                        hint: 'Username',
-                        controller: _username,
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Choose a username' : null,
-                      ),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: AuthTextField(
-                              label: 'First Name',
-                              hint: 'First Name',
-                              controller: _firstName,
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Expanded(
-                            child: AuthTextField(
-                              label: 'Last Name',
-                              hint: 'Last Name',
-                              controller: _lastName,
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty) ? 'Required' : null,
-                            ),
-                          ),
-                        ],
+                        label: 'Full Name',
+                        hint: 'Full Name',
+                        controller: _fullName,
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Enter your full name'
+                            : null,
                       ),
                       AuthTextField(
                         label: 'Email Address',
@@ -194,8 +161,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         hint: 'Repeat Password',
                         controller: _repeatPassword,
                         obscureText: true,
-                        validator: (v) =>
-                            (v == null || v.isEmpty) ? 'Repeat your password' : null,
+                        validator: (v) => (v == null || v.isEmpty)
+                            ? 'Repeat your password'
+                            : null,
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       ElevatedButton(
@@ -206,7 +174,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const OrDivider(),
                       const SizedBox(height: AppSpacing.sm),
                       GoogleSignInButton(onPressed: _handleGoogle),
-                      const SizedBox(height: AppSpacing.md),
                     ],
                   ),
                 ),
