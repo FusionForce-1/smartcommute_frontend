@@ -37,14 +37,14 @@ class ApiService {
   // AUTH (6 methods)
   // =================================================================
 
-  Future<TokenResponse> login(String usernameOrEmail, String password) async {
+  Future<TokenResponse> login(String email, String password) async {
     if (useAuthMocks) {
-      final tokens = await _authMocks.login(usernameOrEmail, password);
+      final tokens = await _authMocks.login(email, password);
       await _storeTokens(tokens);
       return tokens;
     }
     final response = await _dio.post('/auth/login', data: {
-      'username_or_email': usernameOrEmail,
+      'email': email.trim(),
       'password': password,
     });
     final tokens = TokenResponse.fromJson(response.data);

@@ -12,6 +12,8 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
 import '../screens/auth/verify_otp_screen.dart';
+import '../screens/commuter/commuter_dashboard.dart';
+import '../screens/driver/driver_dashboard.dart';
 
 class SmartCommuteAuthApp extends StatelessWidget {
   const SmartCommuteAuthApp({super.key});
@@ -30,6 +32,23 @@ class SmartCommuteAuthApp extends StatelessWidget {
   }
 }
 
+/// Routes to the role-appropriate test dashboard after authentication.
+void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = false}) {
+  Widget destination;
+  switch (role) {
+    case 'driver':
+      destination = const DriverDashboard();
+      break;
+    case 'commuter':
+    default:
+      destination = CommuterDashboard(isGuest: isGuest);
+      break;
+  }
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(builder: (_) => destination),
+  );
+}
+
 class LoginScreenHost extends StatelessWidget {
   const LoginScreenHost({super.key});
 
@@ -38,27 +57,19 @@ class LoginScreenHost extends StatelessWidget {
     final auth = context.read<AuthProvider>();
     return LoginScreen(
       onLogin: (email, password, rememberMe) async {
-        // TODO: Velez — after success, route by tokens.role (commuter vs driver)
         await auth.login(email, password, rememberMe: rememberMe);
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Signed in as ${auth.role ?? 'user'}')),
-        );
+        _openDashboardForRole(context, auth.role);
       },
       onGoogleSignIn: () async {
-        // TODO: Velez — replace 'preview-google-id-token' with google_sign_in
+        // TODO [Velez]: replace 'preview-google-id-token' with google_sign_in
         await auth.loginWithGoogle('preview-google-id-token');
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signed in with Google')),
-        );
+        _openDashboardForRole(context, auth.role);
       },
       onGuestContinue: () {
-        // TODO: Velez — AuthProvider.continueAsGuest() then open commuter map
         auth.continueAsGuest();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Continuing as guest')),
-        );
+        _openDashboardForRole(context, 'commuter', isGuest: true);
       },
       onForgotPassword: () {
         Navigator.of(context).push(

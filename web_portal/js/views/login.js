@@ -62,23 +62,30 @@ Router.register('login', {
       const password = document.getElementById('login-password').value;
       const rememberMe = document.getElementById('login-remember').checked;
 
-      // TODO: Velez — AuthModule.login → POST /auth/login
-      // On success: persist session, then route Operator vs Admin dashboards.
+      // TODO [Velez]: AuthModule.login → POST /auth/login, persist session
       try {
-        await AuthModule.login(email, password, rememberMe);
-        alert('Signed in (preview). TODO: Velez — route by role.');
+        const result = await AuthModule.login(email, password, rememberMe);
+        const role = result?.role || 'operator';
+        if (role === 'admin') {
+          window.location.href = '../admin/index.html';
+        } else {
+          window.location.href = '../operator/index.html';
+        }
       } catch (err) {
         const banner = document.querySelector('#login-error span');
-        if (banner) banner.textContent = err.message || 'Invalid username/email or password.';
+        if (banner) banner.textContent = err.message || 'Invalid email or password.';
         showError('login-error');
       }
     });
 
     document.getElementById('login-google').addEventListener('click', async () => {
-      // TODO: Velez — GIS id_token, then AuthModule.loginWithGoogle → POST /auth/google
+      // TODO [Velez]: GIS id_token, then AuthModule.loginWithGoogle → POST /auth/google
       try {
-        await AuthModule.loginWithGoogle('preview-google-id-token');
-        alert('Google sign-in (preview). TODO: Velez — route by role.');
+        const result = await AuthModule.loginWithGoogle('preview-google-id-token');
+        const role = result?.role || 'operator';
+        window.location.href = role === 'admin'
+          ? '../admin/index.html'
+          : '../operator/index.html';
       } catch (err) {
         alert(err.message || 'Google sign-in failed.');
       }

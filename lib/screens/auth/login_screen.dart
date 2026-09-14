@@ -78,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = 'Invalid username/email or password.');
+        setState(() => _errorMessage = 'Invalid email or password.');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -147,10 +147,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _emailController,
                               prefixIcon: AppIcons.person,
                               keyboardType: TextInputType.emailAddress,
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty)
-                                      ? 'Enter your email'
-                                      : null,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'Enter your email';
+                                }
+                                if (!v.contains('@')) {
+                                  return 'Enter a valid email';
+                                }
+                                return null;
+                              },
                             ),
                             AuthTextField(
                               label: 'Password',

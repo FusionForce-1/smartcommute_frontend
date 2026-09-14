@@ -92,7 +92,7 @@ class _DebugTestScreenState extends State<DebugTestScreen> {
                   ? null
                   : () => _runTest(
                       'login()',
-                      () => _apiService.login('testuser', 'testpassword123'),
+                      () => _apiService.login('commuter@gmail.com', 'password123'),
                     ),
               child: const Text('3. Test login() — needs a REAL test account'),
             ),

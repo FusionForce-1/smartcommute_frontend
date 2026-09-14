@@ -36,33 +36,27 @@ class TokenResponse {
 
 class UserModel {
   final String id;
-  final String username;
   final String email;
-  final String firstName;
-  final String lastName;
+  final String name;
   final String role;
   final bool isActive;
   final bool isVerified;
 
   UserModel({
     required this.id,
-    required this.username,
     required this.email,
-    required this.firstName,
-    required this.lastName,
+    required this.name,
     required this.role,
     required this.isActive,
     required this.isVerified,
   });
 
-  String get fullName => '$firstName $lastName';
+  String get fullName => name;
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
         id: json['id'],
-        username: json['username'],
         email: json['email'],
-        firstName: json['first_name'],
-        lastName: json['last_name'],
+        name: json['name'] ?? '',
         role: json['role'],
         isActive: json['is_active'],
         isVerified: json['is_verified'] ?? false,
@@ -72,27 +66,23 @@ class UserModel {
 // Used when SENDING a registration request — not parsed from JSON,
 // so it needs toJson() instead of fromJson().
 class UserCreate {
-  final String username;
   final String email;
   final String password;
-  final String firstName;
-  final String lastName;
+  final String name;
+  final String? role;
 
   UserCreate({
-    required this.username,
     required this.email,
     required this.password,
-    required this.firstName,
-    required this.lastName,
+    required this.name,
+    this.role,
   });
 
   Map<String, dynamic> toJson() => {
-        'username': username,
         'email': email,
         'password': password,
-        'first_name': firstName,
-        'last_name': lastName,
-        // role omitted — backend defaults new registrations to "commuter"
+        'name': name,
+        if (role != null) 'role': role,
       };
 }
 

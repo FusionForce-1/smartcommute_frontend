@@ -32,8 +32,8 @@ class AppIcons {
   static const IconData close = Icons.close;
 
   /// Google's "G" logo — not a Material icon; bundled as an asset.
-  /// Referenced instead of an IconData: Image.asset(AppIcons.googleAsset).
-  static const String googleAsset = 'assets/icons/google_logo.png';
+  /// Referenced instead of an IconData: SvgPicture.asset(AppIcons.googleAsset).
+  static const String googleAsset = 'assets/icons/google_logo.svg';
 
   // ---- Navigation / shared chrome ----
   static const IconData notificationBell = Icons.notifications_outlined;

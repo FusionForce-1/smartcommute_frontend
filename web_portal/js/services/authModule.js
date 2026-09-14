@@ -38,10 +38,10 @@ const AuthModule = (() => {
 
   function mockDispatch(method, path, body = {}) {
     if (method === 'POST' && path === '/auth/login') {
-      const id = String(body.email || body.username_or_email || '').trim().toLowerCase();
+      const id = String(body.email || '').trim().toLowerCase();
       const user = users[id];
       if (!user || user.password !== body.password) {
-        const err = new Error('Invalid username/email or password.');
+        const err = new Error('Invalid email or password.');
         err.statusCode = 401;
         throw err;
       }
@@ -109,7 +109,6 @@ const AuthModule = (() => {
   return {
     login: (email, password, rememberMe) =>
       request('POST', '/auth/login', {
-        username_or_email: email,
         email,
         password,
         remember_me: rememberMe,

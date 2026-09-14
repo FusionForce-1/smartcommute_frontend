@@ -4,6 +4,7 @@
 // flow + POST /auth/google belongs to Velez (ApiService / AuthProvider).
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 
@@ -28,11 +29,11 @@ class GoogleSignInButton extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(
+          SvgPicture.asset(
             AppIcons.googleAsset,
             width: 20,
             height: 20,
-            errorBuilder: (_, __, ___) => const _GoogleG(),
+            placeholderBuilder: (_) => const _GoogleG(),
           ),
           const SizedBox(width: 10),
           const Text(

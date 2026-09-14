@@ -68,12 +68,12 @@ class MockAuthAdapter {
 
   Future<void> _latency() => Future.delayed(networkDelay);
 
-  Future<TokenResponse> login(String usernameOrEmail, String password) async {
+  Future<TokenResponse> login(String email, String password) async {
     await _latency();
-    final user = _users[usernameOrEmail.trim().toLowerCase()];
+    final user = _users[email.trim().toLowerCase()];
     if (user == null || user.password != password) {
       throw MockAuthException(
-        'Invalid username/email or password.',
+        'Invalid email or password.',
         statusCode: 401,
       );
     }
@@ -94,19 +94,18 @@ class MockAuthAdapter {
     if (_users.containsKey(email)) {
       throw MockAuthException('Email is already registered.', statusCode: 409);
     }
+    final parts = data.name.trim().split(RegExp(r'\s+'));
     _users[email] = _MockUser(
       email: email,
       password: data.password,
       role: 'commuter',
-      firstName: data.firstName,
-      lastName: data.lastName,
+      firstName: parts.isNotEmpty ? parts.first : data.name,
+      lastName: parts.length > 1 ? parts.sublist(1).join(' ') : '',
     );
     return UserModel(
       id: 'mock-${_users.length}',
-      username: data.username,
       email: email,
-      firstName: data.firstName,
-      lastName: data.lastName,
+      name: data.name,
       role: 'commuter',
       isActive: true,
       isVerified: false,
