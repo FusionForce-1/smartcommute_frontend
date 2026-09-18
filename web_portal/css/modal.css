@@ -1,0 +1,39 @@
+/* css/modal.css
+ *
+ * Forgot Password and Verify OTP are a single popup flow launched from the
+ * Login page (not separate routed pages) — a plain white card (reusing
+ * .auth-card from components.css) floating over a dimmed backdrop, matching
+ * the reference popup screenshots. This file adds the fixed-position
+ * backdrop + centering; .modal-shell itself carries the .auth-card class so
+ * it picks up that styling directly rather than duplicating it here.
+ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 22, 32, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  z-index: 1000;
+  animation: modal-fade-in 0.15s ease;
+}
+
+@keyframes modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-shell {
+  position: relative;
+  max-height: 92vh;
+  overflow-y: auto;
+  width: min(440px, 100%);
+}
+
+@media (max-width: 640px) {
+  .modal-shell {
+    border-radius: 20px;
+  }
+}

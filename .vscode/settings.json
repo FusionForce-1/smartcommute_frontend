@@ -1,5 +1,11 @@
 {
     "svn.ignoreMissingSvnWarning": true,
     "cmake.sourceDirectory": "C:/Users/Brylle/OneDrive/Desktop/capstone project/smartcommute_backend/linux",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "files.exclude": {
+        "linux/": true
+    },
+    "C_Cpp.exclude": {
+        "**/linux/**": true
+    }
 }

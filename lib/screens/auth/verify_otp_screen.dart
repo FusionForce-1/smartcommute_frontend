@@ -1,16 +1,12 @@
 // lib/screens/auth/verify_otp_screen.dart
 //
-// E2. Flutter Mobile App Screens — VerifyOtpScreen
-// File: screens/auth/verify_otp_screen.dart · Role: All roles
-// "Teal header banner 'FORGOT PASSWORD'. Envelope icon, 'Enter OTP' heading,
-// masked destination email, 6-digit code field, 'Verify OTP' button."
-//
-// UI-only.TODO:
-//   onVerifyOtp -> AuthService.verify_otp(email, otp) + reset_password() ->
-//                  POST /auth/reset-password -> HTTP 200
+// Emae D. Calonia — Flutter Verify OTP.
+// Envelope icon, destination email, 6-digit code, Verify OTP.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../config/theme_config.dart';
+import '../../constants/app_icons.dart';
 import '../../widgets/auth/auth_header_banner.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
@@ -24,11 +20,12 @@ class VerifyOtpScreen extends StatefulWidget {
     this.onBack,
   });
 
-  /// The email the OTP was (supposedly) sent to — display only, masked by
-  /// the caller if desired.
   final String email;
 
-  /// TODO: wire to the real "verify OTP" API call.
+  /// TODO: Velez — AuthProvider.verifyOtpAndResetPassword(email, otp, newPassword)
+  /// → ApiService.verifyOtpAndResetPassword() → POST /auth/reset-password
+  /// Mockups do not collect a new password on this screen; pass '' for preview
+  /// or add a follow-up set-password step before the live endpoint.
   final Future<void> Function(String otp)? onVerifyOtp;
   final VoidCallback? onBack;
 
@@ -55,22 +52,18 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
       _errorMessage = null;
     });
 
-    if (widget.onVerifyOtp != null) {
-      try {
-        await widget.onVerifyOtp!(_otp.text.trim());
-      } catch (e) {
-        setState(() => _errorMessage = 'Incorrect or expired code. Try again.');
-      }
-    } else {
-      await Future.delayed(const Duration(milliseconds: 400));
+    try {
+      // TODO: Velez — on 200, notifyListeners() and pop to Login
+      await widget.onVerifyOtp?.call(_otp.text.trim());
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Preview only — Verify OTP not wired yet.')),
+        setState(
+          () => _errorMessage = 'Incorrect or expired code. Try again.',
         );
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
@@ -96,18 +89,14 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: AppSpacing.sm),
-                      Center(
-                        child: Container(
-                          width: 84,
-                          height: 84,
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.mail_outline,
-                            color: AppColors.secondary,
-                            size: 56,
-                          ),
+                      const Center(
+                        child: Icon(
+                          AppIcons.otpEnvelope,
+                          color: AppColors.secondary,
+                          size: 72,
                         ),
                       ),
+                      const SizedBox(height: AppSpacing.sm),
                       const Text(
                         'Enter OTP',
                         textAlign: TextAlign.center,
@@ -122,9 +111,11 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                         textAlign: TextAlign.center,
                         text: TextSpan(
                           style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 14),
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
                           children: [
-                            const TextSpan(text: 'We sent a 6-digit code to '),
+                            const TextSpan(text: 'We sent a 6-digit code to\n'),
                             TextSpan(
                               text: widget.email,
                               style: const TextStyle(
@@ -145,7 +136,11 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
                         hint: 'Enter 6-digit code',
                         controller: _otp,
                         pill: true,
+                        maxLength: 6,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                        ],
                         validator: (v) => (v == null || v.trim().length != 6)
                             ? 'Enter the 6-digit code'
                             : null,

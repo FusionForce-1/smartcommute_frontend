@@ -10,7 +10,7 @@
 //
 // KNOWN GAP (flagging honestly rather than guessing):
 // TokenResponse only contains {access_token, refresh_token, token_type,
-// role, expires_in} — there's no username/email/name in it, and none of
+// role, expires_in} — there's no email/name in it, and none of
 // the 19 ApiService methods fetch "my own profile." So `currentUser`
 // stays null right after login; you only reliably get `role` from the
 // token response. If a Profile screen needs full user details later,
@@ -43,11 +43,11 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus get status => _status;
 
   // ---------------------------------------------------------------
-  // LOGIN (username/email + password)
+  // LOGIN (email + password)
   // ---------------------------------------------------------------
   // Deliberately does NOT catch errors here — LoginScreen's own
   // _handleLogin() already wraps this call in try/catch and shows its
-  // own ErrorBanner text ("Invalid username/email or password.").
+  // own ErrorBanner text ("Invalid email or password.").
   // If we swallowed the error here too, the screen would never know
   // the call failed and would incorrectly proceed as if login worked.
   //
@@ -55,7 +55,7 @@ class AuthProvider extends ChangeNotifier {
   // but nothing in your backend spec currently uses it — flag this
   // with your team; for now it's a no-op placeholder.
   Future<void> login(
-    String usernameOrEmail,
+    String email,
     String password, {
     bool rememberMe = false,
   }) async {
@@ -63,7 +63,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tokens = await _apiService.login(usernameOrEmail, password);
+      final tokens = await _apiService.login(email, password);
       _role = tokens.role;
       _isGuest = false;
       _status = AuthStatus.authenticated;
@@ -111,6 +111,65 @@ class AuthProvider extends ChangeNotifier {
     _status = AuthStatus.guest;
     _apiService.continueAsGuest(); // fire-and-forget, not awaited
     notifyListeners();
+  }
+
+  // ---------------------------------------------------------------
+  // REGISTER (commuter) — POST /auth/register
+  // ---------------------------------------------------------------
+  Future<void> registerCommuter({
+    required String fullName,
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _apiService.register(
+        UserCreate(
+          email: email.trim(),
+          password: password,
+          name: fullName.trim(),
+        ),
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // FORGOT PASSWORD — POST /auth/forgot-password
+  // ---------------------------------------------------------------
+  Future<void> sendPasswordResetOtp(String email) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _apiService.sendPasswordResetOtp(email);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
+  // VERIFY OTP / RESET — POST /auth/reset-password
+  // ---------------------------------------------------------------
+  // VerifyOtpScreen only collects the 6-digit code. A new-password step
+  // is not in Emae's mockups; the mock adapter accepts an empty password
+  // for preview. TODO: Velez — collect new_password before calling live API.
+  Future<void> verifyOtpAndResetPassword({
+    required String email,
+    required String otp,
+    String newPassword = '',
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _apiService.verifyOtpAndResetPassword(email, otp, newPassword);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // ---------------------------------------------------------------

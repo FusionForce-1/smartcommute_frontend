@@ -6,6 +6,7 @@
 
 import 'package:flutter/material.dart';
 import '../config/theme_config.dart';
+import '../constants/app_icons.dart';
 
 class ErrorBanner extends StatelessWidget {
   const ErrorBanner({
@@ -30,7 +31,7 @@ class ErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+          const Icon(AppIcons.confirmWarning, color: AppColors.error, size: 20),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(

@@ -10,17 +10,18 @@ dependencies:
   flutter:
     sdk: flutter
   dio: ^5.4.0
-  flutter_secure_storage: ^9.0.0
-  flutter_dotenv: ^5.1.0
+  flutter_secure_storage: ^11.0.0
+  flutter_dotenv: ^6.0.1
   cupertino_icons: ^1.0.6
   provider: ^6.1.5+1
   google_sign_in: ^7.2.0
+  flutter_svg: ^2.0.17
 
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
@@ -28,6 +29,7 @@ flutter:
   assets:
     - assets/images/smart_commute_logo.png
     - assets/images/smart_commute_logo_landscape.png
+    - assets/icons/google_logo.svg
     - .env
 
   fonts:

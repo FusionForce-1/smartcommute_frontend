@@ -14,25 +14,37 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 import 'dio_interceptor.dart';
+import 'mock_auth_adapter.dart';
 
 class ApiService {
   final Dio _dio;
   final FlutterSecureStorage _secureStorage;
+  final MockAuthAdapter _authMocks;
+
+  /// TODO: Velez — set to false when FastAPI auth endpoints are live.
+  /// Keep mocks inside this Francis-owned service layer, never in main.dart.
+  static const bool useAuthMocks = true;
 
   // Constructor takes the pre-configured Dio from dio_interceptor.dart
   // rather than building its own — this way there's only ONE Dio
   // instance (with the interceptor attached) for the whole app.
   ApiService({Dio? dio, FlutterSecureStorage? secureStorage})
       : _dio = dio ?? buildDioClient(),
-        _secureStorage = secureStorage ?? const FlutterSecureStorage();
+        _secureStorage = secureStorage ?? const FlutterSecureStorage(),
+        _authMocks = MockAuthAdapter();
 
   // =================================================================
   // AUTH (6 methods)
   // =================================================================
 
-  Future<TokenResponse> login(String usernameOrEmail, String password) async {
+  Future<TokenResponse> login(String email, String password) async {
+    if (useAuthMocks) {
+      final tokens = await _authMocks.login(email, password);
+      await _storeTokens(tokens);
+      return tokens;
+    }
     final response = await _dio.post('/auth/login', data: {
-      'username_or_email': usernameOrEmail,
+      'email': email.trim(),
       'password': password,
     });
     final tokens = TokenResponse.fromJson(response.data);
@@ -41,6 +53,11 @@ class ApiService {
   }
 
   Future<TokenResponse> loginWithGoogle(String idToken) async {
+    if (useAuthMocks) {
+      final tokens = await _authMocks.loginWithGoogle(idToken);
+      await _storeTokens(tokens);
+      return tokens;
+    }
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
     });
@@ -50,6 +67,9 @@ class ApiService {
   }
 
   Future<UserModel> register(UserCreate data) async {
+    if (useAuthMocks) {
+      return _authMocks.register(data);
+    }
     final response = await _dio.post('/auth/register', data: data.toJson());
     // Backend returns UserResponse — registration does NOT log the user
     // in automatically (no tokens in this response), so we just return
@@ -102,6 +122,10 @@ class ApiService {
   // own comment ("POST /auth/forgot-password -> HTTP 202"); confirm
   // the exact path and response shape with your backend teammate.
   Future<void> sendPasswordResetOtp(String email) async {
+    if (useAuthMocks) {
+      await _authMocks.sendPasswordResetOtp(email);
+      return;
+    }
     await _dio.post('/auth/forgot-password', data: {'email': email});
   }
 
@@ -122,6 +146,10 @@ class ApiService {
     String otp,
     String newPassword,
   ) async {
+    if (useAuthMocks) {
+      await _authMocks.verifyOtpAndResetPassword(email, otp, newPassword);
+      return;
+    }
     await _dio.post('/auth/reset-password', data: {
       'email': email,
       'otp': otp,
