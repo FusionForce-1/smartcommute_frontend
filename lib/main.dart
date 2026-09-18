@@ -15,9 +15,11 @@
 //      placeholder that will fail until this is resolved with your team.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'config/env_config.dart';
 import 'config/theme_config.dart';
 import 'models/models.dart';
 import 'providers/auth_provider.dart';
@@ -28,24 +30,50 @@ import 'screens/auth/forgot_password_screen.dart';
 import 'screens/auth/verify_otp_screen.dart';
 
 Future<void> main() async {
-  // Required because we now call async code (GoogleSignIn.initialize())
-  // before runApp() — without this line, that async call throws.
+  // Required because we now call async code before runApp().
   WidgetsFlutterBinding.ensureInitialized();
+
+  // MUST happen before ApiService/AuthProvider are ever constructed —
+  // anything that reads EnvConfig.apiBaseUrl (which ApiService does,
+  // via buildDioClient()) will throw flutter_dotenv's own
+  // NotInitializedError if .env hasn't been loaded yet. This was
+  // missing in the previous version of this file — that's what
+  // caused the red screen on app launch.
+  await EnvConfig.load();
 
   // google_sign_in v7+ requires a one-time initialize() call at app
   // startup, BEFORE any screen tries to call .authenticate(). It is
   // NOT called again per sign-in attempt.
   //
+  // IMPORTANT WEB QUIRK: passing `serverClientId` on Flutter Web throws
+  // an assertion error ("serverClientId is not supported on Web"), since
+  // the web plugin only knows about `clientId`. On Android/iOS you DO
+  // want serverClientId (so your FastAPI backend can verify the token
+  // against the same client). This is why the two platforms need
+  // different initialize() calls, not one call with both params.
+  //
   // TODO: replace these placeholder strings with your real OAuth
   // client IDs from the Firebase console / Google Cloud console.
-  // clientId = iOS client ID (also used by Android in most setups).
-  // serverClientId = Web client ID — this is the one your FastAPI
-  // backend needs too, since it must verify the idToken against the
-  // SAME client ID that issued it.
-  await GoogleSignIn.instance.initialize(
-    clientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
-    serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
-  );
+  // Wrapped in try/catch as a safety net — with only placeholder
+  // credentials in place, we'd rather the app still load (and Google
+  // Sign-In simply fail later when actually tapped) than have a
+  // startup crash block EVERYTHING, including features that have
+  // nothing to do with Google.
+  try {
+    if (kIsWeb) {
+      await GoogleSignIn.instance.initialize(
+        clientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+      );
+    } else {
+      await GoogleSignIn.instance.initialize(
+        clientId: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
+        serverClientId: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+      );
+    }
+  } catch (e) {
+    debugPrint('GoogleSignIn.initialize() failed (expected until real '
+        'OAuth credentials are set): $e');
+  }
 
   runApp(const SmartCommuteApp());
 }
