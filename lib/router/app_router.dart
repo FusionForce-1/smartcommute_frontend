@@ -3,6 +3,10 @@
 // Emae D. Calonia — click-through navigator for the four auth screens.
 // Navigation only lives here. API mocks live in Francis's MockAuthAdapter
 // (via AuthProvider / ApiService) — not in main.dart.
+//
+// FIXED by Francis: Google Sign-In on web needs two things wired up at
+// startup that were previously missing entirely — see _setUpGoogleSignIn()
+// below for why.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -14,15 +18,98 @@ import '../screens/auth/register_screen.dart';
 import '../screens/auth/verify_otp_screen.dart';
 import '../screens/commuter/commuter_dashboard.dart';
 import '../screens/driver/driver_dashboard.dart';
+import '../services/google_auth_services.dart';
 
-class SmartCommuteAuthApp extends StatelessWidget {
+class SmartCommuteAuthApp extends StatefulWidget {
   const SmartCommuteAuthApp({super.key});
 
   @override
+  State<SmartCommuteAuthApp> createState() => _SmartCommuteAuthAppState();
+}
+
+class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
+  // Held directly as a field instead of via context.read() — this
+  // widget's own `context` sits ABOVE where ChangeNotifierProvider and
+  // MaterialApp get created (they're built INSIDE build() below), so
+  // context.read<AuthProvider>() from here can never find it. Holding
+  // the instance directly sidesteps needing a context at all.
+  final AuthProvider _authProvider = AuthProvider();
+
+  // Same reasoning for navigation: Navigator.of(context) needs a
+  // context that's a DESCENDANT of the Navigator MaterialApp creates.
+  // This widget's own context isn't. A GlobalKey lets us reach the
+  // Navigator directly regardless of where we're calling from.
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _setUpGoogleSignIn();
+  }
+
+  Future<void> _setUpGoogleSignIn() async {
+    try {
+      await GoogleAuthService.instance.initialize();
+    } catch (e) {
+      debugPrint('GoogleAuthService.initialize() failed: $e');
+      return;
+    }
+
+    _listenForNextGoogleSignIn();
+  }
+
+  // signInAndGetIdToken() resolves ONCE per call — it's a one-shot
+  // listener, not a persistent subscription. The first time this ran,
+  // it correctly caught your Register-screen Google click and routed
+  // you in. But after that single Future resolved, nothing was left
+  // listening, so the NEXT Google click (from Login) had no one to
+  // report back to. Calling this again after every result — success
+  // or not — keeps a fresh listener always armed for the next attempt.
+  void _listenForNextGoogleSignIn() {
+    GoogleAuthService.instance.signInAndGetIdToken().then((idToken) async {
+      if (idToken != null) {
+        await _authProvider.loginWithGoogle(idToken);
+        _navigateToDashboard(_authProvider.role);
+      }
+      if (mounted) _listenForNextGoogleSignIn(); // re-arm for next time
+    });
+  }
+
+  // Uses the GlobalKey instead of a BuildContext — works correctly
+  // even when called from outside the widget tree (like the callback
+  // above), unlike Navigator.of(context) would from this State.
+  void _navigateToDashboard(String? role, {bool isGuest = false}) {
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null) return; // not mounted yet — shouldn't happen in practice
+    Widget destination;
+    switch (role) {
+      case 'driver':
+        destination = const DriverDashboard();
+        break;
+      case 'commuter':
+      default:
+        destination = CommuterDashboard(isGuest: isGuest);
+        break;
+    }
+    navigator.pushReplacement(MaterialPageRoute(builder: (_) => destination));
+  }
+
+  @override
+  void dispose() {
+    GoogleAuthService.instance.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return ChangeNotifierProvider<AuthProvider>.value(
+      // .value (not create:) because we already constructed this
+      // instance above as a field — using create: here would make a
+      // SECOND, different AuthProvider that _setUpGoogleSignIn()
+      // never touches, leaving the UI watching the wrong instance.
+      value: _authProvider,
       child: MaterialApp(
+        navigatorKey: _navigatorKey,
         title: 'Smart Commute',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
@@ -61,9 +148,15 @@ class LoginScreenHost extends StatelessWidget {
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
       },
+      // NOTE: this callback is effectively DEAD CODE on web now — see
+      // _setUpGoogleSignIn() above, which handles the whole web flow
+      // independently since GoogleSignInButton has no onPressed to
+      // trigger this. Kept here only in case a non-web platform later
+      // uses a real clickable button that calls this directly.
       onGoogleSignIn: () async {
-        // TODO [Velez]: replace 'preview-google-id-token' with google_sign_in
-        await auth.loginWithGoogle('preview-google-id-token');
+        final idToken = await GoogleAuthService.instance.signInAndGetIdToken();
+        if (idToken == null) return;
+        await auth.loginWithGoogle(idToken);
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
       },
@@ -99,14 +192,20 @@ class RegisterScreenHost extends StatelessWidget {
           email: email,
           password: password,
         );
+        // registerCommuter() only creates the account — your backend's
+        // /auth/register does NOT return tokens, so the user isn't
+        // actually logged in yet at this point. We immediately log
+        // them in with the same credentials they just typed, so
+        // registering feels like one continuous action instead of
+        // "create account, then go type your password again."
+        await auth.login(email, password);
         if (!context.mounted) return;
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Account created. Please log in.')),
-        );
+        _openDashboardForRole(context, auth.role);
       },
       onGoogleSignIn: () async {
-        await auth.loginWithGoogle('preview-google-id-token');
+        final idToken = await GoogleAuthService.instance.signInAndGetIdToken();
+        if (idToken == null) return;
+        await auth.loginWithGoogle(idToken);
         if (!context.mounted) return;
         Navigator.of(context).pop();
       },

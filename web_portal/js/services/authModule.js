@@ -14,7 +14,7 @@
 // OTP fixture: 123456
 
 const AuthModule = (() => {
-  const USE_MOCKS = true; // TODO: Velez — set false once POST /auth/* is live
+  const USE_MOCKS = false; // TODO: Velez — set false once POST /auth/* is live
   const delay = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const users = {

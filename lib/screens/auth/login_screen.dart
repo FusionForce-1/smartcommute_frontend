@@ -224,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(height: AppSpacing.sm),
                             const OrDivider(),
                             const SizedBox(height: AppSpacing.sm),
-                            GoogleSignInButton(onPressed: _handleGoogle),
+                            const GoogleSignInButton(),
                             const SizedBox(height: AppSpacing.sm),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
