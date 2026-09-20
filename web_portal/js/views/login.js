@@ -81,7 +81,7 @@ Router.register('login', {
     document.getElementById('login-google').addEventListener('click', async () => {
       // TODO [Velez]: GIS id_token, then AuthModule.loginWithGoogle → POST /auth/google
       try {
-        const result = await AuthModule.loginWithGoogle('preview-google-id-token');
+        const result = await AuthModule.loginWithGoogle();
         const role = result?.role || 'operator';
         window.location.href = role === 'admin'
           ? '../admin/index.html'

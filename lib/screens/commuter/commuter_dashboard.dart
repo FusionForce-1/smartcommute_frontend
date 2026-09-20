@@ -5,9 +5,11 @@
 // Placeholder tab bodies for navigation / layout testing.
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
-
+import '../../providers/auth_provider.dart';
+import '../../router/app_router.dart';
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
@@ -220,8 +222,19 @@ class _CommuterTabPlaceholder extends StatelessWidget {
             _PreviewActionTile(
               icon: AppIcons.logout,
               label: 'Sign out',
-              onTap: () => Navigator.of(context).pop(),
-            ),
+              onTap: () async {
+                  await context.read<AuthProvider>().logout();
+
+                     if (!context.mounted) return;
+
+              Navigator.of(context).pushAndRemoveUntil(
+                   MaterialPageRoute(
+                    builder: (_) => const LoginScreenHost(),
+                    ),
+      (route) => false,
+    );
+  },
+),
           ],
         ],
       ),

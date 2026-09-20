@@ -23,7 +23,7 @@ class ApiService {
 
   /// TODO: Velez — set to false when FastAPI auth endpoints are live.
   /// Keep mocks inside this Francis-owned service layer, never in main.dart.
-  static const bool useAuthMocks = true;
+  static const bool useAuthMocks = false;
 
   // Constructor takes the pre-configured Dio from dio_interceptor.dart
   // rather than building its own — this way there's only ONE Dio

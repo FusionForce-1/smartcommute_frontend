@@ -173,7 +173,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       const OrDivider(),
                       const SizedBox(height: AppSpacing.sm),
-                      GoogleSignInButton(onPressed: _handleGoogle),
+                      const GoogleSignInButton(),
                     ],
                   ),
                 ),
