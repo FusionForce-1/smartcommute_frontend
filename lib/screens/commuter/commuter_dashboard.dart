@@ -4,12 +4,20 @@
 // Bottom navigation: Map, Routes, Feedback, Profile.
 // Placeholder tab bodies for navigation / layout testing.
 
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../providers/auth_provider.dart';
 import '../../router/app_router.dart';
+import '../../models/transport_stop.dart';
+import '../../services/stops_services.dart';
+import '../../models/transport_model.dart';
+import '../../services/route_services.dart';
+import 'package:dio/dio.dart';
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
@@ -108,7 +116,7 @@ class _CommuterTab {
   final String description;
 }
 
-class _CommuterTabPlaceholder extends StatelessWidget {
+class _CommuterTabPlaceholder extends StatefulWidget {
   const _CommuterTabPlaceholder({
     required this.tab,
     required this.isGuest,
@@ -118,51 +126,255 @@ class _CommuterTabPlaceholder extends StatelessWidget {
   final bool isGuest;
 
   @override
+  State<_CommuterTabPlaceholder> createState() => 
+  _CommuterTabPlaceholderState();
+}
+
+class _CommuterTabPlaceholderState 
+    extends State<_CommuterTabPlaceholder> {
+
+    final MapController _mapController = MapController();
+    LatLng? _currentLocation;
+
+        final List<TransportStop> _stops = [];
+        final List<TransportRoute> _routes = [];
+
+        final Dio _dio = Dio(
+          BaseOptions(
+            baseUrl: 'http://localhost:8000',
+          ),
+        );
+
+        late final StopsService _stopsService;
+        late final RoutesService _routesService;
+
+        @override
+          void initState() {
+            super.initState();
+                  _stopsService = StopsService(_dio);
+                  _routesService = RoutesService(_dio);
+            _loadStops();
+            _loadRoutes();
+          }
+          Future<void> _loadRoutes() async {
+                try {
+                  final routes = await _routesService.getRoutes();
+
+                  setState(() {
+                    _routes
+                      ..clear()
+                      ..addAll(routes);
+                  });
+
+                  debugPrint(
+                    'Loaded ${routes.length} route(s): '
+                    '${routes.map((route) => route.code).join(', ')}',
+                  );
+                } catch (e) {
+                  debugPrint('Failed to load routes: $e');
+                }
+              }
+      // Method ni siya to request sa Stop and and i Store niya sa _StopsList
+    Future<void> _loadStops() async {
+        try {
+          final stops = await _stopsService.getStops();
+
+          setState(() {
+            _stops
+              ..clear()
+              ..addAll(stops);
+          });
+        } catch (e) {
+          debugPrint('Failed to load stops: $e');
+        }
+      }
+
+    Future<void> _getCurrentLocation(BuildContext context) async {
+      LocationPermission permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!context.mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location permission was not granted.',
+              ),
+            ),
+          );
+          return;
+        }
+
+        try {
+          final position = await Geolocator.getCurrentPosition();
+              
+              final location = LatLng(
+                position.latitude,
+                position.longitude,
+              );
+
+              setState(() {
+                _currentLocation = location;
+              });
+            _mapController.move(
+              LatLng(
+                position.latitude,
+                position.longitude,
+                ),
+              15,
+            );
+
+          if (!context.mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Location:'
+                '${position.latitude.toStringAsFixed(5)}, '
+                '${position.longitude.toStringAsFixed(5)}',
+              ),
+            ),
+          );
+      } catch (e) {
+        if (!context.mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to get your current location.'
+              ),
+          ),
+        );
+      }
+    }
+ 
+ 
+  @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            height: tab.label == 'Map' ? 220 : 140,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              boxShadow: AppShadows.card,
-              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
-            ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(tab.icon, size: 48, color: AppColors.secondary),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '${tab.label} view placeholder',
-                    style: Theme.of(context).textTheme.titleLarge,
+          if (widget.tab.label == 'Map')
+                Container(
+                height: 400,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  boxShadow: AppShadows.card,
+                  border: Border.all(
+                    color: AppColors.secondary.withValues(alpha: 0.25),
                   ),
-                  const SizedBox(height: 4),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-                    child: Text(
-                      tab.description,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: const MapOptions(
+                    initialCenter: LatLng(10.3157, 123.8854),
+                    initialZoom: 13,
                   ),
-                ],
+                    children: [
+                        TileLayer(
+                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'com.smartcommute.app',
+                        ),
+
+                        PolylineLayer(
+                          polylines: _routes
+                              .map(
+                                (route) => Polyline(
+                                  points: route.geometry,
+                                  strokeWidth: 5,
+                                ),
+                              )
+                              .toList(),
+                        ),
+
+                        if (_currentLocation != null)
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: _currentLocation!,
+                                width: 75,
+                                height: 75,
+                                child: Image.asset(
+                                  'assets/icons/current_location_marker.png',
+                                  width: 75,
+                                  height: 75,
+                                ),
+                              ),
+                            ],
+                          ),
+                          
+                        if (_stops.isNotEmpty) // Markers ni siya to test if Jeepney Stops is avaible
+                            MarkerLayer(
+                              markers: _stops.map((stop) {
+                                return Marker(
+                                  point: stop.location,
+                                  width: 40,
+                                  height: 40,
+                                  child: const Icon(
+                                    Icons.location_on,
+                                    size: 36,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+
+                ),
+              )
+            else
+              Container(
+                height: 140,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  boxShadow: AppShadows.card,
+                  border: Border.all(
+                    color: AppColors.secondary.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        widget.tab.icon,
+                        size: 48,
+                        color: AppColors.secondary,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '${widget.tab.label} view placeholder',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                        ),
+                        child: Text(
+                          widget.tab.description,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
           const SizedBox(height: AppSpacing.sm),
-          if (tab.label == 'Map') ...[
+          if (widget.tab.label == 'Map') ...[
             _PreviewActionTile(
               icon: AppIcons.myLocation,
               label: 'Center on my location',
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
+              onTap: () => _getCurrentLocation(context),
             ),
             _PreviewActionTile(
               icon: AppIcons.vehicle,
@@ -172,7 +384,7 @@ class _CommuterTabPlaceholder extends StatelessWidget {
               },
             ),
           ],
-          if (tab.label == 'Routes') ...[
+          if (widget.tab.label == 'Routes') ...[
             _PreviewActionTile(
               icon: AppIcons.search,
               label: 'Plan a trip',
@@ -188,7 +400,7 @@ class _CommuterTabPlaceholder extends StatelessWidget {
               },
             ),
           ],
-          if (tab.label == 'Feedback') ...[
+          if (widget.tab.label == 'Feedback') ...[
             _PreviewActionTile(
               icon: AppIcons.feedback,
               label: 'Open feedback form',
@@ -197,8 +409,8 @@ class _CommuterTabPlaceholder extends StatelessWidget {
               },
             ),
           ],
-          if (tab.label == 'Profile') ...[
-            if (isGuest)
+          if (widget.tab.label == 'Profile') ...[
+            if (widget.isGuest)
               Container(
                 padding: const EdgeInsets.all(AppSpacing.sm),
                 margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -214,7 +426,7 @@ class _CommuterTabPlaceholder extends StatelessWidget {
             _PreviewActionTile(
               icon: AppIcons.settings,
               label: 'Account settings',
-              enabled: !isGuest,
+              enabled: !widget.isGuest,
               onTap: () {
                 // TODO [Velez]: Wire with API/State Provider here
               },
@@ -241,6 +453,12 @@ class _CommuterTabPlaceholder extends StatelessWidget {
     );
   }
 }
+
+
+
+  
+
+
 
 class _PreviewActionTile extends StatelessWidget {
   const _PreviewActionTile({
