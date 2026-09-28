@@ -16,7 +16,9 @@ dependencies:
   provider: ^6.1.5+1
   google_sign_in: ^7.2.0
   flutter_svg: ^2.0.17
-
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  geolocator: ^14.0.3
 
 dev_dependencies:
   flutter_test:
@@ -30,6 +32,7 @@ flutter:
     - assets/images/smart_commute_logo.png
     - assets/images/smart_commute_logo_landscape.png
     - assets/icons/google_logo.svg
+    - assets/icons/current_location_marker.png
     - .env
 
   fonts:
