@@ -4,6 +4,7 @@
 // Bottom navigation: Map, Routes, Feedback, Profile.
 // Placeholder tab bodies for navigation / layout testing.
 
+import 'dart:convert';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -12,12 +13,15 @@ import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../providers/auth_provider.dart';
-import '../../router/app_router.dart';
+import '../../router/app_router.dart';  
 import '../../models/transport_stop.dart';
 import '../../services/stops_services.dart';
 import '../../models/transport_model.dart';
 import '../../services/route_services.dart';
+import '../../services/websocket_service.dart';
 import 'package:dio/dio.dart';
+
+
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
@@ -135,7 +139,8 @@ class _CommuterTabPlaceholderState
 
     final MapController _mapController = MapController();
     LatLng? _currentLocation;
-
+      LatLng? _vehicleLocation;
+      String? _vehicleId;
         final List<TransportStop> _stops = [];
         final List<TransportRoute> _routes = [];
 
@@ -147,15 +152,48 @@ class _CommuterTabPlaceholderState
 
         late final StopsService _stopsService;
         late final RoutesService _routesService;
+        late final WebSocketService _webSocketService;
 
         @override
           void initState() {
             super.initState();
                   _stopsService = StopsService(_dio);
                   _routesService = RoutesService(_dio);
-            _loadStops();
-            _loadRoutes();
-          }
+                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles 
+                  _webSocketService = WebSocketService();
+                  _webSocketService.connect();
+                  _webSocketService.listenForMessages((message) {
+                    print('INCOMING JSON: $message');
+
+                    final data = jsonDecode(message as String);
+
+                    final vehicleId = data['vehicle_id'] as String;
+                    final status = data['status'] as String?;
+
+                    if (status == 'signal_lost') {
+                      setState(() {
+                        _vehicleId = vehicleId;
+                      });
+
+                      return;
+                    }
+
+                    final lat = (data['lat'] as num).toDouble();
+                    final lng = (data['lng'] as num).toDouble();
+
+                    setState(() {
+                      _vehicleId = vehicleId;
+                      _vehicleLocation = LatLng(lat, lng);
+                    });
+                  });
+                      _loadStops();
+                      _loadRoutes();
+                  }
+          @override
+            void dispose() {
+              _webSocketService.disconnect();
+              super.dispose();
+}
           Future<void> _loadRoutes() async {
                 try {
                   final routes = await _routesService.getRoutes();
@@ -290,6 +328,7 @@ class _CommuterTabPlaceholderState
                                 (route) => Polyline(
                                   points: route.geometry,
                                   strokeWidth: 5,
+                                  color: const Color.fromARGB(255, 33, 117, 243).withOpacity(0.7),
                                 ),
                               )
                               .toList(),
@@ -310,6 +349,21 @@ class _CommuterTabPlaceholderState
                               ),
                             ],
                           ),
+                        if (_vehicleLocation != null)
+                            MarkerLayer(
+                              markers: [
+                                Marker(
+                                  point: _vehicleLocation!,
+                                  width: 50,
+                                  height: 50,
+                                  child: const Icon(
+                                    Icons.directions_car,
+                                    size: 45,
+                                    color: Color.fromARGB(255, 233, 4, 4),
+                                  ),
+                                ),
+                              ],
+                            ),
                           
                         if (_stops.isNotEmpty) // Markers ni siya to test if Jeepney Stops is avaible
                             MarkerLayer(
