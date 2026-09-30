@@ -14,6 +14,7 @@ import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../providers/auth_provider.dart';
 import '../../router/app_router.dart';  
+import '../../router/app_router.dart';
 import '../../models/transport_stop.dart';
 import '../../services/stops_services.dart';
 import '../../models/transport_model.dart';
@@ -23,6 +24,7 @@ import '../../widgets/stop_image.dart';
 import 'package:dio/dio.dart';
 
 
+import 'package:dio/dio.dart';
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
@@ -152,6 +154,7 @@ class _CommuterTabPlaceholderState
     LatLng? _currentLocation;
       LatLng? _vehicleLocation;
       String? _vehicleId;
+
         final List<TransportStop> _stops = [];
         final List<TransportRoute> _routes = [];
 
@@ -205,6 +208,9 @@ class _CommuterTabPlaceholderState
               _webSocketService.disconnect();
               super.dispose();
 }
+            _loadStops();
+            _loadRoutes();
+          }
           Future<void> _loadRoutes() async {
                 try {
                   final routes = await _routesService.getRoutes();
