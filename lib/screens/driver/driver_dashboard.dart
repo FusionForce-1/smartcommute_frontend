@@ -6,6 +6,9 @@
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../models/models.dart';
+import '../../services/api_service.dart';
+import '../../services/websocket_service.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -15,19 +18,140 @@ class DriverDashboard extends StatefulWidget {
 }
 
 class _DriverDashboardState extends State<DriverDashboard> {
-  bool _gpsSessionActive = false;
+  final GpsIngestionSession _gps = GpsIngestionSession();
+  final ApiService _api = ApiService();
+  final TextEditingController _vehicleIdController = TextEditingController();
+
+  List<VehicleModel> _vehicles = [];
+  String? _selectedVehicleId;
+  bool _loadingVehicles = true;
   String _routeStatus = 'active';
 
-  void _toggleGps(bool value) {
-    setState(() => _gpsSessionActive = value);
-    // TODO [Velez]: Wire with API/State Provider here
-    // Start/stop GPS WebSocket session and background location updates.
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          value ? 'GPS session started (preview)' : 'GPS session stopped (preview)',
+  bool get _gpsSessionActive => _gps.isActive;
+
+  VehicleModel? get _selectedVehicle {
+    for (final v in _vehicles) {
+      if (v.id == _selectedVehicleId) return v;
+    }
+    return null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _gps.addListener(_onGpsChanged);
+    _loadVehicles();
+  }
+
+  @override
+  void dispose() {
+    _gps.removeListener(_onGpsChanged);
+    _gps.dispose();
+    _vehicleIdController.dispose();
+    super.dispose();
+  }
+
+  void _onGpsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadVehicles() async {
+    try {
+      final vehicles = await _api.getVehicles();
+      if (!mounted) return;
+      setState(() {
+        _vehicles = vehicles;
+        _selectedVehicleId ??= vehicles.isNotEmpty ? vehicles.first.id : null;
+      });
+    } catch (e) {
+      // Falls back to typing the vehicle id manually.
+      debugPrint('Failed to load vehicles: $e');
+    } finally {
+      if (mounted) setState(() => _loadingVehicles = false);
+    }
+  }
+
+  Future<void> _toggleGps(bool value) async {
+    final messenger = ScaffoldMessenger.of(context);
+    if (!value) {
+      await _gps.stop();
+      messenger.showSnackBar(const SnackBar(content: Text('GPS session stopped')));
+      return;
+    }
+
+    final vehicleId = _vehicles.isNotEmpty
+        ? _selectedVehicleId
+        : _vehicleIdController.text.trim();
+    if (vehicleId == null || vehicleId.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Select a vehicle before starting GPS.')),
+      );
+      return;
+    }
+
+    try {
+      await _gps.start(vehicleId);
+      messenger.showSnackBar(const SnackBar(content: Text('GPS session started')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not start GPS: $e')));
+    }
+  }
+
+  String get _gpsSubtitle {
+    switch (_gps.state) {
+      case GpsSessionState.idle:
+        return 'Location sharing is off';
+      case GpsSessionState.connecting:
+        return 'Connecting to GPS server…';
+      case GpsSessionState.live:
+        final sent = _gps.lastSentAt;
+        return sent == null
+            ? 'Connected — waiting for first GPS fix'
+            : 'Broadcasting to fleet map · ${_gps.framesSent} updates';
+      case GpsSessionState.reconnecting:
+        return 'Connection lost — reconnecting…';
+      case GpsSessionState.paused:
+        return 'Simulating signal loss (sending paused)';
+      case GpsSessionState.error:
+        return _gps.error ?? 'GPS error';
+    }
+  }
+
+  Color get _gpsColor => switch (_gps.state) {
+        GpsSessionState.live => AppColors.success,
+        GpsSessionState.reconnecting || GpsSessionState.paused => AppColors.accent,
+        GpsSessionState.error => AppColors.error,
+        _ => AppColors.textSecondary,
+      };
+
+  Widget _vehiclePicker() {
+    if (_loadingVehicles) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: AppSpacing.xs),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (_vehicles.isEmpty) {
+      return TextField(
+        controller: _vehicleIdController,
+        enabled: !_gpsSessionActive,
+        decoration: const InputDecoration(
+          labelText: 'Vehicle ID',
+          helperText: 'Could not load vehicles — enter the vehicle id',
         ),
-      ),
+      );
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedVehicleId,
+      decoration: const InputDecoration(labelText: 'Vehicle'),
+      items: [
+        for (final v in _vehicles)
+          DropdownMenuItem(value: v.id, child: Text(v.plateNumber)),
+      ],
+      // Switching vehicles mid-session would mix two tracks.
+      onChanged: _gpsSessionActive
+          ? null
+          : (id) => setState(() => _selectedVehicleId = id),
     );
   }
 
@@ -61,21 +185,25 @@ class _DriverDashboardState extends State<DriverDashboard> {
         children: [
           _DriverCard(
             title: 'GPS Session',
-            subtitle: _gpsSessionActive
-                ? 'Broadcasting location to fleet map'
-                : 'Location sharing is off',
+            subtitle: _gpsSubtitle,
             leading: Icon(
               _gpsSessionActive ? AppIcons.gpsToggleOn : AppIcons.gpsToggleOff,
-              color: _gpsSessionActive ? AppColors.success : AppColors.textSecondary,
+              color: _gpsColor,
               size: 36,
             ),
-            child: SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Enable GPS broadcast'),
-              subtitle: const Text('Required while on an active route'),
-              value: _gpsSessionActive,
-              activeThumbColor: AppColors.secondary,
-              onChanged: _toggleGps,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _vehiclePicker(),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Enable GPS broadcast'),
+                  subtitle: const Text('Required while on an active route'),
+                  value: _gpsSessionActive,
+                  activeThumbColor: AppColors.secondary,
+                  onChanged: _toggleGps,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -86,7 +214,10 @@ class _DriverDashboardState extends State<DriverDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _InfoRow(label: 'Vehicle', value: 'ABC-1234'),
+                _InfoRow(
+                  label: 'Vehicle',
+                  value: _selectedVehicle?.plateNumber ?? 'ABC-1234',
+                ),
                 _InfoRow(label: 'Next stop', value: 'Central Terminal'),
                 _InfoRow(label: 'ETA', value: '4 min'),
               ],
@@ -151,7 +282,19 @@ class _DriverDashboardState extends State<DriverDashboard> {
                   icon: AppIcons.signalLost,
                   label: 'Simulate signal loss',
                   onPressed: () {
-                    // TODO [Velez]: Wire with API/State Provider here
+                    final messenger = ScaffoldMessenger.of(context);
+                    if (!_gpsSessionActive) {
+                      messenger.showSnackBar(const SnackBar(
+                        content: Text('Start a GPS session first.'),
+                      ));
+                      return;
+                    }
+                    // Backend watchdog fires after 30 s of silence and
+                    // re-arms when frames resume.
+                    _gps.simulateSignalLoss();
+                    messenger.showSnackBar(const SnackBar(
+                      content: Text('Pausing GPS for 40 s — map should show signal lost'),
+                    ));
                   },
                 ),
               ],

@@ -5,25 +5,27 @@
 // Placeholder tab bodies for navigation / layout testing.
 
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../providers/auth_provider.dart';
-import '../../router/app_router.dart';  
+import '../../config/env_config.dart';
 import '../../router/app_router.dart';
 import '../../models/transport_stop.dart';
+import '../../models/vehicle_live_update.dart';
+import '../../models/vehicle_track.dart';
 import '../../services/stops_services.dart';
 import '../../models/transport_model.dart';
 import '../../services/route_services.dart';
 import '../../services/websocket_service.dart';
 import 'package:dio/dio.dart';
 
-
-import 'package:dio/dio.dart';
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
@@ -137,72 +139,102 @@ class _CommuterTabPlaceholder extends StatefulWidget {
 }
 
 class _CommuterTabPlaceholderState 
-    extends State<_CommuterTabPlaceholder> {
+    extends State<_CommuterTabPlaceholder>
+    with SingleTickerProviderStateMixin {
 
     final MapController _mapController = MapController();
     LatLng? _currentLocation;
-      LatLng? _vehicleLocation;
-      String? _vehicleId;
+
+        // One smoothed track per jeep, so several vehicles broadcasting
+        // at once each keep their own marker.
+        final Map<String, VehicleTrack> _tracks = {};
+
+        // Drives marker animation. Only the vehicle layer repaints per
+        // frame (via _frame), not the whole tab, and the ticker stops
+        // when every marker has reached its latest fix.
+        final Stopwatch _clock = Stopwatch()..start();
+        final ValueNotifier<int> _frame = ValueNotifier(0);
+        late final Ticker _ticker;
 
         final List<TransportStop> _stops = [];
         final List<TransportRoute> _routes = [];
 
         final Dio _dio = Dio(
           BaseOptions(
-            baseUrl: 'http://localhost:8000',
+            baseUrl: EnvConfig.apiBaseUrl,
           ),
         );
 
         late final StopsService _stopsService;
         late final RoutesService _routesService;
-        late final WebSocketService _webSocketService;
+        WebSocketService? _webSocketService;
+
+        bool get _isMapTab => widget.tab.label == 'Map';
 
         @override
           void initState() {
             super.initState();
                   _stopsService = StopsService(_dio);
                   _routesService = RoutesService(_dio);
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles 
-                  _webSocketService = WebSocketService();
-                  _webSocketService.connect();
-                  _webSocketService.listenForMessages((message) {
-                    print('INCOMING JSON: $message');
 
-                    final data = jsonDecode(message as String);
+                  // IndexedStack builds every tab, so only the Map tab
+                  // opens the live socket and loads map data — otherwise
+                  // each tab would open its own connection.
+                  _ticker = createTicker(_onTick);
+                  if (!_isMapTab) return;
 
-                    final vehicleId = data['vehicle_id'] as String;
-                    final status = data['status'] as String?;
-
-                    if (status == 'signal_lost') {
-                      setState(() {
-                        _vehicleId = vehicleId;
-                      });
-
-                      return;
-                    }
-
-                    final lat = (data['lat'] as num).toDouble();
-                    final lng = (data['lng'] as num).toDouble();
-
-                    setState(() {
-                      _vehicleId = vehicleId;
-                      _vehicleLocation = LatLng(lat, lng);
-                    });
-                  });
-                      _loadStops();
-                      _loadRoutes();
+                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
+                  _webSocketService = WebSocketService()
+                    ..connect()
+                    ..listenForMessages(_onVehicleMessage);
+                  _loadStops();
+                  _loadRoutes();
                   }
+
           @override
             void dispose() {
-              _webSocketService.disconnect();
+              _webSocketService?.disconnect();
+              _ticker.dispose();
+              _frame.dispose();
               super.dispose();
-}
-            _loadStops();
-            _loadRoutes();
+            }
+
+          void _onVehicleMessage(dynamic message) {
+            if (!mounted) return;
+
+            final update = VehicleLiveUpdate.fromJson(
+              jsonDecode(message as String) as Map<String, dynamic>,
+            );
+
+            final now = _clock.elapsed;
+            final track = _tracks[update.vehicleId];
+            if (track == null) {
+              _tracks[update.vehicleId] = VehicleTrack(update, now);
+            } else {
+              // Out-of-order fixes and GPS glitches are dropped inside.
+              track.push(update, now);
+            }
+
+            _frame.value++;
+            if (!_ticker.isActive) _ticker.start();
           }
+
+          void _onTick(Duration _) {
+            final now = _clock.elapsed;
+            _frame.value++;
+            if (!_tracks.values.any((t) => t.isAnimating(now))) _ticker.stop();
+          }
+
+          void _refreshVehicles() {
+            _tracks.clear();
+            _frame.value++;
+            _webSocketService?.connect();
+          }
+
           Future<void> _loadRoutes() async {
                 try {
                   final routes = await _routesService.getRoutes();
+                  if (!mounted) return;
 
                   setState(() {
                     _routes
@@ -222,6 +254,7 @@ class _CommuterTabPlaceholderState
     Future<void> _loadStops() async {
         try {
           final stops = await _stopsService.getStops();
+          if (!mounted) return;
 
           setState(() {
             _stops
@@ -355,22 +388,28 @@ class _CommuterTabPlaceholderState
                               ),
                             ],
                           ),
-                        if (_vehicleLocation != null)
-                            MarkerLayer(
+                        ValueListenableBuilder<int>(
+                          valueListenable: _frame,
+                          builder: (context, frame, child) {
+                            final now = _clock.elapsed;
+                            return MarkerLayer(
                               markers: [
-                                Marker(
-                                  point: _vehicleLocation!,
-                                  width: 50,
-                                  height: 50,
-                                  child: const Icon(
-                                    Icons.directions_car,
-                                    size: 45,
-                                    color: Color.fromARGB(255, 233, 4, 4),
-                                  ),
-                                ),
+                                for (final track in _tracks.values)
+                                  if (track.positionAt(now) case final point?)
+                                    Marker(
+                                      point: point,
+                                      width: 50,
+                                      height: 50,
+                                      child: _VehicleMarker(
+                                        vehicle: track.latest,
+                                        heading: track.headingAt(now),
+                                      ),
+                                    ),
                               ],
-                            ),
-                          
+                            );
+                          },
+                        ),
+
                         if (_stops.isNotEmpty) // Markers ni siya to test if Jeepney Stops is avaible
                             MarkerLayer(
                               markers: _stops.map((stop) {
@@ -439,9 +478,7 @@ class _CommuterTabPlaceholderState
             _PreviewActionTile(
               icon: AppIcons.vehicle,
               label: 'Refresh vehicle markers',
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
+              onTap: _refreshVehicles,
             ),
           ],
           if (widget.tab.label == 'Routes') ...[
@@ -519,6 +556,46 @@ class _CommuterTabPlaceholderState
   
 
 
+
+/// Vehicle pin: points along the heading when moving, greys out when the
+/// backend reports signal_lost (last known position is kept).
+class _VehicleMarker extends StatelessWidget {
+  const _VehicleMarker({required this.vehicle, this.heading});
+
+  final VehicleLiveUpdate vehicle;
+  final double? heading; // smoothed, from VehicleTrack
+
+  @override
+  Widget build(BuildContext context) {
+    final lost = vehicle.isSignalLost;
+    final heading = this.heading;
+    final speed = vehicle.speed;
+
+    final Widget icon = heading != null && !lost
+        ? Transform.rotate(
+            angle: heading * math.pi / 180,
+            child: const Icon(
+              Icons.navigation,
+              size: 40,
+              color: Color.fromARGB(255, 233, 4, 4),
+            ),
+          )
+        : Icon(
+            lost ? Icons.signal_cellular_connected_no_internet_0_bar : Icons.directions_car,
+            size: 40,
+            color: lost ? Colors.grey : const Color.fromARGB(255, 233, 4, 4),
+          );
+
+    return Tooltip(
+      message: lost
+          ? 'Signal lost — last known position'
+          : speed != null
+              ? '${speed.toStringAsFixed(0)} km/h'
+              : 'En route',
+      child: icon,
+    );
+  }
+}
 
 class _PreviewActionTile extends StatelessWidget {
   const _PreviewActionTile({
