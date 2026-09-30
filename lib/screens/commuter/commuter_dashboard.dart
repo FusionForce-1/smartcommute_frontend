@@ -19,6 +19,7 @@ import '../../services/stops_services.dart';
 import '../../models/transport_model.dart';
 import '../../services/route_services.dart';
 import '../../services/websocket_service.dart';
+import '../../widgets/stop_image.dart';
 import 'package:dio/dio.dart';
 
 
@@ -138,6 +139,16 @@ class _CommuterTabPlaceholderState
     extends State<_CommuterTabPlaceholder> {
 
     final MapController _mapController = MapController();
+    bool _mapReady = false;
+
+    // Service area sa app (Metro Cebu: Talisay, Cebu City, Mandaue, Lapu-Lapu, Consolacion).
+    // Usba ni kung mo-expand ang coverage.
+    static final LatLngBounds _serviceArea = LatLngBounds(
+      const LatLng(10.20, 123.80), // southwest
+      const LatLng(10.45, 124.05), // northeast
+    );
+    static const double _minZoom = 12;
+    static const double _maxZoom = 18;
     LatLng? _currentLocation;
       LatLng? _vehicleLocation;
       String? _vehicleId;
@@ -222,10 +233,34 @@ class _CommuterTabPlaceholderState
               ..clear()
               ..addAll(stops);
           });
+          _fitToStops();
         } catch (e) {
           debugPrint('Failed to load stops: $e');
         }
       }
+
+    // I-zoom ang map para makita tanan stops pag load
+    void _fitToStops() {
+      if (!_mapReady || _stops.isEmpty) return;
+      if (_stops.length == 1) {
+        _mapController.move(_stops.first.location, 16);
+        return;
+      }
+      _mapController.fitCamera(
+        CameraFit.coordinates(
+          coordinates: _stops.map((stop) => stop.location).toList(),
+          padding: const EdgeInsets.all(48),
+          maxZoom: 16,
+        ),
+      );
+    }
+
+    // Zoom in (+1) or out (-1) while staying on the current map center
+    void _zoomBy(double delta) {
+      final camera = _mapController.camera;
+      final zoom = (camera.zoom + delta).clamp(_minZoom, _maxZoom);
+      _mapController.move(camera.center, zoom);
+    }
 
     Future<void> _getCurrentLocation(BuildContext context) async {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -312,26 +347,24 @@ class _CommuterTabPlaceholderState
                 clipBehavior: Clip.antiAlias,
                 child: FlutterMap(
                   mapController: _mapController,
-                  options: const MapOptions(
-                    initialCenter: LatLng(10.3157, 123.8854),
+                  options: MapOptions(
+                    initialCenter: const LatLng(10.3157, 123.8854),
                     initialZoom: 13,
+                    minZoom: _minZoom,
+                    maxZoom: _maxZoom,
+                    // I-lock ang map sa Metro Cebu ra para relevant locations ra makita
+                    cameraConstraint: CameraConstraint.contain(
+                      bounds: _serviceArea,
+                    ),
+                    onMapReady: () {
+                      _mapReady = true;
+                      _fitToStops();
+                    },
                   ),
                     children: [
                         TileLayer(
                           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                           userAgentPackageName: 'com.smartcommute.app',
-                        ),
-
-                        PolylineLayer(
-                          polylines: _routes
-                              .map(
-                                (route) => Polyline(
-                                  points: route.geometry,
-                                  strokeWidth: 5,
-                                  color: const Color.fromARGB(255, 33, 117, 243).withOpacity(0.7),
-                                ),
-                              )
-                              .toList(),
                         ),
 
                         if (_currentLocation != null)
@@ -368,17 +401,55 @@ class _CommuterTabPlaceholderState
                         if (_stops.isNotEmpty) // Markers ni siya to test if Jeepney Stops is avaible
                             MarkerLayer(
                               markers: _stops.map((stop) {
+                                // Photo sa area sa stop imbes na icon para dali ma-ila sa commuter
                                 return Marker(
                                   point: stop.location,
-                                  width: 40,
-                                  height: 40,
-                                  child: const Icon(
-                                    Icons.location_on,
-                                    size: 36,
+                                  width: 56,
+                                  height: 68,
+                                  alignment: Alignment.topCenter,
+                                  child: StopImageMarker(
+                                    stop: stop,
+                                    onTap: () =>
+                                        showStopDetailsSheet(context, stop),
                                   ),
                                 );
                               }).toList(),
                             ),
+
+                        // Zoom In / Zoom Out buttons sa map
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.xs),
+                            child: Material(
+                              color: Colors.white,
+                              elevation: 3,
+                              borderRadius: BorderRadius.circular(AppRadius.card),
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Zoom in',
+                                    icon: const Icon(Icons.add),
+                                    color: AppColors.primary,
+                                    onPressed: () => _zoomBy(1),
+                                  ),
+                                  const SizedBox(
+                                    width: 32,
+                                    child: Divider(height: 1),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Zoom out',
+                                    icon: const Icon(Icons.remove),
+                                    color: AppColors.primary,
+                                    onPressed: () => _zoomBy(-1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                           ],
 
                 ),
