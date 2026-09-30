@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Fixed port: Google Sign-In (Authorized JavaScript origins) and the
+      // backend's ALLOWED_ORIGINS both need the exact origin
+      // http://localhost:5500. A random port breaks both.
+      "name": "Smart Commute (Chrome :5500)",
+      "type": "dart",
+      "request": "launch",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "args": ["--web-port", "5500", "--web-hostname", "localhost"]
+    }
+  ]
+}
