@@ -63,6 +63,13 @@
 # After changing .env, stop the app (q) and run it again —
 # hot reload does not pick up .env changes.
 #
+# Note: Google Sign-In only works on http://localhost:5000.
+# Google does not accept IP addresses as sign-in origins.
+# http://localhost:5000 must be listed under "Authorized
+# JavaScript origins" of the OAuth client in Google Cloud
+# Console, and that client ID must match both
+# web/index.html and GOOGLE_CLIENT_ID in the backend .env.
+#
 # Note: "Center on my location" only works on
 # http://localhost:5000 or over https. Browsers block GPS on
 # plain http://<YOUR_IP> addresses.
