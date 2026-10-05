@@ -44,6 +44,14 @@ class EnvConfig {
     return url;
   }
 
+  /// Optional — enables Street View photos for stops. Returns null if unset,
+  /// in which case stops use the free satellite snapshot instead.
+  static String? get googleMapsApiKey {
+    final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
+    if (key == null || key.isEmpty) return null;
+    return key;
+  }
+
   static bool get debugLogging {
     return dotenv.env['DEBUG_LOGGING']?.toLowerCase() == 'true';
   }
