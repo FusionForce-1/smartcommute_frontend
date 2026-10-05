@@ -187,12 +187,6 @@ class _CommuterTabPlaceholderState
             super.initState();
                   _stopsService = StopsService(_dio);
                   _routesService = RoutesService(_dio);
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles 
-                  _webSocketService = WebSocketService();
-                  _webSocketService.connect();
-                  _webSocketService.listenForMessages((message) {
-                    debugPrint('INCOMING JSON: $message');
-                    if (!mounted) return;
 
                   // IndexedStack builds every tab, so only the Map tab
                   // opens the live socket and loads map data — otherwise
@@ -236,19 +230,6 @@ class _CommuterTabPlaceholderState
             if (!_ticker.isActive) _ticker.start();
           }
 
-                    setState(() {
-                      _vehicleId = vehicleId;
-                      _vehicleLocation = LatLng(lat, lng);
-                    });
-                  });
-                      _loadStops();
-                      _loadRoutes();
-                  }
-          @override
-            void dispose() {
-              _webSocketService.disconnect();
-              super.dispose();
-            }
           void _onTick(Duration _) {
             final now = _clock.elapsed;
             _frame.value++;
