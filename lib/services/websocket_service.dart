@@ -1,38 +1,343 @@
+// lib/services/websocket_service.dart
+//
+// Two WebSocket clients, matching the backend's two GPS sockets:
+//
+//   WebSocketService     — commuter side, WSS /ws/live
+//     Receives vehicle broadcasts. Reconnects automatically when the
+//     connection drops, so the map doesn't silently stop updating.
+//
+//   GpsIngestionSession  — driver side, WSS /ws/gps/{vehicle_id}
+//     Streams device fixes as JSON frames {"lat","lng","spd","hdg","ts"}.
+//     spd is km/h, hdg is degrees from north, ts is the device fix time
+//     (ISO 8601 UTC); the backend stores and re-broadcasts ts as-is.
+//
+// The backend watchdog marks a vehicle "signal_lost" after 30 s without a
+// frame and re-arms once frames resume. A parked vehicle's GPS stream goes
+// quiet (distance filter), so the driver session re-sends the last fix on
+// a keepalive timer to avoid false signal-lost alerts.
+
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-class WebSocketService {
-  WebSocketService({
-    this.url = 'ws://localhost:8000/ws/live',
-  });
+import '../config/env_config.dart';
 
-  final String url;
+Uri _wsUri(String path) {
+  final base = EnvConfig.wsBaseUrl.replaceAll(RegExp(r'/+$'), '');
+  return Uri.parse('$base$path');
+}
+
+/// Exponential backoff: 1, 2, 4, 8, 16, then 30 s max.
+Duration _backoff(int attempt) =>
+    Duration(seconds: attempt >= 5 ? 30 : 1 << attempt);
+
+// =================================================================
+// COMMUTER — live vehicle broadcast
+// =================================================================
+
+class WebSocketService {
+  WebSocketService({String? url}) : _url = url;
+
+  final String? _url; // defaults to WS_BASE_URL + /ws/live
 
   WebSocketChannel? _channel;
+  StreamSubscription? _subscription;
+  void Function(dynamic message)? _onMessage;
+  Timer? _reconnectTimer;
+  int _reconnectAttempt = 0;
+  bool _active = false;
 
   Stream<dynamic>? get messages => _channel?.stream;
 
   void connect() {
-    _channel = WebSocketChannel.connect(
-      Uri.parse(url),
+    _active = true;
+    _reconnectTimer?.cancel();
+    _subscription?.cancel();
+    _channel?.sink.close();
+
+    final channel = WebSocketChannel.connect(
+      _url != null ? Uri.parse(_url) : _wsUri('/ws/live'),
     );
+    _channel = channel;
+
+    channel.ready.then((_) {
+      _reconnectAttempt = 0;
+    }).catchError((Object error) {
+      // Failure is also delivered through the stream's onError/onDone,
+      // which schedules the reconnect.
+    });
+
+    // Re-attach the listener after a reconnect.
+    if (_onMessage != null) _listen(channel);
   }
 
   void listenForMessages(
     void Function(dynamic message) onMessage,
   ) {
-    _channel?.stream.listen(
-      onMessage,
+    _onMessage = onMessage;
+    final channel = _channel;
+    if (channel != null) _listen(channel);
+  }
+
+  void _listen(WebSocketChannel channel) {
+    _subscription?.cancel();
+    _subscription = channel.stream.listen(
+      (message) {
+        try {
+          _onMessage?.call(message);
+        } catch (e) {
+          debugPrint('WebSocket: bad frame ($e): $message');
+        }
+      },
       onError: (error) {
-        print('WebSocket error: $error');
+        debugPrint('WebSocket error: $error');
       },
       onDone: () {
-        print('WebSocket connection closed');
+        debugPrint('WebSocket connection closed');
+        if (identical(channel, _channel)) _scheduleReconnect();
       },
+      cancelOnError: false,
     );
   }
 
+  void _scheduleReconnect() {
+    if (!_active) return;
+    _channel = null;
+    final delay = _backoff(_reconnectAttempt++);
+    debugPrint('WebSocket reconnecting in ${delay.inSeconds}s');
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, connect);
+  }
+
   void disconnect() {
+    _active = false;
+    _reconnectTimer?.cancel();
+    _subscription?.cancel();
+    _subscription = null;
     _channel?.sink.close();
     _channel = null;
+  }
+}
+
+// =================================================================
+// DRIVER — GPS ingestion
+// =================================================================
+
+enum GpsSessionState { idle, connecting, live, reconnecting, paused, error }
+
+class GpsIngestionSession extends ChangeNotifier {
+  GpsIngestionSession({
+    this.keepaliveInterval = const Duration(seconds: 10),
+  });
+
+  /// Must stay well under the backend's 30 s watchdog.
+  final Duration keepaliveInterval;
+
+  GpsSessionState _state = GpsSessionState.idle;
+  String? _vehicleId;
+  String? _error;
+  Position? _lastFix;
+  DateTime? _lastSentAt;
+  int _framesSent = 0;
+
+  WebSocketChannel? _channel;
+  StreamSubscription<Position>? _positionSub;
+  StreamSubscription? _socketSub;
+  Timer? _keepaliveTimer;
+  Timer? _reconnectTimer;
+  Timer? _pauseTimer;
+  int _reconnectAttempt = 0;
+  bool _active = false;
+  bool _paused = false;
+
+  GpsSessionState get state => _state;
+  String? get vehicleId => _vehicleId;
+  String? get error => _error;
+  Position? get lastFix => _lastFix;
+  DateTime? get lastSentAt => _lastSentAt;
+  int get framesSent => _framesSent;
+  bool get isActive => _active;
+
+  /// Starts streaming this device's location for [vehicleId].
+  /// Throws if location permission is denied or services are off.
+  Future<void> start(String vehicleId) async {
+    if (_active) await stop();
+    await _ensureLocationPermission();
+
+    _active = true;
+    _vehicleId = vehicleId;
+    _error = null;
+    _framesSent = 0;
+    _reconnectAttempt = 0;
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, // metres
+      ),
+    ).listen(
+      _onFix,
+      onError: (Object e) => _setError('Location stream error: $e'),
+    );
+
+    _keepaliveTimer = Timer.periodic(keepaliveInterval, (_) => _keepalive());
+    await _connect();
+  }
+
+  Future<void> stop() async {
+    _active = false;
+    _paused = false;
+    _keepaliveTimer?.cancel();
+    _reconnectTimer?.cancel();
+    _pauseTimer?.cancel();
+    await _positionSub?.cancel();
+    await _socketSub?.cancel();
+    await _channel?.sink.close();
+    _positionSub = null;
+    _socketSub = null;
+    _channel = null;
+    _setState(GpsSessionState.idle);
+  }
+
+  /// Stops sending frames (socket stays open) so the backend watchdog
+  /// fires signal_lost. Sending resumes automatically afterwards, which
+  /// should re-arm the watchdog and flip the vehicle back to active.
+  void simulateSignalLoss({Duration duration = const Duration(seconds: 40)}) {
+    if (!_active) return;
+    _pauseTimer?.cancel();
+    _paused = true;
+    _setState(GpsSessionState.paused);
+    _pauseTimer = Timer(duration, () {
+      _paused = false;
+      if (!_active) return;
+      _setState(_channel != null ? GpsSessionState.live : GpsSessionState.reconnecting);
+      _sendLastFix();
+    });
+  }
+
+  Future<void> _ensureLocationPermission() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('Location services are turned off.');
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception('Location permission denied.');
+    }
+  }
+
+  Future<void> _connect() async {
+    if (!_active || _vehicleId == null) return;
+    _setState(_reconnectAttempt == 0
+        ? GpsSessionState.connecting
+        : GpsSessionState.reconnecting);
+
+    final channel = WebSocketChannel.connect(_wsUri('/ws/gps/$_vehicleId'));
+    try {
+      await channel.ready;
+    } catch (e) {
+      _scheduleReconnect('Could not reach GPS server');
+      return;
+    }
+    if (!_active) {
+      channel.sink.close();
+      return;
+    }
+
+    _channel = channel;
+    _reconnectAttempt = 0;
+    _error = null;
+    _setState(_paused ? GpsSessionState.paused : GpsSessionState.live);
+
+    _socketSub = channel.stream.listen(
+      (_) {}, // server doesn't send anything on this socket
+      onDone: () => _onSocketClosed(channel.closeCode),
+      onError: (_) => _onSocketClosed(channel.closeCode),
+      cancelOnError: true,
+    );
+
+    // Push the latest fix right away so the map updates on (re)connect.
+    _sendLastFix();
+  }
+
+  void _onSocketClosed(int? code) {
+    _channel = null;
+    _socketSub = null;
+    if (!_active) return;
+    // 1008 = backend rejected the vehicle id; retrying won't help.
+    if (code == 1008) {
+      _active = false;
+      _keepaliveTimer?.cancel();
+      _positionSub?.cancel();
+      _setError('Vehicle not found on server.');
+      return;
+    }
+    _scheduleReconnect('Connection lost');
+  }
+
+  void _scheduleReconnect(String reason) {
+    if (!_active) return;
+    _error = reason;
+    final delay = _backoff(_reconnectAttempt++);
+    _setState(GpsSessionState.reconnecting);
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, _connect);
+  }
+
+  void _onFix(Position fix) {
+    _lastFix = fix;
+    _sendLastFix();
+  }
+
+  void _keepalive() {
+    final last = _lastSentAt;
+    if (last == null || DateTime.now().difference(last) >= keepaliveInterval) {
+      _sendLastFix();
+    }
+  }
+
+  void _sendLastFix() {
+    final fix = _lastFix;
+    final channel = _channel;
+    if (fix == null || channel == null || _paused) {
+      return;
+    }
+    channel.sink.add(jsonEncode(encodeFix(fix)));
+    _lastSentAt = DateTime.now();
+    _framesSent++;
+    notifyListeners();
+  }
+
+  /// JSON frame accepted by the backend's gps_ingestion handler.
+  @visibleForTesting
+  static Map<String, dynamic> encodeFix(Position fix) => {
+        'lat': fix.latitude,
+        'lng': fix.longitude,
+        // Geolocator reports m/s and uses negative values for "unknown".
+        'spd': fix.speed >= 0 ? double.parse((fix.speed * 3.6).toStringAsFixed(2)) : null,
+        'hdg': fix.heading >= 0 ? double.parse(fix.heading.toStringAsFixed(2)) : null,
+        'ts': fix.timestamp.toUtc().toIso8601String(),
+      };
+
+  void _setState(GpsSessionState s) {
+    _state = s;
+    notifyListeners();
+  }
+
+  void _setError(String message) {
+    _error = message;
+    _setState(GpsSessionState.error);
+  }
+
+  @override
+  void dispose() {
+    stop();
+    super.dispose();
   }
 }

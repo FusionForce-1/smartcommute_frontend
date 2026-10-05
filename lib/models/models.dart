@@ -6,6 +6,8 @@
 // so the rest of your app never has to write response['field'] and
 // risk typos or null-safety crashes.
 
+import 'vehicle_live_update.dart' show parseServerTime;
+
 // ---------------------------------------------------------------
 // AUTH
 // ---------------------------------------------------------------
@@ -219,7 +221,7 @@ class VehicleModel {
         status: json['status'],
         crowdLevel: json['crowd_level'],
         lastPosition: json['last_position'] != null
-            ? GPSPositionModel.fromJson(json['last_position'])
+            ? GPSPositionModel.fromJson(json['last_position'], vehicleId: json['id'])
             : null,
       );
 }
@@ -228,8 +230,9 @@ class GPSPositionModel {
   final String vehicleId;
   final double lat;
   final double lng;
-  final double? speed;
-  final double? heading;
+  final double? speed; // km/h
+  final double? heading; // degrees from north
+  final DateTime? timestamp; // device fix time (UTC)
 
   GPSPositionModel({
     required this.vehicleId,
@@ -237,16 +240,33 @@ class GPSPositionModel {
     required this.lng,
     this.speed,
     this.heading,
+    this.timestamp,
   });
 
-  factory GPSPositionModel.fromJson(Map<String, dynamic> json) =>
-      GPSPositionModel(
-        vehicleId: json['vehicle_id'],
-        lat: json['lat'].toDouble(),
-        lng: json['lng'].toDouble(),
-        speed: json['speed']?.toDouble(),
-        heading: json['heading']?.toDouble(),
-      );
+  // The backend sends positions in two shapes:
+  //   GET /vehicles/{id}/position -> {"location": GeoJSON Point, "timestamp", ...}
+  //   vehicle.last_position       -> {"lat", "lng", "timestamp"} (no vehicle_id)
+  // so accept both instead of assuming flat lat/lng.
+  factory GPSPositionModel.fromJson(Map<String, dynamic> json, {String? vehicleId}) {
+    final double lat;
+    final double lng;
+    if (json['location'] != null) {
+      final point = GeoJSONPoint.fromJson(json['location']);
+      lat = point.lat;
+      lng = point.lng;
+    } else {
+      lat = (json['lat'] as num).toDouble();
+      lng = (json['lng'] as num).toDouble();
+    }
+    return GPSPositionModel(
+      vehicleId: json['vehicle_id'] ?? vehicleId ?? '',
+      lat: lat,
+      lng: lng,
+      speed: (json['speed'] as num?)?.toDouble(),
+      heading: (json['heading'] as num?)?.toDouble(),
+      timestamp: parseServerTime(json['timestamp'] ?? json['ts']),
+    );
+  }
 }
 
 // ---------------------------------------------------------------

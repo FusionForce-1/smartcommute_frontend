@@ -8,7 +8,9 @@
 // startup that were previously missing entirely — see _setUpGoogleSignIn()
 // below for why.
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 import '../config/theme_config.dart';
 import '../providers/auth_provider.dart';
@@ -41,6 +43,10 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   // Navigator directly regardless of where we're calling from.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
+  // Same idea for SnackBars shown from the Google callback above.
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
   @override
   void initState() {
     super.initState();
@@ -65,14 +71,43 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   // listening, so the NEXT Google click (from Login) had no one to
   // report back to. Calling this again after every result — success
   // or not — keeps a fresh listener always armed for the next attempt.
+  //
+  // Re-arming happens in whenComplete so it also runs when the sign-in
+  // FAILS — previously a single backend rejection (e.g. 401) skipped the
+  // re-arm and Google sign-in silently stopped working until reload.
   void _listenForNextGoogleSignIn() {
     GoogleAuthService.instance.signInAndGetIdToken().then((idToken) async {
-      if (idToken != null) {
-        await _authProvider.loginWithGoogle(idToken);
-        _navigateToDashboard(_authProvider.role);
-      }
+      if (idToken == null) return; // user closed the popup
+      await _authProvider.loginWithGoogle(idToken);
+      _navigateToDashboard(_authProvider.role);
+    }).catchError((Object e) {
+      debugPrint('Google sign-in failed: $e');
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(_googleErrorMessage(e))),
+      );
+    }).whenComplete(() {
       if (mounted) _listenForNextGoogleSignIn(); // re-arm for next time
     });
+  }
+
+  static String _googleErrorMessage(Object e) {
+    if (e is DioException) {
+      final status = e.response?.statusCode;
+      final detail = e.response?.data is Map ? e.response?.data['detail'] : null;
+      if (status == null) {
+        return "Can't reach the server. Check that the backend is running.";
+      }
+      if (status == 401) {
+        return 'Google sign-in was rejected by the server'
+            '${detail != null ? ': $detail' : '.'}';
+      }
+      if (status == 403) return detail?.toString() ?? 'Account is not allowed.';
+      return 'Google sign-in failed (HTTP $status).';
+    }
+    if (e is GoogleSignInException) {
+      return 'Google sign-in failed: ${e.description ?? e.code.name}';
+    }
+    return 'Google sign-in failed. Try again.';
   }
 
   // Uses the GlobalKey instead of a BuildContext — works correctly
@@ -110,6 +145,7 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
       value: _authProvider,
       child: MaterialApp(
         navigatorKey: _navigatorKey,
+        scaffoldMessengerKey: _scaffoldMessengerKey,
         title: 'Smart Commute',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
