@@ -73,3 +73,46 @@
     border-bottom-right-radius: 60px;
   }
 }
+
+/* Short laptop screens (e.g. 1366×768, 1280×720): tighten vertical spacing
+   so the Login card fits without scrolling. Register still scrolls — it is
+   a long form by design. */
+@media (max-height: 820px) and (min-width: 641px) {
+  .brand-header {
+    padding-top: var(--space-sm);
+    padding-bottom: 0;
+  }
+
+  .brand-header__logo {
+    height: 60px;
+  }
+
+  .split-bg__center {
+    padding: var(--space-xs) var(--space-md) var(--space-md);
+  }
+
+  .auth-card {
+    padding: var(--space-md) var(--space-lg);
+  }
+
+  .auth-card__title {
+    font-size: 28px;
+  }
+
+  .or-divider {
+    margin: var(--space-sm) 0;
+  }
+
+  .field-group {
+    margin-bottom: 12px;
+  }
+
+  .btn {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .options-row {
+    margin-bottom: var(--space-sm);
+  }
+}

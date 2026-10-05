@@ -295,6 +295,26 @@
   font-weight: 500;
 }
 
+/* Invisible Google (GIS) button stretched over .btn-google — see js/services/googleAuth.js */
+.google-signin {
+  position: relative;
+}
+
+.google-signin__overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 400px;
+  height: 44px;
+  overflow: hidden;
+  opacity: 0;
+  transform-origin: 0 0;
+}
+
+.google-signin:hover .btn-google {
+  background: #F7F8FA;
+}
+
 .btn-google svg {
   width: 20px;
   height: 20px;
@@ -338,6 +358,21 @@
    instead of being silently overridden by the display:flex above. */
 .error-banner[hidden] {
   display: none;
+}
+
+.error-banner__text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.error-banner .sc-icon {
+  flex-shrink: 0;
+}
+
+.error-banner--success {
+  background: #E8F5EE;
+  color: #0F7A4D;
 }
 
 .error-banner svg {

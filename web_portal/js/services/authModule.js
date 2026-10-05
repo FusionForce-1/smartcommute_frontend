@@ -14,7 +14,7 @@
 // OTP fixture: 123456
 
 const AuthModule = (() => {
-  const USE_MOCKS = false; // TODO: Velez — set false once POST /auth/* is live
+  const USE_MOCKS = false; // true = offline demo accounts below; false = live FastAPI
   const delay = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const users = {
@@ -25,13 +25,7 @@ const AuthModule = (() => {
   const otps = {};
 
   async function request(method, path, body) {
-    // TODO: Velez — replace this mock switch with:
-    //   return apiClient.request(method, path, body)
-    // Endpoints: POST /auth/login, /auth/register, /auth/forgot-password,
-    //            /auth/reset-password, /auth/google
-    if (!USE_MOCKS) {
-      throw new Error('Live apiClient is not wired yet — keep USE_MOCKS true or plug F7 here.');
-    }
+    if (!USE_MOCKS) return ApiClient.request(method, path, body, { auth: false });
     await delay();
     return mockDispatch(method, path, body);
   }
@@ -106,19 +100,66 @@ const AuthModule = (() => {
     throw err;
   }
 
+  /** Saves company details for the signed-in operator (POST /operators). */
+  function createOperatorProfile({ company_name, franchise_number, contact_number }) {
+    // user_id is required by the schema but the server overwrites it with
+    // the id from the token, so any placeholder works.
+    return ApiClient.post('/operators', { user_id: 'self', company_name, franchise_number, contact_number });
+  }
+
   return {
-    login: (email, password, rememberMe) =>
-      request('POST', '/auth/login', {
-        email,
-        password,
-        remember_me: rememberMe,
-      }),
+    login: async (email, password, rememberMe) => {
+      const result = await request('POST', '/auth/login', { email, password });
+      Session.save({ ...result, email }, rememberMe);
+      return result;
+    },
 
-    registerOperator: (payload) =>
-      request('POST', '/auth/register', { ...payload, role: 'operator' }),
+    logout: async () => {
+      try {
+        await ApiClient.post('/auth/logout');
+      } catch {
+        // JWTs are stateless — clearing the local session is what logs out.
+      }
+      Session.clear();
+    },
 
-    loginWithGoogle: (idToken, email) =>
-      request('POST', '/auth/google', { id_token: idToken, email }),
+    /**
+     * Email/password operator sign-up: creates the account, signs in once to
+     * save the company profile (that endpoint needs a token), then signs out
+     * so the operator logs in normally afterwards.
+     */
+    registerOperator: async ({ name, email, password, profile }) => {
+      await request('POST', '/auth/register', { name, email, password, role: 'operator' });
+      try {
+        const tokens = await request('POST', '/auth/login', { email, password });
+        Session.save({ ...tokens, email });
+        await createOperatorProfile(profile);
+      } finally {
+        Session.clear();
+      }
+    },
+
+    /**
+     * Signs in with a Google ID token. `role` only applies when the Google
+     * account is brand new (the backend never changes an existing role).
+     */
+    loginWithGoogle: async (idToken, { role, email, rememberMe = false } = {}) => {
+      const result = await request('POST', '/auth/google', { id_token: idToken, role });
+      Session.save({ ...result, email }, rememberMe);
+      return result;
+    },
+
+    /** The signed-in operator's company profile, or null if not created yet. */
+    getMyOperatorProfile: async () => {
+      try {
+        return await ApiClient.get('/operators/me');
+      } catch (err) {
+        if (err.statusCode === 404) return null;
+        throw err;
+      }
+    },
+
+    createOperatorProfile,
 
     forgotPassword: (email) =>
       request('POST', '/auth/forgot-password', { email }),

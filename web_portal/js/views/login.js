@@ -3,7 +3,7 @@
 // Operator / Admin web login. UI by Emae; HTTP by Velez (AuthModule).
 
 Router.register('login', {
-  render() {
+  render(params = {}) {
     return `
       <div class="auth-page">
         <div class="split-bg">
@@ -15,6 +15,10 @@ Router.register('login', {
                 <h1 class="auth-card__title">Login Now</h1>
                 <p class="auth-card__subtitle">Welcome back — enter your credentials to continue</p>
 
+                ${params.registered ? `
+                  <div class="error-banner error-banner--success">
+                    ${iconMarkup('circle-check')}<span>Registration complete. An admin will review your operator account — you can log in now.</span>
+                  </div>` : ''}
                 ${Components.errorBanner({ id: 'login-error', message: 'Invalid email or password.' })}
 
                 ${Components.button({ id: 'login-google', label: 'Continue with Google', variant: 'google' })}
@@ -55,6 +59,12 @@ Router.register('login', {
       AuthPopup.openForgotPassword();
     });
 
+    function showLoginError(message) {
+      const banner = document.querySelector('#login-error .error-banner__text');
+      if (banner) banner.textContent = message || 'Invalid email or password.';
+      showError('login-error');
+    }
+
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       hideError('login-error');
@@ -62,33 +72,60 @@ Router.register('login', {
       const password = document.getElementById('login-password').value;
       const rememberMe = document.getElementById('login-remember').checked;
 
-      // TODO [Velez]: AuthModule.login → POST /auth/login, persist session
+      if (!email || !password) {
+        showLoginError('Please enter your email and password.');
+        return;
+      }
+
       try {
         const result = await AuthModule.login(email, password, rememberMe);
-        const role = result?.role || 'operator';
-        if (role === 'admin') {
-          window.location.href = '../admin/index.html';
-        } else {
-          window.location.href = '../operator/index.html';
-        }
+        await PortalRedirect.afterLogin(result.role);
       } catch (err) {
-        const banner = document.querySelector('#login-error span');
-        if (banner) banner.textContent = err.message || 'Invalid email or password.';
-        showError('login-error');
+        showLoginError(err.message);
       }
     });
 
-    document.getElementById('login-google').addEventListener('click', async () => {
-      // TODO [Velez]: GIS id_token, then AuthModule.loginWithGoogle → POST /auth/google
-      try {
-        const result = await AuthModule.loginWithGoogle();
-        const role = result?.role || 'operator';
-        window.location.href = role === 'admin'
-          ? '../admin/index.html'
-          : '../operator/index.html';
-      } catch (err) {
-        alert(err.message || 'Google sign-in failed.');
-      }
+    GoogleAuth.attach(document.getElementById('login-google'), {
+      onError: (err) => showLoginError(err.message),
+      onCredential: async (idToken) => {
+        hideError('login-error');
+        try {
+          const result = await AuthModule.loginWithGoogle(idToken, {
+            email: GoogleAuth.emailFrom(idToken),
+            rememberMe: document.getElementById('login-remember').checked,
+          });
+          await PortalRedirect.afterLogin(result.role);
+        } catch (err) {
+          GoogleAuth.forgetAccount();
+          showLoginError(err.message || 'Google sign-in failed.');
+        }
+      },
     });
   },
 });
+
+// Sends a signed-in user to the right portal. Shared by Login and Register.
+const PortalRedirect = {
+  /**
+   * Admin → admin portal. Operator → operator portal, after collecting the
+   * company profile if it was never saved. Anyone else is signed back out:
+   * commuters and drivers use the mobile app.
+   */
+  async afterLogin(role) {
+    if (role === 'admin') {
+      window.location.href = 'admin/index.html';
+      return;
+    }
+    if (role !== 'operator') {
+      Session.clear();
+      throw new Error('This portal is for operators and admins. Please use the Smart Commute mobile app.');
+    }
+
+    const profile = await AuthModule.getMyOperatorProfile();
+    if (profile) {
+      window.location.href = 'operator/index.html';
+    } else {
+      OperatorProfilePopup.open(Session.email);
+    }
+  },
+};
