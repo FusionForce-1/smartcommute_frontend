@@ -15,19 +15,19 @@ const AdminUi = (() => {
       .replace(/'/g, '&#39;');
   }
 
-  /** The API sends naive UTC timestamps ("2026-01-15T08:00:00"); treat them as UTC. */
+  /**
+   * Accepts a Date, or an API timestamp. The API sends naive UTC timestamps
+   * ("2026-01-15T08:00:00"), so a string without a zone is treated as UTC.
+   */
   function parseDate(value) {
     if (!value) return null;
+    if (value instanceof Date) return value;
     const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(value);
     const date = new Date(hasZone ? value : `${value}Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  function formatMonth(value) {
-    const date = parseDate(value);
-    return date ? date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '—';
-  }
-
+  /** "Oct 6, 2026" */
   function formatDate(value) {
     const date = parseDate(value);
     return date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
@@ -115,7 +115,7 @@ const AdminUi = (() => {
         <td>${escapeHtml(user.email)}</td>
         <td>${roleBadge(user.role)}</td>
         <td>${statusChip(user.status)}</td>
-        <td>${formatMonth(user.created_at)}</td>
+        <td>${formatDate(user.created_at)}</td>
         <td>
           <div class="data-table__actions">
             <button type="button" class="btn-sm" data-action="edit-user" data-id="${user.id}">Edit</button>
@@ -208,7 +208,6 @@ const AdminUi = (() => {
 
   return {
     escapeHtml,
-    formatMonth,
     formatDate,
     formatDateTime,
     formatNumber,

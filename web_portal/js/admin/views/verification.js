@@ -7,13 +7,13 @@ AdminRouter.register('verification', {
 
   mount(el) {
     const STATUS_FILTERS = [
+      { value: '', label: 'All' },
       { value: 'pending', label: 'Pending' },
       { value: 'verified', label: 'Verified' },
       { value: 'declined', label: 'Declined' },
-      { value: '', label: 'All' },
     ];
 
-    let filter = 'pending';
+    let filter = '';
     let profiles = [];
 
     el.innerHTML = `

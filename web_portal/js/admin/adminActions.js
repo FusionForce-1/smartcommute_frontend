@@ -116,13 +116,15 @@ const UserActions = (() => {
 
 const OperatorReview = (() => {
   function details(profile) {
+    // Not verified yet: show today, the date Approve will record.
+    const verifiedAt = profile.verified_at || new Date();
     const rows = [
       ['Full Name', profile.full_name],
       ['Email Address', profile.email],
       ['Contact Number', profile.contact_number],
       ['Company Name', profile.company_name],
       ['Franchise Number', profile.franchise_number],
-      ['Verified At', profile.verified_at ? AdminUi.formatDate(profile.verified_at) : 'Not yet verified'],
+      ['Verified At', AdminUi.formatDate(verifiedAt)],
     ];
     if (profile.declined_at) rows.push(['Declined At', AdminUi.formatDate(profile.declined_at)]);
 

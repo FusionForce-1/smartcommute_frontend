@@ -501,7 +501,7 @@ body.admin-body {
 
 .health-item__dot {
   width: 0.875rem;
-  height: 1.125rem;
+  aspect-ratio: 1; /* height always equals width: a true circle */
   border-radius: 50%;
   background: var(--status-ok);
   flex-shrink: 0;
