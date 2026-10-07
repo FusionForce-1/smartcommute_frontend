@@ -38,6 +38,16 @@ const ICONS = Object.freeze({
   sidebarNav: 'menu',
   settings: 'settings',
 
+  // ---- Admin sidebar ----
+  navDashboard: 'layout-grid',
+  navUsers: 'users',
+  navVerification: 'circle-check',
+  navSystemHealth: 'bell',
+  navReports: 'file-text',
+  navConfig: 'settings',
+  navLogout: 'log-out',
+  navHelp: 'circle-help',
+
   // ---- Fleet / vehicles / routes ----
   plate: 'car-front',
   route: 'route',
@@ -63,4 +73,6 @@ const ICONS = Object.freeze({
 
 // Google's "G" logo is brand asset, not a Lucide glyph — kept alongside
 // ICONS so every page pulls it from one place too.
-const GOOGLE_LOGO_SRC = '/assets/icons/google-logo.svg';
+// Relative (no leading slash) so it resolves under any server root, e.g.
+// Live Server at /smartcommute_frontend/web_portal/.
+const GOOGLE_LOGO_SRC = 'assets/icons/google-logo.svg';
