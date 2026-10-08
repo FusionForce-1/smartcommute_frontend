@@ -34,7 +34,7 @@ const AuthPopup = (() => {
         await AuthModule.forgotPassword(email);
         AuthPopup.openVerifyOtp(email);
       } catch (err) {
-        const banner = document.querySelector('#forgot-error span');
+        const banner = document.querySelector('#forgot-error .error-banner__text');
         if (banner) banner.textContent = err.message || 'This email is not registered';
         showError('forgot-error');
       }
@@ -86,7 +86,7 @@ const AuthPopup = (() => {
         AuthModal.close();
         Router.go('login');
       } catch (err) {
-        const banner = document.querySelector('#otp-error span');
+        const banner = document.querySelector('#otp-error .error-banner__text');
         if (banner) banner.textContent = err.message || 'Incorrect or expired code. Try again.';
         showError('otp-error');
       }

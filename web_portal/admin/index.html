@@ -1,387 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="admin-root">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Commute — System Admin</title>
+  <title>Smart Commute Admin</title>
   <link rel="stylesheet" href="../css/theme.css" />
-  <style>
-    /* Admin portal shell — wider sidebar + top header toolbar (E4 test layout) */
-    :root {
-      --sidebar-width: 280px;
-      --header-height: 72px;
-    }
-
-    body {
-      background: var(--color-bg-ice-blue);
-      overflow: hidden;
-    }
-
-    .portal {
-      display: flex;
-      min-height: 100vh;
-    }
-
-    .sidebar {
-      position: fixed;
-      inset: 0 auto 0 0;
-      width: var(--sidebar-width);
-      background: var(--color-primary);
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      padding: var(--space-md);
-      z-index: 10;
-    }
-
-    .sidebar__brand {
-      font-size: 1.25rem;
-      font-weight: 700;
-      margin-bottom: var(--space-xs);
-    }
-
-    .sidebar__brand span {
-      display: block;
-      font-size: 0.8125rem;
-      font-weight: 400;
-      opacity: 0.75;
-      margin-top: 4px;
-    }
-
-    .sidebar__section-label {
-      font-size: 0.6875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      opacity: 0.55;
-      margin: var(--space-sm) 0 var(--space-xs);
-    }
-
-    .sidebar__nav {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
-    }
-
-    .sidebar__link {
-      display: block;
-      padding: 11px 14px;
-      border-radius: var(--radius-button);
-      color: rgba(255, 255, 255, 0.88);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.9375rem;
-    }
-
-    .sidebar__link:hover,
-    .sidebar__link.is-active {
-      background: rgba(255, 255, 255, 0.14);
-      color: #fff;
-      text-decoration: none;
-    }
-
-    .sidebar__footer {
-      margin-top: auto;
-      padding-top: var(--space-sm);
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
-      font-size: 0.8125rem;
-      opacity: 0.8;
-    }
-
-    .main {
-      margin-left: var(--sidebar-width);
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-
-    .main__header {
-      min-height: var(--header-height);
-      background: var(--color-bg-white);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: var(--space-sm) var(--space-md);
-      box-shadow: var(--shadow-card);
-      gap: var(--space-sm);
-      flex-wrap: wrap;
-    }
-
-    .main__header-left h1 {
-      margin: 0;
-      font-size: 1.375rem;
-      font-weight: 700;
-    }
-
-    .main__header-left p {
-      margin: 4px 0 0;
-      font-size: 0.875rem;
-      color: var(--color-text-secondary);
-    }
-
-    .main__header-actions {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-      flex-wrap: wrap;
-    }
-
-    .header-search {
-      border: 1px solid rgba(0, 0, 0, 0.12);
-      border-radius: var(--radius-button);
-      padding: 8px 14px;
-      min-width: 220px;
-      font-size: 0.875rem;
-    }
-
-    .badge {
-      background: var(--color-accent);
-      color: #1a1a1a;
-      font-size: 0.75rem;
-      font-weight: 700;
-      padding: 5px 12px;
-      border-radius: var(--radius-chip);
-    }
-
-    .header-btn {
-      background: var(--color-secondary);
-      color: #fff;
-      border: none;
-      border-radius: var(--radius-button);
-      padding: 9px 16px;
-      font-weight: 600;
-      font-size: 0.875rem;
-    }
-
-    .main__content {
-      flex: 1;
-      padding: var(--space-md);
-      overflow-y: auto;
-    }
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: var(--space-sm);
-      margin-bottom: var(--space-md);
-    }
-
-    .stat-card {
-      background: var(--color-bg-white);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-card);
-      padding: var(--space-md);
-    }
-
-    .stat-card strong {
-      display: block;
-      font-size: 1.75rem;
-      color: var(--color-primary);
-      line-height: 1.1;
-    }
-
-    .stat-card span {
-      font-size: 0.8125rem;
-      color: var(--color-text-secondary);
-    }
-
-    .panel-grid {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: var(--space-sm);
-    }
-
-    .panel {
-      background: var(--color-bg-white);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-card);
-      padding: var(--space-md);
-      min-height: 240px;
-    }
-
-    .panel h2 {
-      margin: 0 0 var(--space-sm);
-      font-size: 1.0625rem;
-    }
-
-    .panel p {
-      margin: 0;
-      color: var(--color-text-secondary);
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-
-    .table-placeholder {
-      margin-top: var(--space-sm);
-      border: 1px dashed rgba(0, 0, 0, 0.15);
-      border-radius: var(--radius-button);
-      padding: var(--space-md);
-      text-align: center;
-      color: var(--color-text-secondary);
-      font-size: 0.875rem;
-    }
-
-    @media (max-width: 960px) {
-      .panel-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 768px) {
-      .sidebar {
-        width: 80px;
-        padding: var(--space-sm);
-      }
-
-      .sidebar__brand span,
-      .sidebar__section-label,
-      .sidebar__link span,
-      .sidebar__footer {
-        display: none;
-      }
-
-      .main {
-        margin-left: 80px;
-      }
-
-      .header-search {
-        min-width: 140px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="../css/admin.css" />
 </head>
-<body>
-  <div class="portal">
-    <aside class="sidebar" aria-label="Admin navigation">
-      <div class="sidebar__brand">
-        Smart Commute
-        <span>System Administration</span>
+<body class="admin-body">
+  <div class="admin">
+    <aside class="admin-sidebar" aria-label="Admin navigation">
+      <div class="admin-sidebar__brand">
+        <img class="admin-sidebar__logo" src="../assets/images/smart_commute_logo_landscape.png" alt="Smart Commute" />
       </div>
-
-      <div class="sidebar__section-label">Management</div>
-      <nav class="sidebar__nav">
-        <a href="#" class="sidebar__link is-active" data-section="dashboard"><span>Dashboard</span></a>
-        <a href="#" class="sidebar__link" data-section="users"><span>User Management</span></a>
-        <a href="#" class="sidebar__link" data-section="operators"><span>Operator Verification</span></a>
-        <a href="#" class="sidebar__link" data-section="fleet"><span>Fleet Overview</span></a>
-
-        <div class="sidebar__section-label">System</div>
-        <a href="#" class="sidebar__link" data-section="reports"><span>Reports &amp; Analytics</span></a>
-        <a href="#" class="sidebar__link" data-section="audit"><span>Audit Log</span></a>
-        <a href="#" class="sidebar__link" data-section="settings"><span>System Settings</span></a>
-        <a href="../index.html#/login" class="sidebar__link"><span>Sign out</span></a>
-      </nav>
-
-      <div class="sidebar__footer">Test shell — Emae UI scope</div>
+      <nav class="admin-nav" id="admin-nav"></nav>
+      <div class="admin-nav admin-nav--footer" id="admin-nav-footer"></div>
     </aside>
 
-    <div class="main">
-      <header class="main__header">
-        <div class="main__header-left">
-          <h1 id="page-title">System Dashboard</h1>
-          <p id="page-subtitle">Monitor users, operators, fleet health, and platform activity.</p>
-        </div>
-        <div class="main__header-actions">
-          <input type="search" class="header-search" placeholder="Search users, routes…" aria-label="Global search" />
-          <span class="badge">System Admin</span>
-          <button type="button" class="header-btn" id="btn-export">Export Report</button>
-        </div>
+    <div class="admin-main">
+      <header class="admin-header">
+        <h1 class="admin-header__title">System Administration</h1>
+        <span class="admin-header__email" id="admin-email"></span>
       </header>
 
-      <main class="main__content">
-        <div class="stats-row">
-          <div class="stat-card">
-            <strong>—</strong>
-            <span>Total Users</span>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </div>
-          <div class="stat-card">
-            <strong>—</strong>
-            <span>Pending Operators</span>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </div>
-          <div class="stat-card">
-            <strong>—</strong>
-            <span>Active Vehicles</span>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </div>
-          <div class="stat-card">
-            <strong>—</strong>
-            <span>Open Reports</span>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </div>
-        </div>
-
-        <div class="panel-grid">
-          <section class="panel">
-            <h2>User Management</h2>
-            <p>Review, activate, and assign roles across commuter, driver, operator, and admin accounts.</p>
-            <div class="table-placeholder">User table placeholder — paginated list</div>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </section>
-          <section class="panel">
-            <h2>Recent Activity</h2>
-            <p>Latest audit events and system alerts.</p>
-            <div class="table-placeholder">Activity feed placeholder</div>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </section>
-        </div>
-      </main>
+      <!-- js/admin/adminRouter.js renders the current view here -->
+      <main class="admin-content" id="admin-view"></main>
     </div>
   </div>
 
-  <script>
-    const pages = {
-      dashboard: {
-        title: 'System Dashboard',
-        subtitle: 'Monitor users, operators, fleet health, and platform activity.',
-      },
-      users: {
-        title: 'User Management',
-        subtitle: 'Create, update, and deactivate platform accounts.',
-      },
-      operators: {
-        title: 'Operator Verification',
-        subtitle: 'Approve or reject pending operator registrations.',
-      },
-      fleet: {
-        title: 'Fleet Overview',
-        subtitle: 'System-wide vehicle and route status.',
-      },
-      reports: {
-        title: 'Reports & Analytics',
-        subtitle: 'Fleet and system performance metrics.',
-      },
-      audit: {
-        title: 'Audit Log',
-        subtitle: 'Immutable record of administrative actions.',
-      },
-      settings: {
-        title: 'System Settings',
-        subtitle: 'Platform configuration and maintenance tools.',
-      },
-    };
+  <!-- Config + shared services -->
+  <script src="../js/config.js"></script>
+  <script src="../js/constants/icons.js"></script>
+  <script src="../js/components.js"></script>
+  <script src="../js/services/session.js"></script>
+  <script src="../js/services/apiClient.js"></script>
+  <script src="../js/services/authModule.js"></script>
 
-    document.querySelectorAll('.sidebar__link[data-section]').forEach((link) => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.querySelectorAll('.sidebar__link').forEach((l) => l.classList.remove('is-active'));
-        link.classList.add('is-active');
-        const page = pages[link.dataset.section];
-        if (page) {
-          document.getElementById('page-title').textContent = page.title;
-          document.getElementById('page-subtitle').textContent = page.subtitle;
-        }
-        // TODO [Velez]: Wire with API/State Provider here — load section data
-      });
-    });
+  <!-- Admin building blocks -->
+  <script src="../js/admin/adminApi.js"></script>
+  <script src="../js/admin/adminUi.js"></script>
+  <script src="../js/admin/adminActions.js"></script>
+  <script src="../js/admin/adminRouter.js"></script>
 
-    document.getElementById('btn-export').addEventListener('click', () => {
-      // TODO [Velez]: Wire with API/State Provider here — GET /reports/system export
-      alert('Export report (preview)');
-    });
-  </script>
+  <!-- Each view self-registers with AdminRouter.register(...) -->
+  <script src="../js/admin/views/dashboard.js"></script>
+  <script src="../js/admin/views/users.js"></script>
+  <script src="../js/admin/views/verification.js"></script>
+  <script src="../js/admin/views/systemHealth.js"></script>
+  <script src="../js/admin/views/reports.js"></script>
+  <script src="../js/admin/views/config.js"></script>
+
+  <!-- Auth guard + Router start — must load last -->
+  <script src="../js/admin/adminApp.js"></script>
 </body>
 </html>
