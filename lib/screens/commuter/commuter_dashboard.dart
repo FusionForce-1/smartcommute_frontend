@@ -185,28 +185,18 @@ class _CommuterTabPlaceholderState
         @override
           void initState() {
             super.initState();
-                  _stopsService = StopsService(_dio);
-                  _routesService = RoutesService(_dio);
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles 
-                  _webSocketService = WebSocketService();
-                  _webSocketService.connect();
-                  _webSocketService.listenForMessages((message) {
-                    debugPrint('INCOMING JSON: $message');
-                    if (!mounted) return;
+            _stopsService = StopsService(_dio);
+            _routesService = RoutesService(_dio);
+            _ticker = createTicker(_onTick);
 
-                  // IndexedStack builds every tab, so only the Map tab
-                  // opens the live socket and loads map data — otherwise
-                  // each tab would open its own connection.
-                  _ticker = createTicker(_onTick);
-                  if (!_isMapTab) return;
-
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
-                  _webSocketService = WebSocketService()
-                    ..connect()
-                    ..listenForMessages(_onVehicleMessage);
-                  _loadStops();
-                  _loadRoutes();
-                  }
+            // Only the Map tab needs live vehicle updates and map data.
+            if (!_isMapTab) return;
+            _webSocketService = WebSocketService()
+              ..connect()
+              ..listenForMessages(_onVehicleMessage);
+            _loadStops();
+            _loadRoutes();
+          }
 
           @override
             void dispose() {
@@ -236,19 +226,6 @@ class _CommuterTabPlaceholderState
             if (!_ticker.isActive) _ticker.start();
           }
 
-                    setState(() {
-                      _vehicleId = vehicleId;
-                      _vehicleLocation = LatLng(lat, lng);
-                    });
-                  });
-                      _loadStops();
-                      _loadRoutes();
-                  }
-          @override
-            void dispose() {
-              _webSocketService.disconnect();
-              super.dispose();
-            }
           void _onTick(Duration _) {
             final now = _clock.elapsed;
             _frame.value++;
