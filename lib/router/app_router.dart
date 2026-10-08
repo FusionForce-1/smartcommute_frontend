@@ -12,6 +12,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
+import 'package:smartcommute_app/screens/operator/operator_dashboard.dart';
 import '../config/theme_config.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -121,6 +122,9 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
       case 'driver':
         destination = const DriverDashboard();
         break;
+      case 'operator':
+        destination = const OperatorDashboard();
+        break;
       case 'commuter':
       default:
         destination = CommuterDashboard(isGuest: isGuest);
@@ -161,6 +165,9 @@ void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = f
   switch (role) {
     case 'driver':
       destination = const DriverDashboard();
+      break;
+    case 'operator':
+      destination = const OperatorDashboard();
       break;
     case 'commuter':
     default:

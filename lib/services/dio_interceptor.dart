@@ -109,6 +109,10 @@ class DioInterceptor extends Interceptor {
 
         // Retry the ORIGINAL failed request, now with the new token.
         err.requestOptions.headers['Authorization'] = 'Bearer $newAccessToken';
+        // A FormData body (e.g. license photo uploads) can only be sent
+        // once, so the retry needs a fresh copy of it.
+        final body = err.requestOptions.data;
+        if (body is FormData) err.requestOptions.data = body.clone();
         final retryResponse = await dio.fetch(err.requestOptions);
 
         _isRefreshing = false;

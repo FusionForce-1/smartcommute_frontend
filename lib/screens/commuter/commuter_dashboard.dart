@@ -185,6 +185,18 @@ class _CommuterTabPlaceholderState
         @override
           void initState() {
             super.initState();
+            _stopsService = StopsService(_dio);
+            _routesService = RoutesService(_dio);
+            _ticker = createTicker(_onTick);
+
+            // Only the Map tab needs live vehicle updates and map data.
+            if (!_isMapTab) return;
+            _webSocketService = WebSocketService()
+              ..connect()
+              ..listenForMessages(_onVehicleMessage);
+            _loadStops();
+            _loadRoutes();
+          }
                   _stopsService = StopsService(_dio);
                   _routesService = RoutesService(_dio);
 
