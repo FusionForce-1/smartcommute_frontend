@@ -46,53 +46,87 @@ Router.register('register', {
     wirePasswordToggle('register-password');
     wirePasswordToggle('register-repeat-password');
 
+    function showRegisterError(message) {
+      const banner = document.querySelector('#register-error .error-banner__text');
+      if (banner) banner.textContent = message;
+      showError('register-error');
+    }
+
+    const value = (id) => document.getElementById(id).value.trim();
+
     document.getElementById('register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const payload = {
-        full_name: document.getElementById('register-full-name').value.trim(),
-        email: document.getElementById('register-email').value.trim(),
-        contact_number: document.getElementById('register-contact').value.trim(),
-        company_name: document.getElementById('register-company').value.trim(),
-        franchise_number: document.getElementById('register-franchise').value.trim(),
-        password: document.getElementById('register-password').value,
-        repeatPassword: document.getElementById('register-repeat-password').value,
-        role: 'operator',
-      };
-
-      if (payload.password !== payload.repeatPassword) {
-        const banner = document.querySelector('#register-error span');
-        if (banner) banner.textContent = 'Passwords do not match.';
-        showError('register-error');
-        return;
-      }
       hideError('register-error');
 
-      // TODO: Velez — AuthModule.registerOperator → POST /auth/register
-      // Include company_name + franchise_number for operator verification later.
+      const name = value('register-full-name');
+      const email = value('register-email');
+      const password = document.getElementById('register-password').value;
+      const repeatPassword = document.getElementById('register-repeat-password').value;
+      const profile = {
+        company_name: value('register-company'),
+        franchise_number: value('register-franchise'),
+        contact_number: value('register-contact'),
+      };
+
+      const problem = validateRegistration({ name, email, password, repeatPassword, profile });
+      if (problem) {
+        showRegisterError(problem);
+        return;
+      }
+
+      const submit = document.getElementById('register-submit');
+      submit.disabled = true;
       try {
-        await AuthModule.registerOperator(payload);
-        Router.go('login');
+        await AuthModule.registerOperator({ name, email, password, profile });
+        Router.go('login', { registered: '1' });
       } catch (err) {
-        const banner = document.querySelector('#register-error span');
-        if (banner) banner.textContent = err.message || 'Registration failed.';
-        showError('register-error');
+        showRegisterError(err.message || 'Registration failed.');
+      } finally {
+        submit.disabled = false;
       }
     });
 
-    document.getElementById('register-google').addEventListener('click', async () => {
-      // TODO: Velez — GIS id_token, POST /auth/google, then if needs_profile
-      // open the Complete Profile overlay (company / franchise / contact).
-      try {
-        const result = await AuthModule.loginWithGoogle('preview-google-id-token');
-        OperatorGoogleProfile.open(result.email || 'operator@gmail.com');
-      } catch (err) {
-        alert(err.message || 'Google sign-in failed.');
-      }
+    GoogleAuth.attach(document.getElementById('register-google'), {
+      onError: (err) => showRegisterError(err.message),
+      onCredential: async (idToken) => {
+        hideError('register-error');
+        try {
+          const result = await AuthModule.loginWithGoogle(idToken, {
+            role: 'operator',
+            email: GoogleAuth.emailFrom(idToken),
+          });
+          if (result.role !== 'operator') {
+            Session.clear();
+            throw new Error(`This Google account is already registered as ${result.role}. Use a different account.`);
+          }
+          // Opens "Complete your Profile" for new operators; returning ones go straight in.
+          await PortalRedirect.afterLogin(result.role);
+        } catch (err) {
+          GoogleAuth.forgetAccount();
+          showRegisterError(err.message || 'Google sign-up failed.');
+        }
+      },
     });
   },
 });
 
-const OperatorGoogleProfile = {
+/** Returns the first problem with the form, or '' if it is valid. */
+function validateRegistration({ name, email, password, repeatPassword, profile }) {
+  if (!name || !email || !password || !profile.company_name) {
+    return 'Please fill in your name, email, company name and password.';
+  }
+  if (name.length < 2) return 'Full name must be at least 2 characters.';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
+  if (profile.company_name.length < 2) return 'Company name must be at least 2 characters.';
+  if (password.length < 6) return 'Password must be at least 6 characters.';
+  if (password !== repeatPassword) return 'Passwords do not match.';
+  return '';
+}
+
+// "Complete your Profile" popup (OPERATOR_GOOGLE.png). Shown to a signed-in
+// operator who has no company profile yet: after Google sign-up, or on
+// login if the profile step was never finished.
+const OperatorProfilePopup = {
   open(email) {
     const html = `
       <button type="button" class="modal-close" id="profile-close" aria-label="Close">
@@ -104,7 +138,7 @@ const OperatorGoogleProfile = {
       <div class="google-account-chip">
         <img src="${GOOGLE_LOGO_SRC}" alt="" width="22" height="22" />
         <div class="google-account-chip__text">
-          <span>Signed in with Google</span>
+          <span>Signed in as</span>
           <strong>${escapeHtml(email)}</strong>
         </div>
         <button type="button" class="link-inline" id="profile-change">Change</button>
@@ -117,40 +151,50 @@ const OperatorGoogleProfile = {
         ${Components.errorBanner({ id: 'profile-error', message: 'Please complete all fields.' })}
         ${Components.button({ id: 'profile-submit', label: 'Register', variant: 'primary', type: 'submit' })}
       </form>
-      ${Components.bottomLinkRow({ prompt: 'Have an account?', linkText: 'Login', href: '#/login' })}
     `;
+
+    // Leaving without finishing signs the user out again.
+    const cancel = () => {
+      Session.clear();
+      GoogleAuth.forgetAccount();
+      AuthModal.close();
+    };
+
+    function showProfileError(message) {
+      document.querySelector('#profile-error .error-banner__text').textContent = message;
+      showError('profile-error');
+    }
 
     AuthModal.setContent(html, {
       centered: false,
       onMount: () => {
-        document.getElementById('profile-close').addEventListener('click', () => AuthModal.close());
-        document.getElementById('profile-change').addEventListener('click', () => AuthModal.close());
+        document.getElementById('profile-close').addEventListener('click', cancel);
+        document.getElementById('profile-change').addEventListener('click', cancel);
         document.getElementById('profile-form').addEventListener('submit', async (e) => {
           e.preventDefault();
-          const payload = {
-            email,
-            full_name: email.split('@')[0],
+          const profile = {
             company_name: document.getElementById('profile-company').value.trim(),
             franchise_number: document.getElementById('profile-franchise').value.trim(),
             contact_number: document.getElementById('profile-contact').value.trim(),
-            password: 'google-oauth',
-            auth_provider: 'google',
-            role: 'operator',
           };
-          if (!payload.company_name || !payload.franchise_number || !payload.contact_number) {
-            showError('profile-error');
+          if (!profile.company_name || !profile.franchise_number || !profile.contact_number) {
+            showProfileError('Please complete all fields.');
+            return;
+          }
+          if (profile.company_name.length < 2) {
+            showProfileError('Company name must be at least 2 characters.');
             return;
           }
           hideError('profile-error');
-          // TODO: Velez — POST /auth/register (Google operator) with company/franchise/contact
+
+          const submit = document.getElementById('profile-submit');
+          submit.disabled = true;
           try {
-            await AuthModule.registerOperator(payload);
-            AuthModal.close();
-            Router.go('login');
+            await AuthModule.createOperatorProfile(profile);
+            window.location.href = 'operator/index.html';
           } catch (err) {
-            const banner = document.querySelector('#profile-error span');
-            if (banner) banner.textContent = err.message || 'Registration failed.';
-            showError('profile-error');
+            showProfileError(err.message || 'Registration failed.');
+            submit.disabled = false;
           }
         });
       },

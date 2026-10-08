@@ -1,0 +1,846 @@
+/* css/admin.css
+ *
+ * System Admin portal — sidebar shell, stat cards, panels, tables, badges,
+ * modal and toast. Colors follow the admin mockups; shared tokens
+ * (spacing, error colors) come from theme.css.
+ */
+
+@font-face { font-family: 'Poppins'; src: url('../assets/fonts/Poppins-Regular.ttf') format('truetype'); font-weight: 400; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../assets/fonts/Poppins-Medium.ttf') format('truetype'); font-weight: 500; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../assets/fonts/Poppins-SemiBold.ttf') format('truetype'); font-weight: 600; font-display: swap; }
+@font-face { font-family: 'Poppins'; src: url('../assets/fonts/Poppins-Bold.ttf') format('truetype'); font-weight: 700; font-display: swap; }
+
+:root {
+  --admin-font: 'Poppins', var(--font-family);
+  --admin-sidebar-bg: #D3EDFB;
+  --admin-teal: #3B8A9E;
+  --admin-teal-dark: #2F7083;
+  --admin-ink: #111111;
+  --admin-muted: #8A8F98;
+  --admin-border: #DCE2E8;
+  --admin-row-border: #E6EAEE;
+  --admin-soft-bg: #EEF3F8;
+
+  --role-admin: #1E3557;
+  --role-operator: #6E2D9E;
+  --role-driver: #0F7A4D;
+  --role-commuter: #2C6FBF;
+
+  --status-active: var(--admin-teal);
+  --status-pending: #F5A623;
+  --status-suspended: var(--color-error);
+  --status-ok: #0F7A4D;
+  --status-ok-bg: #E8F5EE;
+  --status-idle: #8A8F98;
+
+  --sidebar-width: 21.75rem;
+  --radius-panel: 1.5rem;
+}
+
+/* Fluid scale: every size below is in rem, and 1rem tracks the viewport.
+   16px at 1920×1080 (the mockup size), shrinking proportionally on smaller
+   laptops — whichever of width or height is tighter wins — never below 12px. */
+html.admin-root {
+  font-size: clamp(12px, min(0.8333vw, 1.4815vh), 16px);
+}
+
+body.admin-body {
+  font-family: var(--admin-font);
+  color: var(--admin-ink);
+  background: var(--color-bg-white);
+}
+
+.admin-body button,
+.admin-body input,
+.admin-body select {
+  font-family: inherit;
+}
+
+/* ---------- Shell ---------- */
+
+.admin {
+  display: flex;
+  min-height: 100vh;
+}
+
+.admin-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(--sidebar-width);
+  background: var(--admin-sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 2.5rem 0.75rem 2rem;
+  z-index: 20;
+  overflow-y: auto; /* very short screens: scroll instead of overlapping */
+}
+
+.admin-sidebar__brand {
+  margin: 0 auto 3.5rem;
+  width: 88%;
+  max-width: 18.75rem;
+}
+
+.admin-sidebar__logo {
+  display: block;
+  width: 100%;
+  mix-blend-mode: multiply; /* the logo PNG has a white background */
+}
+
+.admin-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.admin-nav--footer {
+  margin-top: auto;
+  padding-top: 1.5rem;
+}
+
+.admin-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 0.625rem;
+  background: none;
+  color: var(--admin-ink);
+  font-size: 1.25rem;
+  font-weight: 400;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-nav__link:hover {
+  background: rgba(59, 138, 158, 0.12);
+  text-decoration: none;
+}
+
+.admin-nav__link.is-active {
+  background: var(--admin-teal);
+  color: #fff;
+  font-weight: 600;
+}
+
+.admin-nav__link .sc-icon {
+  display: inline-flex;
+  width: 1.875rem;
+  height: 1.875rem;
+  flex-shrink: 0;
+}
+
+.admin-nav__link .sc-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--sidebar-width);
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 2.5rem 2.5rem 2rem 2.25rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-header__title {
+  margin: 0;
+  font-size: 2.9rem;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.admin-header__email {
+  color: #5F6670;
+  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+}
+
+.admin-content {
+  flex: 1;
+  padding: 2.375rem 2.5rem 2.5rem 2.25rem;
+}
+
+/* ---------- Stat cards ---------- */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2.25rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-panel);
+  padding: 1.75rem 1rem;
+  text-align: center;
+  background: var(--color-bg-white);
+}
+
+.stat-card__label {
+  font-size: 2.1rem;
+  font-weight: 400;
+  margin: 0 0 0.375rem;
+}
+
+.stat-card__value {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* ---------- Panels ---------- */
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1.5fr);
+  gap: 2.25rem;
+  align-items: start;
+}
+
+.panel-stack {
+  display: grid;
+  gap: 2.5rem;
+}
+
+.panel {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--radius-panel);
+  background: var(--color-bg-white);
+  overflow: hidden;
+}
+
+.panel__head {
+  padding: 1.25rem 2rem 1.125rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.panel__title {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 600;
+}
+
+.panel__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 1.05rem;
+}
+
+.panel__body {
+  padding: 1rem 1.25rem 1.5rem;
+}
+
+.panel__body--flush {
+  padding: 0;
+}
+
+.panel--fill {
+  min-height: 40rem;
+}
+
+/* ---------- Filter chips ---------- */
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.125rem;
+  padding: 1.125rem 1.625rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.filter-bar__label {
+  font-size: 1.3rem;
+  margin-right: 1.5rem;
+}
+
+.filter-bar__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.125rem;
+}
+
+.chip {
+  min-width: 6.25rem;
+  padding: 0.5rem 1.125rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.5rem;
+  background: var(--color-bg-white);
+  font-size: 0.85rem;
+  color: var(--admin-ink);
+}
+
+.chip:hover {
+  border-color: var(--admin-teal);
+}
+
+.chip.is-active {
+  background: var(--admin-teal);
+  border-color: var(--admin-teal);
+  color: #fff;
+}
+
+/* ---------- Table ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 1.1rem;
+}
+
+.data-table th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 1.3rem;
+  padding: 1.125rem 0.5rem 0.625rem;
+  border-bottom: 1px solid var(--admin-row-border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.875rem 0.5rem;
+  border-bottom: 1px solid var(--admin-row-border);
+  white-space: nowrap;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  padding-left: 0.75rem;
+}
+
+.panel__body--flush .data-table th:first-child,
+.panel__body--flush .data-table td:first-child {
+  padding-left: 1.625rem;
+}
+
+.data-table__name {
+  font-weight: 600;
+}
+
+.data-table__actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.data-table__empty {
+  text-align: center;
+  color: var(--admin-muted);
+  padding: 2.5rem 0.75rem !important;
+  white-space: normal !important;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 1rem;
+}
+
+/* ---------- Badges + chips ---------- */
+
+.role-badge {
+  display: inline-block;
+  min-width: 5.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  color: #fff;
+  font-size: 0.85rem;
+  text-align: center;
+  text-transform: lowercase;
+}
+
+.role-badge--admin { background: var(--role-admin); }
+.role-badge--operator { background: var(--role-operator); }
+.role-badge--driver { background: var(--role-driver); }
+.role-badge--commuter { background: var(--role-commuter); }
+
+.status-chip {
+  display: inline-block;
+  min-width: 5.625rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--admin-soft-bg);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.status-chip--active,
+.status-chip--verified { color: var(--status-active); }
+.status-chip--pending { color: var(--status-pending); background: #FAF3E8; }
+.status-chip--suspended,
+.status-chip--declined { color: var(--status-suspended); background: #FCEEEE; }
+.status-chip--operational { color: var(--status-ok); background: var(--status-ok-bg); }
+.status-chip--idle { color: var(--status-idle); }
+.status-chip--down { color: var(--status-suspended); background: #FCEEEE; }
+
+/* ---------- Buttons ---------- */
+
+.btn-sm {
+  padding: 0.375rem 1rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.375rem;
+  background: var(--color-bg-white);
+  color: var(--admin-ink);
+  font-size: 0.9rem;
+}
+
+.btn-sm:hover {
+  border-color: var(--admin-teal);
+  color: var(--admin-teal-dark);
+}
+
+.btn-sm--danger:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.btn-sm--teal {
+  border-color: var(--admin-teal);
+  color: var(--admin-teal);
+}
+
+.btn-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-lg {
+  flex: 1;
+  padding: 0.875rem 1.25rem;
+  border-radius: 0.375rem;
+  font-size: 1.6rem;
+  font-weight: 400;
+}
+
+.btn-lg--approve {
+  background: var(--status-ok);
+  border: 1px solid var(--status-ok);
+  color: #fff;
+}
+
+.btn-lg--decline {
+  background: var(--color-bg-white);
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}
+
+.btn-lg--primary {
+  background: var(--admin-teal);
+  border: 1px solid var(--admin-teal);
+  color: #fff;
+}
+
+.btn-lg--ghost {
+  background: var(--color-bg-white);
+  border: 1px solid var(--admin-border);
+  color: var(--admin-ink);
+}
+
+.btn-lg:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* ---------- Pending operator list ---------- */
+
+.pending-list {
+  display: grid;
+  gap: 1.375rem;
+  padding: 0.625rem 0;
+  min-height: 10.625rem;
+}
+
+.pending-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--admin-soft-bg);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+/* ---------- Health list ---------- */
+
+.health-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.health-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.health-item__dot {
+  width: 0.875rem;
+  aspect-ratio: 1; /* height always equals width: a true circle */
+  border-radius: 50%;
+  background: var(--status-ok);
+  flex-shrink: 0;
+}
+
+.health-item__dot--idle { background: var(--status-idle); }
+.health-item__dot--down { background: var(--status-suspended); }
+
+.health-item .status-chip {
+  margin-left: auto;
+  text-transform: capitalize;
+}
+
+.panel__meta {
+  margin-top: 0.875rem;
+  color: var(--admin-muted);
+  font-size: 0.85rem;
+}
+
+/* ---------- Loading / empty / error ---------- */
+
+.state-msg {
+  padding: 2rem 0.75rem;
+  text-align: center;
+  color: var(--admin-muted);
+}
+
+.state-msg--error {
+  color: var(--color-error);
+}
+
+.state-msg button {
+  margin-top: 0.625rem;
+}
+
+.skeleton {
+  display: inline-block;
+  width: 3ch;
+  height: 0.9em;
+  border-radius: 0.375rem;
+  background: linear-gradient(90deg, #EEF1F4 25%, #F7F9FA 50%, #EEF1F4 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.2s infinite;
+}
+
+@keyframes skeleton {
+  to { background-position: -200% 0; }
+}
+
+/* ---------- Modal ---------- */
+
+.admin-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(40, 40, 40, 0.24);
+}
+
+.admin-modal {
+  width: 100%;
+  max-width: 51.875rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border-radius: var(--radius-panel);
+  background: var(--color-bg-white);
+  box-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.18);
+}
+
+.admin-modal--sm {
+  max-width: 32.5rem;
+}
+
+.admin-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.875rem 1.75rem 1rem 2.5rem;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.admin-modal__title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.admin-modal__close {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0.375rem;
+  border: none;
+  background: none;
+  color: #555;
+}
+
+.admin-modal__close svg {
+  width: 100%;
+  height: 100%;
+}
+
+.admin-modal__body {
+  padding: 1.5rem 2.125rem;
+}
+
+.admin-modal__foot {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.5rem 2.125rem 3.5rem;
+}
+
+.admin-modal__error {
+  margin: 0 2.125rem 1rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.5rem;
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.detail-list {
+  margin: 0;
+  border: 1px solid var(--admin-border);
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+
+.detail-list__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.375rem 1.75rem;
+  border-bottom: 1px solid var(--admin-border);
+  font-size: 1.5rem;
+}
+
+.detail-list__row:last-child {
+  border-bottom: none;
+}
+
+.detail-list__row dt {
+  color: var(--admin-muted);
+}
+
+.detail-list__row dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.form-field {
+  display: grid;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+.form-field label {
+  font-weight: 500;
+}
+
+.form-field input,
+.form-field select {
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  background: var(--color-bg-white);
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: 2px solid var(--admin-teal);
+  outline-offset: 1px;
+}
+
+.modal-text {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.modal-text + .modal-text {
+  margin-top: 0.625rem;
+}
+
+/* ---------- Toast ---------- */
+
+.toast-root {
+  position: fixed;
+  right: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 200;
+  display: grid;
+  gap: 0.625rem;
+}
+
+.toast {
+  padding: 0.75rem 1.125rem;
+  border-radius: 0.625rem;
+  background: var(--admin-ink);
+  color: #fff;
+  box-shadow: 0 0.375rem 1.25rem rgba(0, 0, 0, 0.2);
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast--error {
+  background: var(--color-error);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(0.5rem); }
+}
+
+/* ---------- Responsive ---------- */
+
+/* Smaller laptops (1280–1500px): text has hit its minimum size, so give the
+   tables more room instead — narrower sidebar, wider left panel, less padding. */
+@media (max-width: 1500px) {
+  :root {
+    --sidebar-width: 18.5rem;
+  }
+
+  .admin-header {
+    padding: 1.75rem 1.75rem 1.5rem;
+  }
+
+  .admin-content {
+    padding: 1.75rem;
+  }
+
+  .stat-grid,
+  .panel-grid {
+    gap: 1.5rem;
+  }
+
+  .panel-grid {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.15fr);
+  }
+
+  .panel__head {
+    padding: 1rem 1.5rem;
+  }
+
+  .panel__body {
+    padding: 0.75rem 0.875rem 1.25rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stat-grid {
+    gap: 1.25rem;
+  }
+}
+
+@media (max-width: 960px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 4.5rem;
+  }
+
+  .admin-sidebar {
+    padding: 1.25rem 0.5rem;
+  }
+
+  /* Collapsed sidebar: crop the landscape logo down to just its icon. */
+  .admin-sidebar__brand {
+    width: 3.5rem;
+    height: 2.75rem;
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+
+  .admin-sidebar__logo {
+    width: 12.5rem;
+    max-width: none;
+    margin: -1.75rem 0 0 -1.125rem;
+  }
+
+  .admin-nav__link {
+    justify-content: center;
+    padding: 0.75rem 0;
+  }
+
+  .admin-nav__label {
+    display: none;
+  }
+
+  .admin-header,
+  .admin-content {
+    padding: 1.25rem 1rem;
+  }
+
+  .admin-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .admin-header__email {
+    font-size: 1rem;
+  }
+
+  .stat-grid {
+    gap: 0.75rem;
+  }
+
+  .stat-card {
+    padding: 1.125rem 0.5rem;
+  }
+
+  .admin-modal__head,
+  .admin-modal__body {
+    padding-left: 1.25rem;
+    padding-right: 1rem;
+  }
+
+  .admin-modal__foot {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.5rem 1.25rem 1.75rem;
+  }
+
+  .detail-list__row {
+    flex-direction: column;
+    gap: 2px;
+    padding: 0.875rem 1.125rem;
+  }
+
+  .detail-list__row dd {
+    text-align: left;
+  }
+}
