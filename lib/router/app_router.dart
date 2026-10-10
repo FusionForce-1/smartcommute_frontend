@@ -12,7 +12,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
-import 'package:smartcommute_app/screens/operator/operator_dashboard.dart';
 import '../config/theme_config.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -23,6 +22,11 @@ import '../screens/commuter/commuter_dashboard.dart';
 import '../screens/driver/driver_dashboard.dart';
 import '../services/api_service.dart' show TwoFactorRequired;
 import '../services/google_auth_services.dart';
+
+/// Operators manage their fleet in the web portal, not in this app.
+const String _operatorUseWebPortal =
+    'Operator accounts use the Smart Commute web portal. '
+    'Please sign in there to manage your fleet.';
 
 class SmartCommuteAuthApp extends StatefulWidget {
   const SmartCommuteAuthApp({super.key});
@@ -118,13 +122,17 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   void _navigateToDashboard(String? role, {bool isGuest = false}) {
     final navigator = _navigatorKey.currentState;
     if (navigator == null) return; // not mounted yet — shouldn't happen in practice
+    if (role == 'operator') {
+      _authProvider.logout();
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text(_operatorUseWebPortal)),
+      );
+      return;
+    }
     Widget destination;
     switch (role) {
       case 'driver':
         destination = const DriverDashboard();
-        break;
-      case 'operator':
-        destination = const OperatorDashboard();
         break;
       case 'commuter':
       default:
@@ -162,13 +170,18 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
 
 /// Routes to the role-appropriate test dashboard after authentication.
 void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = false}) {
+  if (role == 'operator') {
+    context.read<AuthProvider>().logout();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(_operatorUseWebPortal)),
+    );
+    return;
+  }
   Widget destination;
   switch (role) {
     case 'driver':
       destination = const DriverDashboard();
-      break;
-    case 'operator':
-      destination = const OperatorDashboard();
       break;
     case 'commuter':
     default:

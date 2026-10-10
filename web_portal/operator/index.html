@@ -4,259 +4,68 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Commute — Operator Portal</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="../css/theme.css" />
-  <style>
-    /* Operator portal shell — fixed sidebar + main content (E4 test layout) */
-    :root {
-      --sidebar-width: 240px;
-      --header-height: 64px;
-    }
-
-    body {
-      background: var(--color-bg-ice-blue);
-      overflow: hidden;
-    }
-
-    .portal {
-      display: flex;
-      min-height: 100vh;
-    }
-
-    .sidebar {
-      position: fixed;
-      inset: 0 auto 0 0;
-      width: var(--sidebar-width);
-      background: var(--color-primary);
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      padding: var(--space-md) var(--space-sm);
-      z-index: 10;
-    }
-
-    .sidebar__brand {
-      font-size: 1.125rem;
-      font-weight: 700;
-      margin-bottom: var(--space-lg);
-      line-height: 1.3;
-    }
-
-    .sidebar__brand span {
-      display: block;
-      font-size: 0.75rem;
-      font-weight: 400;
-      opacity: 0.75;
-    }
-
-    .sidebar__nav {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex: 1;
-    }
-
-    .sidebar__link {
-      display: block;
-      padding: 10px 12px;
-      border-radius: var(--radius-button);
-      color: rgba(255, 255, 255, 0.85);
-      text-decoration: none;
-      font-weight: 600;
-      font-size: 0.9375rem;
-    }
-
-    .sidebar__link:hover,
-    .sidebar__link.is-active {
-      background: rgba(255, 255, 255, 0.12);
-      color: #fff;
-      text-decoration: none;
-    }
-
-    .sidebar__footer {
-      margin-top: auto;
-      padding-top: var(--space-sm);
-      border-top: 1px solid rgba(255, 255, 255, 0.15);
-      font-size: 0.8125rem;
-      opacity: 0.8;
-    }
-
-    .main {
-      margin-left: var(--sidebar-width);
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 100vh;
-    }
-
-    .main__header {
-      height: var(--header-height);
-      background: var(--color-bg-white);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--space-md);
-      box-shadow: var(--shadow-card);
-    }
-
-    .main__header h1 {
-      margin: 0;
-      font-size: 1.25rem;
-      font-weight: 700;
-    }
-
-    .main__header-actions {
-      display: flex;
-      align-items: center;
-      gap: var(--space-sm);
-    }
-
-    .badge {
-      background: var(--color-secondary);
-      color: #fff;
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 4px 10px;
-      border-radius: var(--radius-chip);
-    }
-
-    .main__content {
-      flex: 1;
-      padding: var(--space-md);
-      overflow-y: auto;
-    }
-
-    .panel-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: var(--space-sm);
-    }
-
-    .panel {
-      background: var(--color-bg-white);
-      border-radius: var(--radius-card);
-      box-shadow: var(--shadow-card);
-      padding: var(--space-md);
-      min-height: 160px;
-    }
-
-    .panel h2 {
-      margin: 0 0 var(--space-xs);
-      font-size: 1rem;
-      color: var(--color-text-primary);
-    }
-
-    .panel p {
-      margin: 0;
-      color: var(--color-text-secondary);
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-
-    .map-placeholder {
-      margin-top: var(--space-sm);
-      background: linear-gradient(135deg, #d9eef7 0%, #ebf4fa 100%);
-      border: 2px dashed var(--color-secondary);
-      border-radius: var(--radius-card);
-      min-height: 320px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--color-secondary);
-      font-weight: 600;
-    }
-
-    @media (max-width: 768px) {
-      .sidebar {
-        width: 72px;
-        padding: var(--space-sm) 8px;
-      }
-
-      .sidebar__brand span,
-      .sidebar__link span,
-      .sidebar__footer {
-        display: none;
-      }
-
-      .main {
-        margin-left: 72px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/operator.css" />
 </head>
-<body>
-  <div class="portal">
-    <aside class="sidebar" aria-label="Operator navigation">
-      <div class="sidebar__brand">
+<body class="op-body">
+  <div class="op-portal">
+    <aside class="op-sidebar" aria-label="Operator navigation">
+      <div class="op-sidebar__brand">
         Smart Commute
         <span>Operator Portal</span>
       </div>
-      <nav class="sidebar__nav">
-        <a href="#" class="sidebar__link is-active" data-section="fleet"><span>Fleet Map</span></a>
-        <a href="#" class="sidebar__link" data-section="routes"><span>Routes &amp; Stops</span></a>
-        <a href="#" class="sidebar__link" data-section="vehicles"><span>Vehicles</span></a>
-        <a href="#" class="sidebar__link" data-section="announcements"><span>Announcements</span></a>
-        <a href="#" class="sidebar__link" data-section="reports"><span>Reports</span></a>
-        <a href="../index.html#/login" class="sidebar__link"><span>Sign out</span></a>
-      </nav>
-      <div class="sidebar__footer">Test shell — Emae UI scope</div>
+      <nav class="op-sidebar__nav" id="op-nav"></nav>
+      <div class="op-sidebar__footer" id="op-company"></div>
     </aside>
 
-    <div class="main">
-      <header class="main__header">
-        <h1 id="page-title">Fleet Overview</h1>
-        <div class="main__header-actions">
-          <span class="badge">Operator</span>
-          <span id="operator-email">operator@gmail.com</span>
+    <div class="op-main">
+      <header class="op-header">
+        <h1 id="op-title">Fleet Overview</h1>
+        <div class="op-header__actions">
+          <span class="op-badge">Operator</span>
+          <span id="op-email"></span>
         </div>
       </header>
 
-      <main class="main__content">
-        <div class="map-placeholder" id="fleet-map">
-          Leaflet.js fleet map panel (placeholder)
-        </div>
+      <div class="op-notice" id="op-notice" hidden></div>
 
-        <div class="panel-grid" style="margin-top: var(--space-sm);">
-          <section class="panel">
-            <h2>Active Vehicles</h2>
-            <p>Live count and status summary for assigned fleet.</p>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </section>
-          <section class="panel">
-            <h2>Route Alerts</h2>
-            <p>Congested or suspended routes requiring attention.</p>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </section>
-          <section class="panel">
-            <h2>Recent Feedback</h2>
-            <p>Commuter reports tied to your routes.</p>
-            <!-- TODO [Velez]: Wire with API/State Provider here -->
-          </section>
-        </div>
-      </main>
+      <!-- js/operator/operatorRouter.js renders the current view here -->
+      <main class="op-content" id="op-view"></main>
     </div>
   </div>
 
-  <script>
-    // Sidebar nav preview — swaps header title only (no real routing yet).
-    const titles = {
-      fleet: 'Fleet Overview',
-      routes: 'Routes & Stops',
-      vehicles: 'Vehicle Management',
-      announcements: 'Announcements',
-      reports: 'Operator Reports',
-    };
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    document.querySelectorAll('.sidebar__link[data-section]').forEach((link) => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        document.querySelectorAll('.sidebar__link').forEach((l) => l.classList.remove('is-active'));
-        link.classList.add('is-active');
-        const section = link.dataset.section;
-        document.getElementById('page-title').textContent = titles[section] || 'Operator Portal';
-        // TODO [Velez]: Wire with API/State Provider here — load section content + Leaflet map
-      });
-    });
-  </script>
+  <!-- Config + shared services -->
+  <script src="../js/config.js"></script>
+  <script src="../js/constants/icons.js"></script>
+  <script src="../js/components.js"></script>
+  <script src="../js/services/session.js"></script>
+  <script src="../js/services/apiClient.js"></script>
+  <script src="../js/services/authModule.js"></script>
+
+  <!-- Shared UI helpers (escapeHtml, loadInto, toast, modal) -->
+  <script src="../js/admin/adminUi.js"></script>
+
+  <!-- Operator building blocks -->
+  <script src="../js/operator/operatorApi.js"></script>
+  <script src="../js/operator/operatorUi.js"></script>
+  <script src="../js/operator/operatorRouter.js"></script>
+
+  <!-- Each view self-registers with OperatorRouter.register(...) -->
+  <script src="../js/operator/views/fleetMap.js"></script>
+  <script src="../js/operator/views/routes.js"></script>
+  <script src="../js/operator/views/vehicles.js"></script>
+  <script src="../js/operator/views/drivers.js"></script>
+  <script src="../js/operator/views/announcements.js"></script>
+  <script src="../js/operator/views/revenueReport.js"></script>
+  <script src="../js/operator/views/reports.js"></script>
+  <script src="../js/operator/views/profile.js"></script>
+  <script src="../js/operator/views/settings.js"></script>
+
+  <!-- Auth guard + router start — must load last -->
+  <script src="../js/operator/operatorApp.js"></script>
 </body>
 </html>
