@@ -2,11 +2,17 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../router/app_router.dart';
 import '../../models/fleet.dart';
 import '../../services/dio_interceptor.dart';
 import '../../services/drivers_service.dart';
 import '../../services/fleet_service.dart';
+import 'operator_alerts.dart';
+import 'operator_profile.dart';
+import 'operator_routes.dart';
+import 'operator_settings.dart';
 import 'operator_vehicles.dart';
 
 class OperatorDashboard extends StatefulWidget {
@@ -152,11 +158,56 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
             color: Color(0xFFC8DCE3),
           ),
 
-          _buildBottomSidebarItem(
-            icon: Icons.logout,
-            label: 'Log Out',
-            onTap: () {},
-          ),
+            _buildBottomSidebarItem(
+              icon: Icons.logout,
+              label: 'Log Out',
+              onTap: () async {
+                final shouldLogout = await showDialog<bool>(
+                  context: context,
+                  builder: (dialogContext) => AlertDialog(
+                    title: const Text('Log Out'),
+                    content: const Text(
+                      'Are you sure you want to log out?',
+                    ),
+                    actions: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(true);
+                            },
+                            child: const Text('Log Out'),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.of(dialogContext).pop(false);
+                            },
+                            child: const Text('Cancel'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+
+          if (shouldLogout != true || !mounted) return;
+
+          await context.read<AuthProvider>().logout();
+
+          if (!mounted) return;
+
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (_) => const LoginScreenHost(),
+            ),
+            (route) => false,
+          );
+        },
+      ),
+
 
           _buildBottomSidebarItem(
             icon: Icons.help_outline,
@@ -262,8 +313,13 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
   }
 
   Widget _buildMainContent() {
-    // Fleet draws its own full-width top bar, so it skips the page padding.
+    // Every page except the dashboard home draws its own full-width top
+    // bar, so it skips the page padding.
     if (_selectedIndex == 1) return const OperatorVehicles();
+    if (_selectedIndex == 2) return const OperatorRoutes();
+    if (_selectedIndex == 3) return const OperatorAlerts();
+    if (_selectedIndex == 4) return const OperatorProfileScreen();
+    if (_selectedIndex == 5) return const OperatorSettings();
 
     return Container(
       color: pageColor,
@@ -274,47 +330,9 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
           32,
           24,
         ),
-        child: _buildContent(),
+        child: _dashboardHome(),
       ),
     );
-  }
-
-  Widget _buildContent() {
-    switch (_selectedIndex) {
-      case 1:
-        return const OperatorVehicles();
-
-      case 2:
-        return _placeholder(
-          'Routes',
-          'View and manage transportation routes.',
-          Icons.navigation_outlined,
-        );
-
-      case 3:
-        return _placeholder(
-          'Alerts',
-          'Monitor important fleet and vehicle alerts.',
-          Icons.notifications_none,
-        );
-
-      case 4:
-        return _placeholder(
-          'Profile',
-          'Manage your operator profile.',
-          Icons.person_outline,
-        );
-
-      case 5:
-        return _placeholder(
-          'Settings',
-          'Manage your operator settings.',
-          Icons.settings_outlined,
-        );
-
-      default:
-        return _dashboardHome();
-    }
   }
 
   Widget _dashboardHome() {
@@ -827,41 +845,6 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _placeholder(
-    String title,
-    String description,
-    IconData icon,
-  ) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 64,
-            color: primaryColor,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.grey,
             ),
           ),
         ],
