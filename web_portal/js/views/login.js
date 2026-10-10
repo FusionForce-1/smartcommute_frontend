@@ -79,6 +79,10 @@ Router.register('login', {
 
       try {
         const result = await AuthModule.login(email, password, rememberMe);
+        if (result.two_factor_required) {
+          AuthPopup.openSignInCode({ email, sentTo: result.email, rememberMe });
+          return;
+        }
         await PortalRedirect.afterLogin(result.role);
       } catch (err) {
         showLoginError(err.message);
