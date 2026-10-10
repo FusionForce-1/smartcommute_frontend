@@ -197,38 +197,6 @@ class _CommuterTabPlaceholderState
             _loadStops();
             _loadRoutes();
           }
-                  _stopsService = StopsService(_dio);
-                  _routesService = RoutesService(_dio);
-
-                  // IndexedStack builds every tab, so only the Map tab
-                  // opens the live socket and loads map data — otherwise
-                  // each tab would open its own connection.
-                  _ticker = createTicker(_onTick);
-                  if (!_isMapTab) return;
-
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
-                  _webSocketService = WebSocketService()
-                    ..connect()
-                    ..listenForMessages(_onVehicleMessage);
-                  _loadStops();
-                  _loadRoutes();
-                  }
-                  _stopsService = StopsService(_dio);
-                  _routesService = RoutesService(_dio);
-
-                  // IndexedStack builds every tab, so only the Map tab
-                  // opens the live socket and loads map data — otherwise
-                  // each tab would open its own connection.
-                  _ticker = createTicker(_onTick);
-                  if (!_isMapTab) return;
-
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
-                  _webSocketService = WebSocketService()
-                    ..connect()
-                    ..listenForMessages(_onVehicleMessage);
-                  _loadStops();
-                  _loadRoutes();
-                  }
 
           @override
             void dispose() {

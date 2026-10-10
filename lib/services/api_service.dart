@@ -16,6 +16,22 @@ import '../models/models.dart';
 import 'dio_interceptor.dart';
 import 'mock_auth_adapter.dart';
 
+/// Thrown by [ApiService.login] when the account has two-factor
+/// authentication on: a code was emailed and must be confirmed with
+/// [ApiService.verifyLoginCode] before the user is signed in.
+class TwoFactorRequired implements Exception {
+  const TwoFactorRequired({required this.email, required this.maskedEmail});
+
+  /// The email the user signed in with (sent back with the code).
+  final String email;
+
+  /// Where the code went, e.g. "op******@cebulines.ph".
+  final String maskedEmail;
+
+  @override
+  String toString() => 'Two-factor code required for $maskedEmail';
+}
+
 class ApiService {
   final Dio _dio;
   final FlutterSecureStorage _secureStorage;
@@ -46,6 +62,24 @@ class ApiService {
     final response = await _dio.post('/auth/login', data: {
       'email': email.trim(),
       'password': password,
+    });
+    final data = response.data as Map<String, dynamic>;
+    if (response.statusCode == 202 && data['two_factor_required'] == true) {
+      throw TwoFactorRequired(
+        email: email.trim(),
+        maskedEmail: data['email'] as String? ?? email.trim(),
+      );
+    }
+    final tokens = TokenResponse.fromJson(data);
+    await _storeTokens(tokens);
+    return tokens;
+  }
+
+  /// Second step of a two-factor login: POST /auth/login/verify.
+  Future<TokenResponse> verifyLoginCode(String email, String otp) async {
+    final response = await _dio.post('/auth/login/verify', data: {
+      'email': email,
+      'otp': otp,
     });
     final tokens = TokenResponse.fromJson(response.data);
     await _storeTokens(tokens);
