@@ -7,25 +7,34 @@ const OperatorApp = (() => {
   const LOGIN_URL = '../index.html#/login';
 
   const NAV_ITEMS = [
-    { route: 'fleet', label: 'Fleet Map' },
-    { route: 'routes', label: 'Routes & Stops' },
-    { route: 'vehicles', label: 'Vehicles' },
-    { route: 'drivers', label: 'Drivers' },
-    { route: 'announcements', label: 'Announcements' },
-    { route: 'reports', label: 'Reports' },
-    { route: 'profile', label: 'Profile' },
-    { route: 'settings', label: 'Settings' },
+    { route: 'fleet', label: 'Fleet Map', icon: 'navFleetMap' },
+    { route: 'routes', label: 'Routes & Stops', icon: 'navRoutes' },
+    { route: 'vehicles', label: 'Vehicles', icon: 'navVehicles' },
+    { route: 'drivers', label: 'Drivers', icon: 'navDrivers' },
+    { route: 'announcements', label: 'Announcements', icon: 'navAnnouncements' },
+    { route: 'reports', label: 'Reports', icon: 'navOperatorReports' },
+    { route: 'profile', label: 'Profile', icon: 'navProfile' },
+    { route: 'settings', label: 'Settings', icon: 'navSettings' },
   ];
 
   function redirectToLogin() {
     window.location.replace(LOGIN_URL);
   }
 
+  // Same sidebar markup as the admin portal (see adminApp.js), styled by admin.css.
+  function navLink({ route, label, icon }) {
+    return `
+      <a href="#/${route}" class="admin-nav__link" data-route="${route}">
+        ${iconMarkup(icon)}<span class="admin-nav__label">${label}</span>
+      </a>`;
+  }
+
   function renderSidebar() {
-    document.getElementById('op-nav').innerHTML = `
-      ${NAV_ITEMS.map(({ route, label }) => `
-        <a href="#/${route}" class="op-sidebar__link" data-route="${route}">${label}</a>`).join('')}
-      <button type="button" class="op-sidebar__link" id="op-logout">Sign out</button>`;
+    document.getElementById('op-nav').innerHTML = NAV_ITEMS.map(navLink).join('');
+    document.getElementById('op-nav-footer').innerHTML = `
+      <button type="button" class="admin-nav__link" id="op-logout">
+        ${iconMarkup('navLogout')}<span class="admin-nav__label">Log Out</span>
+      </button>`;
 
     document.getElementById('op-logout').addEventListener('click', async () => {
       await AuthModule.logout();

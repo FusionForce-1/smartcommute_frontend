@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="admin-root">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,30 +9,30 @@
   <link rel="stylesheet" href="../css/admin.css" />
   <link rel="stylesheet" href="../css/operator.css" />
 </head>
-<body class="op-body">
-  <div class="op-portal">
-    <aside class="op-sidebar" aria-label="Operator navigation">
-      <div class="op-sidebar__brand">
-        Smart Commute
-        <span>Operator Portal</span>
+<!-- Same shell as admin/admin.html (styled by admin.css); operator.css only styles the views. -->
+<body class="admin-body op-body">
+  <div class="admin">
+    <aside class="admin-sidebar" aria-label="Operator navigation">
+      <div class="admin-sidebar__brand">
+        <img class="admin-sidebar__logo" src="../assets/images/smart_commute_logo_landscape.png" alt="Smart Commute" />
       </div>
-      <nav class="op-sidebar__nav" id="op-nav"></nav>
-      <div class="op-sidebar__footer" id="op-company"></div>
+      <nav class="admin-nav" id="op-nav"></nav>
+      <div class="admin-nav admin-nav--footer">
+        <p class="op-company" id="op-company"></p>
+        <div id="op-nav-footer"></div>
+      </div>
     </aside>
 
-    <div class="op-main">
-      <header class="op-header">
-        <h1 id="op-title">Fleet Overview</h1>
-        <div class="op-header__actions">
-          <span class="op-badge">Operator</span>
-          <span id="op-email"></span>
-        </div>
+    <div class="admin-main">
+      <header class="admin-header">
+        <h1 class="admin-header__title" id="op-title">Fleet Overview</h1>
+        <span class="admin-header__email" id="op-email"></span>
       </header>
 
       <div class="op-notice" id="op-notice" hidden></div>
 
       <!-- js/operator/operatorRouter.js renders the current view here -->
-      <main class="op-content" id="op-view"></main>
+      <main class="admin-content" id="op-view"></main>
     </div>
   </div>
 
