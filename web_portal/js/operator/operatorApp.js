@@ -79,15 +79,18 @@ const OperatorApp = (() => {
     });
   }
 
-  /** Operator's name in the sidebar, plus a notice while the account awaits verification. */
+  function renderCompany({ company_name }) {
+    document.getElementById('op-company').textContent = company_name || '';
+    document.getElementById('op-account').hidden = !company_name;
+  }
+
+  /** Company name in the sidebar, plus a notice while the account awaits verification. */
   async function loadProfile() {
+    window.addEventListener('profile:updated', (e) => renderCompany(e.detail));
     const notice = document.getElementById('op-notice');
     try {
       const profile = await OperatorApi.profile();
-      if (profile.full_name) {
-        document.getElementById('op-name').textContent = profile.full_name;
-        document.getElementById('op-account').hidden = false;
-      }
+      renderCompany(profile);
       if (!profile.is_verified) {
         notice.textContent =
           'Your operator account is waiting for admin verification. ' +
