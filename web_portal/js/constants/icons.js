@@ -48,6 +48,16 @@ const ICONS = Object.freeze({
   navLogout: 'log-out',
   navHelp: 'circle-help',
 
+  // ---- Operator sidebar (Log Out reuses navLogout) ----
+  navFleetMap: 'map',
+  navRoutes: 'route',
+  navVehicles: 'bus',
+  navDrivers: 'id-card',
+  navAnnouncements: 'megaphone',
+  navOperatorReports: 'bar-chart-3',
+  navProfile: 'user-round',
+  navSettings: 'settings',
+
   // ---- Fleet / vehicles / routes ----
   plate: 'car-front',
   route: 'route',

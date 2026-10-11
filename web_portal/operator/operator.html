@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" class="admin-root">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Commute — Operator Portal</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="../css/theme.css" />
+  <link rel="stylesheet" href="../css/admin.css" />
+  <link rel="stylesheet" href="../css/operator.css" />
+</head>
+<!-- Same shell as admin/admin.html (styled by admin.css); operator.css only styles the views. -->
+<body class="admin-body op-body">
+  <div class="admin">
+    <aside class="admin-sidebar" aria-label="Operator navigation">
+      <div class="admin-sidebar__brand">
+        <img class="admin-sidebar__logo" src="../assets/images/smart_commute_logo_landscape.png" alt="Smart Commute" />
+      </div>
+      <div class="admin-sidebar__account" id="op-account" hidden>
+        <p class="admin-sidebar__name" id="op-company"></p>
+      </div>
+      <nav class="admin-nav" id="op-nav"></nav>
+      <div class="admin-nav admin-nav--footer" id="op-nav-footer"></div>
+    </aside>
+
+    <div class="admin-main">
+      <header class="admin-header">
+        <h1 class="admin-header__title" id="op-title">Fleet Overview</h1>
+        <!-- Placeholder: subscription page not built yet, so the button has no action. -->
+        <button type="button" class="op-btn">Subscription</button>
+      </header>
+
+      <div class="op-notice" id="op-notice" hidden></div>
+
+      <!-- js/operator/operatorRouter.js renders the current view here -->
+      <main class="admin-content" id="op-view"></main>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Config + shared services -->
+  <script src="../js/config.js"></script>
+  <script src="../js/constants/icons.js"></script>
+  <script src="../js/components.js"></script>
+  <script src="../js/services/session.js"></script>
+  <script src="../js/services/apiClient.js"></script>
+  <script src="../js/services/authModule.js"></script>
+
+  <!-- Shared UI helpers (escapeHtml, loadInto, toast, modal) -->
+  <script src="../js/admin/adminUi.js"></script>
+
+  <!-- Operator building blocks -->
+  <script src="../js/operator/operatorApi.js"></script>
+  <script src="../js/operator/operatorUi.js"></script>
+  <script src="../js/operator/operatorRouter.js"></script>
+
+  <!-- Each view self-registers with OperatorRouter.register(...) -->
+  <script src="../js/operator/views/fleetMap.js"></script>
+  <script src="../js/operator/views/routes.js"></script>
+  <script src="../js/operator/views/vehicles.js"></script>
+  <script src="../js/operator/views/drivers.js"></script>
+  <script src="../js/operator/views/announcements.js"></script>
+  <script src="../js/operator/views/revenueReport.js"></script>
+  <script src="../js/operator/views/reports.js"></script>
+  <script src="../js/operator/views/profile.js"></script>
+  <script src="../js/operator/views/settings.js"></script>
+
+  <!-- Auth guard + router start — must load last -->
+  <script src="../js/operator/operatorApp.js"></script>
+</body>
+</html>

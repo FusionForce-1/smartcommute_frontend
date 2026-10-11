@@ -20,7 +20,13 @@ import '../screens/auth/register_screen.dart';
 import '../screens/auth/verify_otp_screen.dart';
 import '../screens/commuter/commuter_dashboard.dart';
 import '../screens/driver/driver_dashboard.dart';
+import '../services/api_service.dart' show TwoFactorRequired;
 import '../services/google_auth_services.dart';
+
+/// Operators manage their fleet in the web portal, not in this app.
+const String _operatorUseWebPortal =
+    'Operator accounts use the Smart Commute web portal. '
+    'Please sign in there to manage your fleet.';
 
 class SmartCommuteAuthApp extends StatefulWidget {
   const SmartCommuteAuthApp({super.key});
@@ -116,6 +122,13 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   void _navigateToDashboard(String? role, {bool isGuest = false}) {
     final navigator = _navigatorKey.currentState;
     if (navigator == null) return; // not mounted yet — shouldn't happen in practice
+    if (role == 'operator') {
+      _authProvider.logout();
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text(_operatorUseWebPortal)),
+      );
+      return;
+    }
     Widget destination;
     switch (role) {
       case 'driver':
@@ -157,6 +170,14 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
 
 /// Routes to the role-appropriate test dashboard after authentication.
 void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = false}) {
+  if (role == 'operator') {
+    context.read<AuthProvider>().logout();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(_operatorUseWebPortal)),
+    );
+    return;
+  }
   Widget destination;
   switch (role) {
     case 'driver':
@@ -180,7 +201,16 @@ class LoginScreenHost extends StatelessWidget {
     final auth = context.read<AuthProvider>();
     return LoginScreen(
       onLogin: (email, password, rememberMe) async {
-        await auth.login(email, password, rememberMe: rememberMe);
+        try {
+          await auth.login(email, password, rememberMe: rememberMe);
+        } on TwoFactorRequired catch (challenge) {
+          // Password was right; the account wants the emailed code too.
+          if (!context.mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => TwoFactorLoginHost(challenge: challenge)),
+          );
+          return;
+        }
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
       },
@@ -288,6 +318,27 @@ class VerifyOtpHost extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('OTP verified. You can log in.')),
         );
+      },
+    );
+  }
+}
+/// Second sign-in step for accounts with two-factor authentication on.
+class TwoFactorLoginHost extends StatelessWidget {
+  const TwoFactorLoginHost({super.key, required this.challenge});
+
+  final TwoFactorRequired challenge;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    return VerifyOtpScreen(
+      title: 'VERIFY\nSIGN-IN',
+      email: challenge.maskedEmail,
+      onBack: () => Navigator.of(context).pop(),
+      onVerifyOtp: (otp) async {
+        await auth.verifyLoginCode(challenge.email, otp);
+        if (!context.mounted) return;
+        _openDashboardForRole(context, auth.role);
       },
     );
   }

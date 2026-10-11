@@ -185,22 +185,22 @@ class _CommuterTabPlaceholderState
         @override
           void initState() {
             super.initState();
-                  _stopsService = StopsService(_dio);
-                  _routesService = RoutesService(_dio);
+            _stopsService = StopsService(_dio);
+            _routesService = RoutesService(_dio);
+            _ticker = createTicker(_onTick);
 
-                  // IndexedStack builds every tab, so only the Map tab
-                  // opens the live socket and loads map data — otherwise
-                  // each tab would open its own connection.
-                  _ticker = createTicker(_onTick);
-                  if (!_isMapTab) return;
+            // IndexedStack builds every tab, so only the Map tab opens the
+            // live socket and loads map data — otherwise each tab would
+            // open its own connection.
+            if (!_isMapTab) return;
 
-                  // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
-                  _webSocketService = WebSocketService()
-                    ..connect()
-                    ..listenForMessages(_onVehicleMessage);
-                  _loadStops();
-                  _loadRoutes();
-                  }
+            // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
+            _webSocketService = WebSocketService()
+              ..connect()
+              ..listenForMessages(_onVehicleMessage);
+            _loadStops();
+            _loadRoutes();
+          }
 
           @override
             void dispose() {

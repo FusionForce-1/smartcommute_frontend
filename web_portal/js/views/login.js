@@ -79,6 +79,10 @@ Router.register('login', {
 
       try {
         const result = await AuthModule.login(email, password, rememberMe);
+        if (result.two_factor_required) {
+          AuthPopup.openSignInCode({ email, sentTo: result.email, rememberMe });
+          return;
+        }
         await PortalRedirect.afterLogin(result.role);
       } catch (err) {
         showLoginError(err.message);
@@ -113,7 +117,7 @@ const PortalRedirect = {
    */
   async afterLogin(role) {
     if (role === 'admin') {
-      window.location.href = 'admin/index.html';
+      window.location.href = 'admin/admin.html';
       return;
     }
     if (role !== 'operator') {
@@ -123,7 +127,7 @@ const PortalRedirect = {
 
     const profile = await AuthModule.getMyOperatorProfile();
     if (profile) {
-      window.location.href = 'operator/index.html';
+      window.location.href = 'operator/operator.html';
     } else {
       OperatorProfilePopup.open(Session.email);
     }

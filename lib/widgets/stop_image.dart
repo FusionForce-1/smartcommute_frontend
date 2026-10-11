@@ -5,12 +5,15 @@
 //
 // Image sources (tried in order):
 //   1. Google Street View Static API — only if GOOGLE_MAPS_API_KEY is in .env
-//   2. Esri World Imagery satellite snapshot centered on the stop (free, no key)
-//   3. Fallback icon if both images fail to load
+//   2. Esri World Imagery satellite tiles centered on the stop (free, no key)
+//
+// Note: ang Esri "export" endpoint (single snapshot image) gi-disable na
+// (HTTP 500), so mini map gikan sa satellite tiles na ang gamit.
 
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 
 import '../config/env_config.dart';
@@ -33,23 +36,10 @@ class StopImageUrls {
         '&key=$key';
   }
 
-  /// Satellite snapshot centered on the stop (about 120m x 120m of area).
-  static String satellite(LatLng location, {int size = 400}) {
-    const halfMeters = 60.0;
-    final dLat = halfMeters / 111320;
-    final dLng =
-        halfMeters / (111320 * math.cos(location.latitude * math.pi / 180));
-    final bbox = [
-      location.longitude - dLng,
-      location.latitude - dLat,
-      location.longitude + dLng,
-      location.latitude + dLat,
-    ].join(',');
-    return 'https://server.arcgisonline.com/ArcGIS/rest/services/'
-        'World_Imagery/MapServer/export'
-        '?bbox=$bbox&bboxSR=4326&imageSR=3857'
-        '&size=$size,$size&format=jpg&f=image';
-  }
+  /// Esri World Imagery tiles (CORS-enabled, works on web).
+  static const String satelliteTiles =
+      'https://server.arcgisonline.com/ArcGIS/rest/services/'
+      'World_Imagery/MapServer/tile/{z}/{y}/{x}';
 }
 
 /// Image of the area around [location], with automatic fallbacks.
@@ -59,7 +49,6 @@ class StopImage extends StatelessWidget {
     required this.location,
     this.size = 400,
     this.fit = BoxFit.cover,
-    this.fallbackIconSize = 24,
   });
 
   final LatLng location;
@@ -67,14 +56,10 @@ class StopImage extends StatelessWidget {
   /// Requested image resolution in pixels (square).
   final int size;
   final BoxFit fit;
-  final double fallbackIconSize;
 
   @override
   Widget build(BuildContext context) {
-    final satellite = _network(
-      StopImageUrls.satellite(location, size: size),
-      onError: _fallbackIcon(),
-    );
+    final satellite = _satellite();
 
     final streetViewUrl = StopImageUrls.streetView(location, size: size);
     if (streetViewUrl == null) return satellite;
@@ -104,14 +89,26 @@ class StopImage extends StatelessWidget {
     );
   }
 
-  Widget _fallbackIcon() {
-    return Container(
-      color: AppColors.backgroundIceBlue,
-      alignment: Alignment.center,
-      child: Icon(
-        Icons.location_on,
-        size: fallbackIconSize,
-        color: AppColors.secondary,
+  /// Static satellite view centered on the stop (~120m across at zoom 18).
+  /// AbsorbPointer: ang tap modawat sa marker / sheet, dili sa mini map.
+  Widget _satellite() {
+    return AbsorbPointer(
+      child: FlutterMap(
+        options: MapOptions(
+          initialCenter: location,
+          initialZoom: 18,
+          backgroundColor: AppColors.backgroundIceBlue,
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.none,
+          ),
+        ),
+        children: [
+          TileLayer(
+            urlTemplate: StopImageUrls.satelliteTiles,
+            userAgentPackageName: 'com.smartcommute.app',
+            maxNativeZoom: 19,
+          ),
+        ],
       ),
     );
   }
@@ -148,7 +145,6 @@ class StopImageMarker extends StatelessWidget {
                 child: StopImage(
                   location: stop.location,
                   size: 150,
-                  fallbackIconSize: 22,
                 ),
               ),
             ),
@@ -190,7 +186,8 @@ Future<void> showStopDetailsSheet(BuildContext context, TransportStop stop) {
     builder: (context) {
       final textTheme = Theme.of(context).textTheme;
       return SafeArea(
-        child: Padding(
+        // Scrollable para dili mag-overflow sa mubo nga window (e.g. Chrome sa laptop)
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
             0,
@@ -201,16 +198,26 @@ Future<void> showStopDetailsSheet(BuildContext context, TransportStop stop) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                child: AspectRatio(
-                  aspectRatio: 16 / 10,
-                  child: StopImage(
-                    location: stop.location,
-                    size: 640,
-                    fallbackIconSize: 48,
-                  ),
-                ),
+              // 16:10 photo, pero dili molapas 35% sa screen height —
+              // sa lapad nga screen ma-crop gamay imbes mo-taas kaayo.
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final height = math.min(
+                    constraints.maxWidth * 10 / 16,
+                    MediaQuery.sizeOf(context).height * 0.35,
+                  );
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    child: SizedBox(
+                      width: constraints.maxWidth,
+                      height: height,
+                      child: StopImage(
+                        location: stop.location,
+                        size: 640,
+                      ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(stop.name, style: textTheme.titleMedium),

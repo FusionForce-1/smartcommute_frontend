@@ -76,6 +76,27 @@ class AuthProvider extends ChangeNotifier {
   }
 
   // ---------------------------------------------------------------
+  // LOGIN, TWO-FACTOR STEP
+  // ---------------------------------------------------------------
+  // login() throws TwoFactorRequired when the account has two-factor on;
+  // the emailed code is then confirmed here. Errors propagate so the
+  // code screen can show them.
+  Future<void> verifyLoginCode(String email, String otp) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final tokens = await _apiService.verifyLoginCode(email, otp);
+      _role = tokens.role;
+      _isGuest = false;
+      _status = AuthStatus.authenticated;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ---------------------------------------------------------------
   // GOOGLE SIGN-IN
   // ---------------------------------------------------------------
   // Takes the idToken as a parameter — the ACTUAL Google sign-in

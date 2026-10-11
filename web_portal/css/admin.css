@@ -70,13 +70,13 @@ body.admin-body {
   background: var(--admin-sidebar-bg);
   display: flex;
   flex-direction: column;
-  padding: 2.5rem 0.75rem 2rem;
+  padding: 1.5rem 0.75rem 2rem;
   z-index: 20;
   overflow-y: auto; /* very short screens: scroll instead of overlapping */
 }
 
 .admin-sidebar__brand {
-  margin: 0 auto 3.5rem;
+  margin: 0 auto 1.25rem;
   width: 88%;
   max-width: 18.75rem;
 }
@@ -85,6 +85,22 @@ body.admin-body {
   display: block;
   width: 100%;
   mix-blend-mode: multiply; /* the logo PNG has a white background */
+  /* The PNG has blank space around the artwork (~14% of its width above, ~17% below). */
+  margin-top: -9%;
+  margin-bottom: -15%;
+}
+
+/* Signed-in user's name under the logo. */
+.admin-sidebar__account {
+  margin: 0 1.25rem 1.75rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.admin-sidebar__name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
 .admin-nav {
@@ -794,6 +810,10 @@ body.admin-body {
   .admin-nav__link {
     justify-content: center;
     padding: 0.75rem 0;
+  }
+
+  .admin-sidebar__account {
+    display: none;
   }
 
   .admin-nav__label {

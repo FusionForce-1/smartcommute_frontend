@@ -191,7 +191,7 @@ const OperatorProfilePopup = {
           submit.disabled = true;
           try {
             await AuthModule.createOperatorProfile(profile);
-            window.location.href = 'operator/index.html';
+            window.location.href = 'operator/operator.html';
           } catch (err) {
             showProfileError(err.message || 'Registration failed.');
             submit.disabled = false;

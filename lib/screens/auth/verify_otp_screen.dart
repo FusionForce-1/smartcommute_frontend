@@ -18,9 +18,13 @@ class VerifyOtpScreen extends StatefulWidget {
     required this.email,
     this.onVerifyOtp,
     this.onBack,
+    this.title = 'FORGOT\nPASSWORD',
   });
 
   final String email;
+
+  /// Banner heading; the two-factor sign-in step reuses this screen.
+  final String title;
 
   /// TODO: Velez — AuthProvider.verifyOtpAndResetPassword(email, otp, newPassword)
   /// → ApiService.verifyOtpAndResetPassword() → POST /auth/reset-password
@@ -77,7 +81,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               AuthHeaderBanner(
-                title: 'FORGOT\nPASSWORD',
+                title: widget.title,
                 onBack: widget.onBack,
                 big: true,
               ),

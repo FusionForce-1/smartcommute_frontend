@@ -45,7 +45,9 @@ const ApiClient = (() => {
   }
 
   async function send(method, path, body, { auth = true, retry = true } = {}) {
-    const headers = { 'Content-Type': 'application/json' };
+    // FormData (file uploads) sets its own multipart Content-Type.
+    const isForm = body instanceof FormData;
+    const headers = isForm ? {} : { 'Content-Type': 'application/json' };
     if (auth && Session.accessToken) headers.Authorization = `Bearer ${Session.accessToken}`;
 
     let response;
@@ -53,7 +55,7 @@ const ApiClient = (() => {
       response = await fetch(`${API_BASE_URL}${path}`, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined || isForm ? body : JSON.stringify(body),
       });
     } catch {
       throw apiError('Cannot reach the server. Check that the backend is running.', 0);
@@ -86,6 +88,8 @@ const ApiClient = (() => {
     query,
     get: (path, params) => send('GET', `${path}${query(params)}`),
     post: (path, body) => send('POST', path, body),
+    /** POST a FormData body (multipart file upload). */
+    upload: (path, formData) => send('POST', path, formData),
     patch: (path, body) => send('PATCH', path, body),
     delete: (path) => send('DELETE', path),
   };

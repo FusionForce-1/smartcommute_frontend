@@ -108,8 +108,21 @@ const AuthModule = (() => {
   }
 
   return {
+    /**
+     * Resolves with the token response, or with { two_factor_required: true,
+     * email } when the account has two-factor on — then finish with
+     * verifyLoginCode() using the code that was emailed.
+     */
     login: async (email, password, rememberMe) => {
       const result = await request('POST', '/auth/login', { email, password });
+      if (result?.two_factor_required) return result;
+      Session.save({ ...result, email }, rememberMe);
+      return result;
+    },
+
+    /** Second step of a two-factor login (POST /auth/login/verify). */
+    verifyLoginCode: async (email, otp, rememberMe) => {
+      const result = await request('POST', '/auth/login/verify', { email, otp });
       Session.save({ ...result, email }, rememberMe);
       return result;
     },

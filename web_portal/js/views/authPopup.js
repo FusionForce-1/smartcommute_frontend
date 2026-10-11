@@ -101,6 +101,60 @@ const AuthPopup = (() => {
     });
   }
 
+  // ---------- Two-factor sign-in ----------
+
+  function signInCodeContent(sentTo) {
+    return `
+      ${Components.popupIcon('otpEnvelope')}
+      <h1 class="auth-card__title" style="font-size:28px;">Verify Sign-in</h1>
+      <p class="auth-card__subtitle">Two-factor authentication is on. We sent a 6-digit code to <strong>${escapeHtml(sentTo)}</strong></p>
+
+      <form id="signin-code-form" novalidate style="text-align:left;">
+        ${Components.field({ id: 'signin-code', label: 'Sign-in Code', type: 'text', placeholder: 'Enter 6 - digit code' })}
+
+        ${Components.errorBanner({ id: 'signin-code-error', message: 'Incorrect or expired code. Try again.' })}
+
+        <div class="btn-stack mt-sm">
+          ${Components.button({ id: 'signin-code-submit', label: 'Verify', variant: 'primary', type: 'submit' })}
+          ${Components.button({ id: 'signin-code-cancel', label: 'Cancel', variant: 'outline', type: 'button' })}
+        </div>
+      </form>`;
+  }
+
+  function initSignInCode({ email, rememberMe }) {
+    const showCodeError = (message) => {
+      const banner = document.querySelector('#signin-code-error .error-banner__text');
+      if (banner) banner.textContent = message;
+      showError('signin-code-error');
+    };
+
+    document.getElementById('signin-code-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const otp = document.getElementById('signin-code').value.trim();
+      if (!/^\d{6}$/.test(otp)) {
+        showCodeError('Enter the 6-digit code from your email.');
+        return;
+      }
+      hideError('signin-code-error');
+      try {
+        const result = await AuthModule.verifyLoginCode(email, otp, rememberMe);
+        AuthModal.close();
+        await PortalRedirect.afterLogin(result.role);
+      } catch (err) {
+        showCodeError(err.message || 'Incorrect or expired code. Try again.');
+      }
+    });
+
+    document.getElementById('signin-code-cancel').addEventListener('click', () => AuthModal.close());
+  }
+
+  /** @param {{email, sentTo, rememberMe}} opts — sentTo is the masked address */
+  function openSignInCode(opts) {
+    AuthModal.setContent(signInCodeContent(opts.sentTo || opts.email), {
+      onMount: () => initSignInCode(opts),
+    });
+  }
+
   function openForgotPassword() {
     AuthModal.setContent(forgotPasswordContent(), { onMount: initForgotPassword });
   }
@@ -109,5 +163,5 @@ const AuthPopup = (() => {
     AuthModal.setContent(verifyOtpContent(email), { onMount: () => initVerifyOtp(email) });
   }
 
-  return { openForgotPassword, openVerifyOtp };
+  return { openForgotPassword, openVerifyOtp, openSignInCode };
 })();

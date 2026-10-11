@@ -61,6 +61,19 @@ const AdminApp = (() => {
     });
   }
 
+  /** Admin's name under the logo. There is no /users/me, so find this account in the admin list. */
+  async function loadAccount() {
+    try {
+      const admins = await AdminApi.listUsers({ role: 'admin', limit: 200 });
+      const me = admins.find((u) => u.email === Session.email);
+      if (!me?.name) return;
+      document.getElementById('admin-name').textContent = me.name;
+      document.getElementById('admin-account').hidden = false;
+    } catch {
+      // The sidebar works without the name; the header still shows the email.
+    }
+  }
+
   function openHelp() {
     AdminModal.open({
       title: 'Help',
@@ -80,6 +93,7 @@ const AdminApp = (() => {
     window.addEventListener('session:expired', redirectToLogin);
     document.getElementById('admin-email').textContent = Session.email;
     renderSidebar();
+    loadAccount();
     AdminRouter.start(highlightNav);
   }
 
