@@ -79,11 +79,15 @@ const OperatorApp = (() => {
     });
   }
 
-  /** Shows a notice while the account awaits verification or its profile is missing. */
+  /** Operator's name in the sidebar, plus a notice while the account awaits verification. */
   async function loadProfile() {
     const notice = document.getElementById('op-notice');
     try {
       const profile = await OperatorApi.profile();
+      if (profile.full_name) {
+        document.getElementById('op-name').textContent = profile.full_name;
+        document.getElementById('op-account').hidden = false;
+      }
       if (!profile.is_verified) {
         notice.textContent =
           'Your operator account is waiting for admin verification. ' +
