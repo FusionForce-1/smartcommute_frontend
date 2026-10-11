@@ -476,7 +476,7 @@ OperatorRouter.register('drivers', {
       if (!driver) return;
       ({ view: openView, edit: openEdit, login: openLogin, remove: confirmRemove })[btn.dataset.action]?.(driver);
     });
-    el.querySelector('#drv-add').addEventListener('click', openScan);
+    el.querySelector('#drv-add').addEventListener('click', () => OperatorUi.whenVerified(openScan));
 
     load();
   },

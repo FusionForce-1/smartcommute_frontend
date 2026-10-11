@@ -33,18 +33,7 @@
   font-family: inherit;
 }
 
-/* ---------- Shell additions ---------- */
-
-.op-company {
-  margin: 0 1.25rem 0.75rem;
-  color: var(--admin-muted);
-  font-size: 1rem;
-  overflow-wrap: anywhere;
-}
-
-.op-company:empty {
-  display: none;
-}
+/* ---------- Verification notice ---------- */
 
 .op-notice {
   margin: 1.5rem 2.5rem 0 2.25rem;
@@ -954,7 +943,6 @@
 }
 
 @media (max-width: 768px) {
-  .op-company { display: none; }
   .op-notice { margin: 1rem 1rem 0; }
   .op-grid--2,
   .op-form__grid,

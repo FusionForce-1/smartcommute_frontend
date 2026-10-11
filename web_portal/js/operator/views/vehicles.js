@@ -298,9 +298,10 @@ OperatorRouter.register('vehicles', {
       if (!vehicle) return;
       ({ edit: openEdit, key: openDeviceKey, remove: confirmRemove })[btn.dataset.action]?.(vehicle);
     });
-    addBtn.addEventListener('click', () => {
+    // Verify first: GET /fleet refuses unverified operators, so `fleet` never loads for them.
+    addBtn.addEventListener('click', () => OperatorUi.whenVerified(() => {
       if (Array.isArray(fleet)) openAdd();
-    });
+    }));
 
     load();
   },

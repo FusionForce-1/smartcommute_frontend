@@ -97,7 +97,6 @@ OperatorRouter.register('profile', {
               profile = { ...profile, ...changes };
               AdminModal.close();
               render();
-              window.dispatchEvent(new CustomEvent('profile:updated', { detail: profile }));
               AdminUi.toast('Profile updated.');
             },
           },

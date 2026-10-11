@@ -143,7 +143,7 @@ const RevenueReport = (() => {
   // ---------- Mount ----------
 
   function mount(container) {
-    let range = '30';
+    let range = '7';
     const custom = { start: addDays(todayIso(), -29), end: todayIso() };
     let summary = null;
     let log = [];
@@ -501,7 +501,7 @@ const RevenueReport = (() => {
       else confirmDelete(r);
     });
 
-    $('#rev-record').addEventListener('click', openRecord);
+    $('#rev-record').addEventListener('click', () => OperatorUi.whenVerified(openRecord));
     exportBtn.addEventListener('click', exportCsv);
 
     renderRanges();

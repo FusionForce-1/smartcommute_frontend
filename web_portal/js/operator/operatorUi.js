@@ -102,6 +102,26 @@ const OperatorUi = (() => {
     return [driver.first_name, driver.last_name].filter(Boolean).map(title).join(' ') || driver.driver_code;
   }
 
+  /**
+   * Runs `action` only for a verified operator; anyone else gets a notice.
+   * The backend rejects these changes from unverified accounts, so this stops
+   * them before they fill in a form. If the check itself fails, `action` runs
+   * and the backend still guards the save.
+   */
+  async function whenVerified(action) {
+    const profile = await OperatorApi.profile().catch(() => null);
+    if (profile && !profile.is_verified) {
+      AdminModal.open({
+        title: 'Account Not Verified',
+        size: 'sm',
+        body: '<p class="modal-text">Your operator account has not been verified by an admin yet.</p>',
+        actions: [{ label: 'OK', variant: 'primary', onClick: AdminModal.close }],
+      });
+      return;
+    }
+    action();
+  }
+
   const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
 
   return {
@@ -117,5 +137,6 @@ const OperatorUi = (() => {
     vehicleStatusChip,
     routeLabels,
     driverName,
+    whenVerified,
   };
 })();

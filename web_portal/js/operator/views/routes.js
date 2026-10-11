@@ -241,9 +241,15 @@ OperatorRouter.register('routes', {
       else if (btn.dataset.action === 'delete') remove(route);
     });
 
-    toggleBtn.addEventListener('click', () => {
+    const toggleForm = () => {
       showForm = !showForm;
       renderForm();
+    };
+
+    // Opening the form needs a verified account; Cancel always works.
+    toggleBtn.addEventListener('click', () => {
+      if (showForm) toggleForm();
+      else OperatorUi.whenVerified(toggleForm);
     });
 
     renderForm();
