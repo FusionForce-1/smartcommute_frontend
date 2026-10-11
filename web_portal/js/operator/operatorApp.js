@@ -109,7 +109,6 @@ const OperatorApp = (() => {
     }
 
     window.addEventListener('session:expired', redirectToLogin);
-    document.getElementById('op-email').textContent = Session.email;
     renderSidebar();
     loadProfile();
     OperatorRouter.start(onRouteChange);
