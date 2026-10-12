@@ -34,9 +34,12 @@ class RouteMapScreen extends StatelessWidget {
     for (var i = 0; i < option.legs.length; i++) {
       final leg = option.legs[i];
       final route = routesById[leg.routeId];
-      if (route != null && route.geometry.length > 1) {
+      // Prefer the ridden part (board -> alight) from the recommender;
+      // fall back to the whole route line.
+      final points = leg.path ?? route?.geometry;
+      if (points != null && points.length > 1) {
         polylines.add(Polyline(
-          points: route.geometry,
+          points: points,
           color: _legColors[i % _legColors.length],
           strokeWidth: 5,
         ));
@@ -73,7 +76,7 @@ class RouteMapScreen extends StatelessWidget {
                     : null,
                 minZoom: MapConfig.minZoom,
                 maxZoom: MapConfig.maxZoom,
-                cameraConstraint: CameraConstraint.contain(bounds: MapConfig.serviceArea),
+                cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
               ),
               children: [
                 TileLayer(

@@ -80,7 +80,10 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
   void initState() {
     super.initState();
     // Each list loads on its own, so one failing doesn't hide the others.
-    _load('stops', StopsService(_dio).getStops, (items) => _stops = items);
+    // Only stops a route serves: a stop no jeepney uses can't be boarded,
+    // so it would just clutter the map and the stop search.
+    _load('stops', StopsService(_dio).getStops,
+        (items) => _stops = [for (final s in items) if (s.routeIds.isNotEmpty) s]);
     _load('routes', RoutesService(_dio).getRoutes, (items) => _routes = items);
     _load('vehicles', VehiclesService(_dio).getVehicles, (items) => _vehicles = items);
     _alerts.load();

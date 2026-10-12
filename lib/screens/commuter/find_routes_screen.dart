@@ -3,6 +3,8 @@
 // "Find Routes" page, opened from Plan Your Route: shows the trip-plan
 // request's progress, then the ranked route options. The best option
 // starts selected; tap another to select it, then view it on the map.
+// While open, the plan follows the commuter's GPS (TripPlanProvider live
+// updates): the closest stop and the next jeep refresh as they move.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -20,7 +22,7 @@ import 'route_map_screen.dart';
 /// A route option the commuter chose to follow, between two place names.
 typedef TripStarted = void Function(RouteOption option, String from, String to);
 
-class FindRoutesScreen extends StatelessWidget {
+class FindRoutesScreen extends StatefulWidget {
   const FindRoutesScreen({super.key, required this.routes, this.onTripStarted});
 
   /// Routes from /routes, for route codes, stop counts and map lines.
@@ -29,9 +31,35 @@ class FindRoutesScreen extends StatelessWidget {
   /// Called when the selected route is opened on the map (records a trip).
   final TripStarted? onTripStarted;
 
+  @override
+  State<FindRoutesScreen> createState() => _FindRoutesScreenState();
+}
+
+class _FindRoutesScreenState extends State<FindRoutesScreen> {
+  // Held so dispose() doesn't need a context.
+  TripPlanProvider? _trip;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_trip == null) {
+      _trip = context.read<TripPlanProvider>();
+      // After this frame: starting notifies listeners, which can't happen mid-build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _trip?.startLiveUpdates();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _trip?.stopLiveUpdates();
+    super.dispose();
+  }
+
   void _viewOnMap(BuildContext context, RouteOption option, Map<String, TransportRoute> routesById) {
     final trip = context.read<TripPlanProvider>();
-    onTripStarted?.call(option, trip.originLabel ?? 'Your location', trip.destinationLabel ?? 'Destination');
+    widget.onTripStarted?.call(option, trip.originLabel ?? 'Your location', trip.destinationLabel ?? 'Destination');
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => RouteMapScreen(option: option, routesById: routesById)),
     );
@@ -40,7 +68,7 @@ class FindRoutesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trip = context.watch<TripPlanProvider>();
-    final routesById = {for (final route in routes) route.id: route};
+    final routesById = {for (final route in widget.routes) route.id: route};
     final selected = trip.selectedOption;
 
     return Scaffold(
@@ -60,6 +88,9 @@ class FindRoutesScreen extends StatelessWidget {
                   '${trip.originLabel ?? 'Your location'} → ${trip.destinationLabel ?? ''}',
                   style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
                 ),
+                if (trip.isFollowingLocation) _LiveStatus(trip: trip),
+                if (trip.updateNotice != null)
+                  _UpdateNotice(text: trip.updateNotice!, onDismiss: trip.dismissUpdateNotice),
                 const SizedBox(height: AppSpacing.md),
                 ...switch (trip.status) {
                   TripPlanStatus.idle || TripPlanStatus.loading => [
@@ -101,6 +132,68 @@ class FindRoutesScreen extends StatelessWidget {
                 },
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveStatus extends StatelessWidget {
+  const _LiveStatus({required this.trip});
+
+  final TripPlanProvider trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = trip.lastUpdated;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          const Icon(AppIcons.myLocation, size: 16, color: AppColors.success),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              updated == null
+                  ? 'Following your location'
+                  : 'Following your location  •  Updated ${TimeOfDay.fromDateTime(updated).format(context)}',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+          ),
+          if (trip.isRefreshing)
+            const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+        ],
+      ),
+    );
+  }
+}
+
+class _UpdateNotice extends StatelessWidget {
+  const _UpdateNotice({required this.text, required this.onDismiss});
+
+  final String text;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpacing.xs),
+      padding: const EdgeInsets.only(left: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundIceBlue,
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+        borderRadius: BorderRadius.circular(AppSpacing.xs),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.update, size: 18, color: AppColors.secondary),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Dismiss',
+            onPressed: onDismiss,
           ),
         ],
       ),

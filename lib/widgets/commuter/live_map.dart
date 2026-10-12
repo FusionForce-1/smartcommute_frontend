@@ -60,7 +60,7 @@ class LiveMap extends StatelessWidget {
           initialZoom: 13,
           minZoom: MapConfig.minZoom,
           maxZoom: MapConfig.maxZoom,
-          cameraConstraint: CameraConstraint.contain(bounds: MapConfig.serviceArea),
+          cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
           onMapReady: onMapReady,
         ),
         children: [

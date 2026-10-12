@@ -74,14 +74,60 @@ class RouteOptionCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      '~${option.totalEtaMin} min',
-                      style: const TextStyle(fontSize: 17, color: AppColors.textPrimary),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '~${option.totalEtaMin} min',
+                          style: const TextStyle(fontSize: 17, color: AppColors.textPrimary),
+                        ),
+                        if (option.arriveAt != null)
+                          Text(
+                            'Arrive ${TimeOfDay.fromDateTime(option.arriveAt!.toLocal()).format(context)}',
+                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                          ),
+                      ],
                     ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(_details, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                if (trafficSummary(option) case final traffic?)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.traffic, size: 16, color: _trafficColor(option)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(traffic,
+                              style: TextStyle(fontSize: 13, color: _trafficColor(option))),
+                        ),
+                      ],
+                    ),
+                  ),
+                for (final leg in option.legs)
+                  if (boardingSummary(leg) case final summary?)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            leg.waitIsLive ? Icons.directions_bus : Icons.directions_walk,
+                            size: 16,
+                            color: leg.waitIsLive ? AppColors.success : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              option.legs.length > 1 ? '${leg.routeCode ?? leg.routeName}: $summary' : summary,
+                              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
               ],
             ),
           ),
@@ -89,6 +135,13 @@ class RouteOptionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _trafficColor(RouteOption option) {
+  final levels = option.legs.map((l) => l.traffic);
+  if (levels.contains('heavy')) return AppColors.error;
+  if (levels.contains('moderate')) return AppColors.accent;
+  return AppColors.success;
 }
 
 class _LegCodes extends StatelessWidget {

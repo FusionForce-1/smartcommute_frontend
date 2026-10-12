@@ -27,6 +27,9 @@ class _HangingLocationSource implements LocationSource {
   Future<LatLng> currentLocation() => Completer<LatLng>().future;
 
   @override
+  Stream<LatLng> positionStream({int distanceFilterM = 25}) => const Stream.empty();
+
+  @override
   Future<void> openSettings() async {}
 
   @override

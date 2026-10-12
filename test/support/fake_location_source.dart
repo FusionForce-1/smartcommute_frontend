@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:latlong2/latlong.dart';
 import 'package:smartcommute_app/services/location_source.dart';
 
@@ -17,6 +19,12 @@ class FakeLocationSource implements LocationSource {
     if (failure != null) throw LocationException(failure);
     return result!;
   }
+
+  /// Push positions with `positions.add(...)` to simulate the commuter moving.
+  final StreamController<LatLng> positions = StreamController<LatLng>.broadcast();
+
+  @override
+  Stream<LatLng> positionStream({int distanceFilterM = 25}) => positions.stream;
 
   @override
   Future<void> openSettings() async {
