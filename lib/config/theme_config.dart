@@ -35,6 +35,7 @@ class AppColors {
   static const Color headerSky = Color(0xFFD3EDFB);
   static const Color divider = Color(0xFFDCE2E8);
   static const Color navInactive = Color(0xFF8A8F98);
+  static const Color infoBlue = Color(0xFF1E63C6); // "Info" transit alerts
 }
 
 /// E1 corner-radius tokens.

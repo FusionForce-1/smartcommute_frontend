@@ -22,10 +22,13 @@ import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
 
 class RouteTab extends StatelessWidget {
-  const RouteTab({super.key, required this.stops, required this.routes});
+  const RouteTab({super.key, required this.stops, required this.routes, this.onTripStarted});
 
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
+
+  /// Called when the commuter opens a chosen route on the map.
+  final TripStarted? onTripStarted;
 
   Future<void> _chooseFrom(BuildContext context) async {
     final stop = await showStopSearchSheet(context, stops);
@@ -64,7 +67,7 @@ class RouteTab extends StatelessWidget {
         // A pushed page sits outside the dashboard's provider scope.
         builder: (_) => ChangeNotifierProvider.value(
           value: trip,
-          child: FindRoutesScreen(routes: routes),
+          child: FindRoutesScreen(routes: routes, onTripStarted: onTripStarted),
         ),
       ),
     );

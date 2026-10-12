@@ -17,13 +17,21 @@ import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/route_option_card.dart';
 import 'route_map_screen.dart';
 
+/// A route option the commuter chose to follow, between two place names.
+typedef TripStarted = void Function(RouteOption option, String from, String to);
+
 class FindRoutesScreen extends StatelessWidget {
-  const FindRoutesScreen({super.key, required this.routes});
+  const FindRoutesScreen({super.key, required this.routes, this.onTripStarted});
 
   /// Routes from /routes, for route codes, stop counts and map lines.
   final List<TransportRoute> routes;
 
+  /// Called when the selected route is opened on the map (records a trip).
+  final TripStarted? onTripStarted;
+
   void _viewOnMap(BuildContext context, RouteOption option, Map<String, TransportRoute> routesById) {
+    final trip = context.read<TripPlanProvider>();
+    onTripStarted?.call(option, trip.originLabel ?? 'Your location', trip.destinationLabel ?? 'Destination');
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => RouteMapScreen(option: option, routesById: routesById)),
     );
