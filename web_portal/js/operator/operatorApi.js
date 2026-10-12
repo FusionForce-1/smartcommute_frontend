@@ -17,6 +17,13 @@ const OperatorApi = {
   fleet: () => ApiClient.get('/fleet'),
   fleetReport: () => ApiClient.get('/reports/fleet'),
   subscription: () => ApiClient.get('/subscriptions/me'),
+  startTrial: () => ApiClient.post('/subscriptions/trial'),
+  /** Returns { checkout_url }: PayPal's approval page (or the mock pay path). */
+  checkout: ({ return_url, cancel_url }) => ApiClient.post('/subscriptions/checkout', { return_url, cancel_url }),
+  /** After PayPal sends the operator back with ?token=<order id>. */
+  capturePayPal: (orderId) => ApiClient.post('/subscriptions/paypal/capture', { order_id: orderId }),
+  /** Development only (PAYMENT_PROVIDER=mock): "pays" the checkout instantly. */
+  mockPay: (path) => ApiClient.post(path),
   drivers: () => ApiClient.get('/drivers'),
   /** Reads both sides of a license. Nothing is saved. */
   scanLicense: (front, back) => {
