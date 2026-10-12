@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../config/env_config.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../models/transport_model.dart';
@@ -18,6 +17,7 @@ import '../../models/vehicles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/trip_plan_provider.dart';
 import '../../router/app_router.dart';
+import '../../services/dio_interceptor.dart';
 import '../../services/location_source.dart';
 import '../../services/route_services.dart';
 import '../../services/stops_services.dart';
@@ -48,7 +48,9 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
   ];
 
-  final Dio _dio = Dio(BaseOptions(baseUrl: EnvConfig.apiBaseUrl));
+  // Signs requests with the commuter's token (and refreshes it);
+  // /trip-plan rejects anonymous calls.
+  final Dio _dio = buildDioClient();
 
   int _currentIndex = 0;
   List<TransportStop> _stops = const [];

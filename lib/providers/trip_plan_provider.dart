@@ -33,7 +33,12 @@ class TripPlanProvider extends ChangeNotifier {
   // Kung walay GPS fix (e.g. sulod sa building), dili mag-spin forever.
   final Duration _locateTimeout;
 
+  /// Kapila ka recent search ang i-display.
+  static const int maxRecentSearches = 3;
+
   LatLng? _origin;
+  // null = ang GPS location sa commuter; kung naa, stop nga gipili.
+  String? _originLabel;
   bool _isLocating = false;
   String? _locationError;
 
@@ -45,12 +50,16 @@ class TripPlanProvider extends ChangeNotifier {
   List<RouteOption> _options = const [];
   RouteOption? _selectedOption;
   String? _errorMessage;
+  final List<TripPlace> _recentSearches = [];
 
   // Mo-increment kada clear para ma-ignore ang daan nga response.
   int _requestId = 0;
   bool _disposed = false;
 
   LatLng? get origin => _origin;
+
+  /// Stop name for a chosen origin; null when the origin is the GPS location.
+  String? get originLabel => _originLabel;
   bool get isLocating => _isLocating;
   String? get locationError => _locationError;
   LatLng? get destination => _destination;
@@ -60,6 +69,11 @@ class TripPlanProvider extends ChangeNotifier {
   List<RouteOption> get options => _options;
   RouteOption? get selectedOption => _selectedOption;
   String? get errorMessage => _errorMessage;
+
+  /// Newest first, session only.
+  List<TripPlace> get recentSearches => List.unmodifiable(_recentSearches);
+
+  bool get canSwap => _origin != null && _destination != null && !_isLocating;
 
   bool get canPlan =>
       _origin != null &&
@@ -75,6 +89,8 @@ class TripPlanProvider extends ChangeNotifier {
 
     try {
       _origin = await _locationSource.currentLocation().timeout(_locateTimeout);
+      _originLabel = null;
+      _clearResults();
     } on LocationException catch (e) {
       _origin = null;
       _locationError = e.message;
@@ -90,6 +106,27 @@ class TripPlanProvider extends ChangeNotifier {
   bool get canOpenLocationSettings => _locationSource.canOpenSettings;
 
   Future<void> openLocationSettings() => _locationSource.openSettings();
+
+  /// Start from a chosen stop instead of the GPS location.
+  void setOrigin(LatLng origin, String label) {
+    _origin = origin;
+    _originLabel = label;
+    _locationError = null;
+    _clearResults();
+    _notify();
+  }
+
+  void swapOriginAndDestination() {
+    if (!canSwap) return;
+    final origin = _origin!;
+    final originLabel = _originLabel ?? 'Your location';
+    _origin = _destination;
+    _originLabel = _destinationLabel;
+    _destination = origin;
+    _destinationLabel = originLabel;
+    _clearResults();
+    _notify();
+  }
 
   void setDestination(LatLng destination, String label) {
     _destination = destination;
@@ -119,6 +156,10 @@ class TripPlanProvider extends ChangeNotifier {
       return;
     }
 
+    _rememberSearch(TripPlace(
+      location: destination,
+      label: _destinationLabel ?? 'Dropped pin',
+    ));
     final requestId = _requestId;
     _status = TripPlanStatus.loading;
     _notify();
@@ -132,6 +173,8 @@ class TripPlanProvider extends ChangeNotifier {
       if (requestId != _requestId) return;
       _options = response.options;
       _status = _options.isEmpty ? TripPlanStatus.empty : TripPlanStatus.success;
+      // Best-ranked option starts selected.
+      _selectedOption = _options.isEmpty ? null : _options.first;
     } on DioException catch (e) {
       if (requestId != _requestId) return;
       _status = TripPlanStatus.error;
@@ -147,6 +190,15 @@ class TripPlanProvider extends ChangeNotifier {
   void selectOption(RouteOption option) {
     _selectedOption = option;
     _notify();
+  }
+
+  void _rememberSearch(TripPlace place) {
+    _recentSearches
+      ..removeWhere((p) => p.label == place.label)
+      ..insert(0, place);
+    if (_recentSearches.length > maxRecentSearches) {
+      _recentSearches.removeRange(maxRecentSearches, _recentSearches.length);
+    }
   }
 
   void _clearResults() {

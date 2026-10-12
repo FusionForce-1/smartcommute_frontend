@@ -115,17 +115,23 @@ void main() {
       expect(provider.status, TripPlanStatus.idle);
     });
 
-    test('success stores options and allows selecting one', () async {
+    test('success stores options and pre-selects the best one', () async {
       final provider = await readyProvider(okAdapter());
 
       await provider.plan();
 
       expect(provider.status, TripPlanStatus.success);
       expect(provider.options, hasLength(1));
-      expect(provider.selectedOption, isNull);
+      expect(provider.selectedOption, same(provider.options.first));
+    });
 
-      provider.selectOption(provider.options.single);
-      expect(provider.selectedOption, same(provider.options.single));
+    test('empty results leave nothing selected', () async {
+      final provider =
+          await readyProvider(FakeAdapter((_) async => jsonBody(emptyResponse())));
+
+      await provider.plan();
+
+      expect(provider.selectedOption, isNull);
     });
 
     test('sends the chosen preference', () async {
@@ -270,6 +276,93 @@ void main() {
       gate.complete(jsonBody(sampleResponse()));
 
       await expectLater(pending, completes);
+    });
+  });
+
+  group('origin', () {
+    test('starts as the GPS location with no label', () async {
+      final provider = buildProvider(okAdapter());
+      await provider.locateOrigin();
+
+      expect(provider.origin, origin);
+      expect(provider.originLabel, isNull);
+    });
+
+    test('setOrigin uses a chosen stop and clears results', () async {
+      final provider = await readyProvider(okAdapter());
+      await provider.plan();
+
+      provider.setOrigin(const LatLng(10.30, 123.89), 'Fuente Osmeña Circle');
+
+      expect(provider.origin, const LatLng(10.30, 123.89));
+      expect(provider.originLabel, 'Fuente Osmeña Circle');
+      expect(provider.options, isEmpty);
+      expect(provider.status, TripPlanStatus.idle);
+    });
+
+    test('locating again returns to the GPS location', () async {
+      final provider = buildProvider(okAdapter());
+      provider.setOrigin(const LatLng(10.30, 123.89), 'Fuente Osmeña Circle');
+
+      await provider.locateOrigin();
+
+      expect(provider.origin, origin);
+      expect(provider.originLabel, isNull);
+    });
+  });
+
+  group('swapOriginAndDestination', () {
+    test('needs both ends set', () {
+      final provider = buildProvider(okAdapter());
+      provider.setDestination(destination, 'IT Park');
+
+      expect(provider.canSwap, isFalse);
+      provider.swapOriginAndDestination();
+      expect(provider.destination, destination);
+    });
+
+    test('swaps places and labels; the GPS origin becomes "Your location"', () async {
+      final provider = await readyProvider(okAdapter());
+
+      provider.swapOriginAndDestination();
+
+      expect(provider.origin, destination);
+      expect(provider.originLabel, 'IT Park');
+      expect(provider.destination, origin);
+      expect(provider.destinationLabel, 'Your location');
+    });
+  });
+
+  group('recentSearches', () {
+    test('records each planned destination, newest first, without duplicates', () async {
+      final provider = await readyProvider(okAdapter());
+      await provider.plan(); // IT Park
+      provider.setDestination(const LatLng(10.29, 123.9), 'Colon');
+      await provider.plan();
+      provider.setDestination(destination, 'IT Park');
+      await provider.plan();
+
+      expect(provider.recentSearches.map((p) => p.label), ['IT Park', 'Colon']);
+    });
+
+    test('keeps only the latest few', () async {
+      final provider = await readyProvider(okAdapter());
+      for (var i = 0; i < TripPlanProvider.maxRecentSearches + 2; i++) {
+        provider.setDestination(LatLng(10.33 + i / 100, 123.905), 'Place $i');
+        await provider.plan();
+      }
+
+      expect(provider.recentSearches, hasLength(TripPlanProvider.maxRecentSearches));
+      expect(provider.recentSearches.first.label, 'Place ${TripPlanProvider.maxRecentSearches + 1}');
+    });
+
+    test('is not recorded when already at the destination', () async {
+      final provider = await readyProvider(okAdapter());
+      provider.setDestination(origin, 'Here');
+
+      await provider.plan();
+
+      expect(provider.recentSearches, isEmpty);
     });
   });
 }

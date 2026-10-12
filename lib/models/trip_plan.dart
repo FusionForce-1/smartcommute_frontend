@@ -3,13 +3,16 @@
 // Mirror sa backend trip_models.py (POST /trip-plan).
 // Walay fare computation diri — gi-display ra nato unsa ang i-return sa backend.
 
+import 'package:latlong2/latlong.dart';
+
 import 'models.dart';
+import 'transport_model.dart';
 
 /// Unsa ang i-minimize sa trip planner (backend `preferences.minimize`).
 enum TripPreference {
   time('time', 'Fastest'),
   fare('fare', 'Cheapest'),
-  transfers('transfers', 'Fewest transfers');
+  transfers('transfers', 'Few Transfers');
 
   const TripPreference(this.apiValue, this.label);
 
@@ -108,7 +111,38 @@ extension StopDisplay on StopModel {
   String get displayName => isPlaceholder ? 'Your location' : name;
 }
 
+extension RouteOptionStops on RouteOption {
+  /// Stops ridden across every leg, counted along each route's stop order.
+  /// Null when a leg's route or its board/alight stop isn't in [routesById]
+  /// (e.g. the backend's placeholder origin stop).
+  int? stopCount(Map<String, TransportRoute> routesById) {
+    var total = 0;
+    for (final leg in legs) {
+      final stops = routesById[leg.routeId]?.stops;
+      if (stops == null) return null;
+      final ordered = [...stops]..sort((a, b) => a.sequence.compareTo(b.sequence));
+      final board = ordered.indexWhere((s) => s.id == leg.boardStop.id);
+      final alight = ordered.indexWhere((s) => s.id == leg.alightStop.id);
+      if (board < 0 || alight < 0) return null;
+      total += (alight - board).abs();
+    }
+    return total;
+  }
+}
+
+/// A named point the commuter travels from or to (a stop, or a map pin).
+class TripPlace {
+  const TripPlace({required this.location, required this.label});
+
+  final LatLng location;
+  final String label;
+}
+
 String formatFare(double fare) => '₱${fare.toStringAsFixed(2)}';
+
+/// "₱13" for whole pesos, "₱13.50" otherwise — for compact fare badges.
+String formatFareCompact(double fare) =>
+    fare == fare.roundToDouble() ? '₱${fare.toStringAsFixed(0)}' : formatFare(fare);
 
 String formatTransfers(int transfers) {
   if (transfers == 0) return 'No transfers';
