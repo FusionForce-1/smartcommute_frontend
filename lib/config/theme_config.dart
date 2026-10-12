@@ -29,6 +29,12 @@ class AppColors {
   static const Color bannerTeal = secondary;
   static const Color inputBorder = secondary;
   static const Color errorBackground = Color(0xFFFCE4E4);
+
+  // Commuter dashboard (same palette as the web portal's admin/operator UI).
+  static const Color brandTeal = Color(0xFF3B8A9E);
+  static const Color headerSky = Color(0xFFD3EDFB);
+  static const Color divider = Color(0xFFDCE2E8);
+  static const Color navInactive = Color(0xFF8A8F98);
 }
 
 /// E1 corner-radius tokens.
