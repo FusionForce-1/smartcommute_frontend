@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 // One frame from WSS /ws/live (broadcast by the backend's gps_ingestion).
 //
 //   {"vehicle_id", "lat", "lng", "speed", "heading", "ts",
-//    "status", "crowd", "eta_next_stop"}
+//    "status", "crowd", "eta_next_stop", "next_stop", "traffic"}
 //
 // signal_lost frames have NO lat/lng/ts — only vehicle_id + status —
 // so [location] and [timestamp] are nullable.
@@ -18,6 +18,8 @@ class VehicleLiveUpdate {
     this.timestamp,
     this.crowd,
     this.etaNextStop,
+    this.nextStop,
+    this.traffic,
   });
 
   final String vehicleId;
@@ -27,7 +29,9 @@ class VehicleLiveUpdate {
   final double? heading; // degrees from north
   final DateTime? timestamp; // device fix time, UTC
   final String? crowd; // low | medium | high
-  final int? etaNextStop; // minutes, -1 when unknown
+  final int? etaNextStop; // minutes at current traffic speed, -1 when unknown
+  final String? nextStop; // name of the stop the jeep reaches next
+  final String? traffic; // "light" | "moderate" | "heavy" on this route now
 
   bool get isSignalLost => status == 'signal_lost';
 
@@ -46,6 +50,8 @@ class VehicleLiveUpdate {
       timestamp: parseServerTime(json['ts']),
       crowd: json['crowd'] as String?,
       etaNextStop: (json['eta_next_stop'] as num?)?.toInt(),
+      nextStop: json['next_stop'] as String?,
+      traffic: json['traffic'] as String?,
     );
   }
 

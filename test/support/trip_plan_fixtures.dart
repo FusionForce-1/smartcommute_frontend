@@ -48,3 +48,53 @@ Map<String, dynamic> emptyResponse() => {
       'options': <dynamic>[],
       'generated_at': '2026-10-01T08:00:00',
     };
+
+/// Recommender-style response: one direct option on [routeId], boarding at
+/// [boardId], with the walking / live-wait fields the recommender adds.
+Map<String, dynamic> recommenderResponse({
+  String routeId = 'r1',
+  String boardId = 'b1',
+  String boardName = 'Capitol',
+  int waitMin = 4,
+  bool live = true,
+}) =>
+    {
+      'options': [
+        {
+          'rank': 1,
+          'total_eta_min': 20,
+          'total_fare': 13.0,
+          'transfers': 0,
+          'total_walk_m': 180,
+          'walk_from_alight_m': 60,
+          'walk_from_alight_min': 1,
+          'legs': [
+            {
+              'route_id': routeId,
+              'route_name': 'Banawa - Carbon',
+              'route_code': '07B',
+              'board_stop': stopJson(boardId, boardName, 123.89, 10.316),
+              'alight_stop': stopJson('a1', 'CNU', 123.896, 10.301),
+              'eta_min': waitMin + 8,
+              'fare': 13.0,
+              'walk_to_board_m': 120,
+              'walk_to_board_min': 2,
+              'wait_min': waitMin,
+              'wait_is_live': live,
+              'next_vehicle_id': live ? 'v1' : null,
+              'ride_km': 1.93,
+              'ride_min': 8,
+              'path': {
+                'type': 'LineString',
+                'coordinates': [
+                  [123.89, 10.316],
+                  [123.893, 10.31],
+                  [123.896, 10.301],
+                ],
+              },
+            },
+          ],
+        },
+      ],
+      'generated_at': '2026-10-12T08:00:00',
+    };

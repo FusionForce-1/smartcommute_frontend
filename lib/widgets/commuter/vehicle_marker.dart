@@ -36,12 +36,19 @@ class VehicleMarker extends StatelessWidget {
           );
 
     return Tooltip(
-      message: lost
-          ? 'Signal lost — last known position'
-          : speed != null
-              ? '${speed.toStringAsFixed(0)} km/h'
-              : 'En route',
+      message: lost ? 'Signal lost — last known position' : _liveLabel(vehicle, speed),
       child: icon,
     );
+  }
+
+  /// "25 km/h  •  Next: CNU in 3 min  •  Heavy traffic"
+  static String _liveLabel(VehicleLiveUpdate v, double? speed) {
+    final eta = v.etaNextStop;
+    final parts = [
+      if (speed != null) '${speed.toStringAsFixed(0)} km/h',
+      if (v.nextStop != null && eta != null && eta >= 0) 'Next: ${v.nextStop} in $eta min',
+      if (v.traffic != null) '${v.traffic![0].toUpperCase()}${v.traffic!.substring(1)} traffic',
+    ];
+    return parts.isEmpty ? 'En route' : parts.join('  •  ');
   }
 }

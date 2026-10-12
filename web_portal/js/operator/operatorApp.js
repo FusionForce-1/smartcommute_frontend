@@ -13,6 +13,7 @@ const OperatorApp = (() => {
     { route: 'drivers', label: 'Drivers', icon: 'navDrivers' },
     { route: 'announcements', label: 'Announcements', icon: 'navAnnouncements' },
     { route: 'reports', label: 'Reports', icon: 'navOperatorReports' },
+    { route: 'subscription', label: 'Subscription', icon: 'navSubscription' },
     { route: 'profile', label: 'Profile', icon: 'navProfile' },
     { route: 'settings', label: 'Settings', icon: 'navSettings' },
   ];
@@ -24,6 +25,7 @@ const OperatorApp = (() => {
     ['Drivers', 'Add a driver by scanning both sides of their license, then hand them the app login shown once after saving.'],
     ['Announcements', 'Publish transit alerts to notify commuters and drivers about service changes.'],
     ['Reports', 'Fleet and service figures, and revenue from the daily remittances you record for each vehicle.'],
+    ['Subscription', 'Your first 3 months are free. After that the plan is ₱1,000 a year, paid with PayPal, for unlimited vehicles.'],
     ['Profile & Settings', 'Update your company details, and turn two-factor authentication on or off.'],
   ];
 
@@ -112,6 +114,8 @@ const OperatorApp = (() => {
     }
 
     window.addEventListener('session:expired', redirectToLogin);
+    // Back from PayPal (?paypal=return|cancel): open the Subscription page.
+    if (new URLSearchParams(location.search).has('paypal')) location.hash = '#/subscription';
     renderSidebar();
     loadProfile();
     OperatorRouter.start(onRouteChange);

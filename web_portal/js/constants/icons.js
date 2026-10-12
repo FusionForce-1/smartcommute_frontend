@@ -57,6 +57,7 @@ const ICONS = Object.freeze({
   navOperatorReports: 'bar-chart-3',
   navProfile: 'user-round',
   navSettings: 'settings',
+  navSubscription: 'credit-card',
 
   // ---- Fleet / vehicles / routes ----
   plate: 'car-front',

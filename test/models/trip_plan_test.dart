@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:smartcommute_app/models/transport_model.dart';
 import 'package:smartcommute_app/models/trip_plan.dart';
 
 import '../support/trip_plan_fixtures.dart';
@@ -62,6 +64,54 @@ void main() {
       expect(TripPreference.fare.apiValue, 'fare');
       expect(TripPreference.transfers.apiValue, 'transfers');
       expect(TripPreference.time.label, 'Fastest');
+    });
+
+    test('formatFareCompact drops ".00" only for whole pesos', () {
+      expect(formatFareCompact(13), '₱13');
+      expect(formatFareCompact(13.5), '₱13.50');
+    });
+  });
+
+  group('stopCount', () {
+    RouteStop stop(String id, int sequence) =>
+        RouteStop(id: id, name: id, sequence: sequence, location: const LatLng(10.3, 123.9));
+
+    // r1: a → b → c → d ; r2: d → e → f (stops listed out of order on purpose)
+    final routesById = {
+      'r1': TransportRoute(
+        id: 'r1', name: 'R1', code: '01K', geometry: const [], isActive: true,
+        stops: [stop('c', 3), stop('a', 1), stop('d', 4), stop('b', 2)],
+      ),
+      'r2': TransportRoute(
+        id: 'r2', name: 'R2', code: '13C', geometry: const [], isActive: true,
+        stops: [stop('d', 1), stop('e', 2), stop('f', 3)],
+      ),
+    };
+
+    Map<String, dynamic> leg(String routeId, String board, String alight) => {
+          'route_id': routeId,
+          'route_name': routeId,
+          'board_stop': stopJson(board, board, 123.9, 10.3),
+          'alight_stop': stopJson(alight, alight, 123.9, 10.3),
+          'eta_min': 5,
+          'fare': 13,
+        };
+
+    RouteOption option(List<Map<String, dynamic>> legs) => RouteOption.fromJson({
+          'rank': 1,
+          'legs': legs,
+          'total_eta_min': 10,
+          'total_fare': 26,
+          'transfers': legs.length - 1,
+        });
+
+    test('adds up stops ridden on every leg, following route order', () {
+      expect(option([leg('r1', 'a', 'd'), leg('r2', 'd', 'f')]).stopCount(routesById), 5);
+    });
+
+    test('is null when a stop or route is unknown', () {
+      expect(option([leg('r1', '0', 'd')]).stopCount(routesById), isNull);
+      expect(option([leg('r9', 'a', 'd')]).stopCount(routesById), isNull);
     });
   });
 }

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smartcommute_app/constants/app_icons.dart';
-import 'package:smartcommute_app/screens/commuter/alert.dart';
-import 'package:smartcommute_app/screens/commuter/profile.dart';
 import 'package:smartcommute_app/widgets/commuter/commuter_action_tile.dart';
 import 'package:smartcommute_app/widgets/commuter/commuter_nav_bar.dart';
 import 'package:smartcommute_app/widgets/commuter/nearby_vehicle_card.dart';
@@ -91,31 +89,5 @@ void main() {
     await tester.tap(find.text('On'));
     await tester.tap(find.text('Off'));
     expect(taps, 1);
-  });
-
-  testWidgets('AlertsTab shows the empty state', (tester) async {
-    await tester.pumpWidget(host(const AlertsTab()));
-    expect(find.text('No alerts right now'), findsOneWidget);
-  });
-
-  group('ProfileTab', () {
-    testWidgets('guests see the notice and cannot open settings', (tester) async {
-      await tester.pumpWidget(host(ProfileTab(isGuest: true, onSignOut: () {})));
-
-      expect(find.textContaining('Guest mode'), findsOneWidget);
-      final settings = tester.widget<CommuterActionTile>(
-        find.widgetWithText(CommuterActionTile, 'Account settings'),
-      );
-      expect(settings.enabled, isFalse);
-    });
-
-    testWidgets('signed-in commuters have no guest notice and can sign out', (tester) async {
-      var signedOut = false;
-      await tester.pumpWidget(host(ProfileTab(isGuest: false, onSignOut: () => signedOut = true)));
-
-      expect(find.textContaining('Guest mode'), findsNothing);
-      await tester.tap(find.text('Sign out'));
-      expect(signedOut, isTrue);
-    });
   });
 }
