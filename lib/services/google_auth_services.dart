@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+
+import '../config/env_config.dart';
 
 class GoogleAuthService {
   GoogleAuthService._();
@@ -15,7 +18,11 @@ class GoogleAuthService {
   Completer<String?>? _tokenCompleter;
 
   Future<void> initialize() async {
-    await _googleSignIn.initialize();
+    // Web gets its client ID from web/index.html; Android must be told the
+    // Web client ID explicitly, or Google returns no ID token.
+    await _googleSignIn.initialize(
+      serverClientId: kIsWeb ? null : EnvConfig.googleWebClientId,
+    );
 
     _authSubscription ??= _googleSignIn.authenticationEvents.listen(
       _handleAuthEvent,

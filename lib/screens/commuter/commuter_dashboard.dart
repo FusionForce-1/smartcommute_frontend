@@ -1,36 +1,47 @@
 // lib/screens/commuter/commuter_dashboard.dart
 //
-// Emae D. Calonia — Commuter test dashboard scaffold.
-// Bottom navigation: Map, Routes, Feedback, Profile.
-// Placeholder tab bodies for navigation / layout testing.
+// Commuter dashboard shell: logo header, the four tabs (Home, Route,
+// Alerts, Profile) and the bottom navigation. Loads stops, routes and
+// vehicles once and hands them to the tabs that need them, and owns the
+// trip, alert and profile state so it survives switching tabs.
 
-import 'dart:convert';
-import 'dart:math' as math;
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
-import '../../providers/auth_provider.dart';
-import '../../config/env_config.dart';
-import '../../router/app_router.dart';
-import '../../models/transport_stop.dart';
-import '../../models/vehicle_live_update.dart';
-import '../../models/vehicle_track.dart';
-import '../../services/stops_services.dart';
+import '../../models/commuter_profile.dart';
 import '../../models/transport_model.dart';
+import '../../models/transport_stop.dart';
+import '../../models/trip_plan.dart';
+import '../../models/vehicles.dart';
+import '../../providers/alerts_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/profile_provider.dart';
+import '../../providers/trip_plan_provider.dart';
+import '../../router/app_router.dart';
+import '../../services/alerts_service.dart';
+import '../../services/dio_interceptor.dart';
+import '../../services/location_source.dart';
+import '../../services/profile_service.dart';
 import '../../services/route_services.dart';
-import '../../services/websocket_service.dart';
-import '../../widgets/stop_image.dart';
-import 'package:dio/dio.dart';
+import '../../services/stops_services.dart';
+import '../../services/trip_plan_service.dart';
+import '../../services/vehicles_service.dart';
+import '../../widgets/commuter/commuter_header.dart';
+import '../../widgets/commuter/commuter_nav_bar.dart';
+import 'alert.dart';
+import 'home.dart';
+import 'profile.dart';
+import 'route.dart';
 
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
-  /// True when opened via "Continue as Guest" — profile actions stay disabled.
+  /// True when opened via "Continue as Guest" — no profile, and alerts
+  /// come from the public list without read state.
   final bool isGuest;
 
   @override
@@ -38,664 +49,133 @@ class CommuterDashboard extends StatefulWidget {
 }
 
 class _CommuterDashboardState extends State<CommuterDashboard> {
-  int _currentIndex = 0;
-
-  static const _tabs = [
-    _CommuterTab(
-      label: 'Map',
-      icon: AppIcons.location,
-      title: 'Live Map',
-      description: 'Leaflet map with vehicle markers and stop pins.',
-    ),
-    _CommuterTab(
-      label: 'Routes',
-      icon: AppIcons.routeStop,
-      title: 'Trip Planner',
-      description: 'Origin / destination search and ranked route options.',
-    ),
-    _CommuterTab(
-      label: 'Feedback',
-      icon: AppIcons.feedback,
-      title: 'Submit Feedback',
-      description: 'Report delays, overcrowding, or route issues.',
-    ),
-    _CommuterTab(
-      label: 'Profile',
-      icon: AppIcons.profileAvatar,
-      title: 'My Profile',
-      description: 'Account details, preferences, and sign-out.',
-    ),
+  static const _navItems = [
+    CommuterNavItem(icon: AppIcons.navHome, label: 'Home'),
+    CommuterNavItem(icon: AppIcons.navRoute, label: 'Route'),
+    CommuterNavItem(icon: AppIcons.navAlerts, label: 'Alerts'),
+    CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
   ];
+  static const _routeTab = 1;
+  static const _profileTab = 3;
+
+  // Signs requests with the commuter's token (and refreshes it);
+  // /trip-plan, /alerts/feed and /users/me reject anonymous calls.
+  final Dio _dio = buildDioClient();
+
+  late final TripPlanProvider _trip = TripPlanProvider(
+    service: TripPlanService(_dio),
+    locationSource: GeolocatorLocationSource(),
+  );
+  late final AlertsProvider _alerts =
+      AlertsProvider(service: AlertsService(_dio), isGuest: widget.isGuest);
+  late final ProfileProvider _profile =
+      ProfileProvider(service: ProfileService(_dio), isGuest: widget.isGuest);
+
+  int _currentIndex = 0;
+  List<TransportStop> _stops = const [];
+  List<TransportRoute> _routes = const [];
+  List<Vehicle> _vehicles = const [];
 
   @override
-  Widget build(BuildContext context) {
-    final tab = _tabs[_currentIndex];
-
-    return Scaffold(
-      backgroundColor: AppColors.backgroundIceBlue,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: Text(tab.title),
-        actions: [
-          IconButton(
-            icon: const Icon(AppIcons.notificationBell),
-            tooltip: 'Announcements',
-            onPressed: () {
-              // TODO [Velez]: Wire with API/State Provider here
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Announcements (preview)')),
-              );
-            },
-          ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: List.generate(_tabs.length, (index) {
-          return _CommuterTabPlaceholder(
-            tab: _tabs[index],
-            isGuest: widget.isGuest && index == 3,
-          );
-        }),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) => setState(() => _currentIndex = index),
-        destinations: [
-          for (final t in _tabs)
-            NavigationDestination(icon: Icon(t.icon), label: t.label),
-        ],
-      ),
-    );
+  void initState() {
+    super.initState();
+    // Each list loads on its own, so one failing doesn't hide the others.
+    // Only stops a route serves: a stop no jeepney uses can't be boarded,
+    // so it would just clutter the map and the stop search.
+    _load('stops', StopsService(_dio).getStops,
+        (items) => _stops = [for (final s in items) if (s.routeIds.isNotEmpty) s]);
+    _load('routes', RoutesService(_dio).getRoutes, (items) => _routes = items);
+    _load('vehicles', VehiclesService(_dio).getVehicles, (items) => _vehicles = items);
+    _alerts.load();
+    _profile.load();
   }
-}
-
-class _CommuterTab {
-  const _CommuterTab({
-    required this.label,
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final String label;
-  final IconData icon;
-  final String title;
-  final String description;
-}
-
-class _CommuterTabPlaceholder extends StatefulWidget {
-  const _CommuterTabPlaceholder({
-    required this.tab,
-    required this.isGuest,
-  });
-
-  final _CommuterTab tab;
-  final bool isGuest;
 
   @override
-  State<_CommuterTabPlaceholder> createState() => 
-  _CommuterTabPlaceholderState();
-}
+  void dispose() {
+    _trip.dispose();
+    _alerts.dispose();
+    _profile.dispose();
+    super.dispose();
+  }
 
-class _CommuterTabPlaceholderState 
-    extends State<_CommuterTabPlaceholder>
-    with SingleTickerProviderStateMixin {
-
-    final MapController _mapController = MapController();
-    bool _mapReady = false;
-
-    // Service area sa app (Metro Cebu: Talisay, Cebu City, Mandaue, Lapu-Lapu, Consolacion).
-    // Usba ni kung mo-expand ang coverage.
-    static final LatLngBounds _serviceArea = LatLngBounds(
-      const LatLng(10.20, 123.80), // southwest
-      const LatLng(10.45, 124.05), // northeast
-    );
-    static const double _minZoom = 12;
-    static const double _maxZoom = 18;
-    LatLng? _currentLocation;
-
-        // One smoothed track per jeep, so several vehicles broadcasting
-        // at once each keep their own marker.
-        final Map<String, VehicleTrack> _tracks = {};
-
-        // Drives marker animation. Only the vehicle layer repaints per
-        // frame (via _frame), not the whole tab, and the ticker stops
-        // when every marker has reached its latest fix.
-        final Stopwatch _clock = Stopwatch()..start();
-        final ValueNotifier<int> _frame = ValueNotifier(0);
-        late final Ticker _ticker;
-
-        final List<TransportStop> _stops = [];
-        final List<TransportRoute> _routes = [];
-
-        final Dio _dio = Dio(
-          BaseOptions(
-            baseUrl: EnvConfig.apiBaseUrl,
-          ),
-        );
-
-        late final StopsService _stopsService;
-        late final RoutesService _routesService;
-        WebSocketService? _webSocketService;
-
-        bool get _isMapTab => widget.tab.label == 'Map';
-
-        @override
-          void initState() {
-            super.initState();
-            _stopsService = StopsService(_dio);
-            _routesService = RoutesService(_dio);
-            _ticker = createTicker(_onTick);
-
-            // IndexedStack builds every tab, so only the Map tab opens the
-            // live socket and loads map data — otherwise each tab would
-            // open its own connection.
-            if (!_isMapTab) return;
-
-            // Connection ni siya sa WebSocketService para sa Live Updates sa mga Jeepney Vehicles
-            _webSocketService = WebSocketService()
-              ..connect()
-              ..listenForMessages(_onVehicleMessage);
-            _loadStops();
-            _loadRoutes();
-          }
-
-          @override
-            void dispose() {
-              _webSocketService?.disconnect();
-              _ticker.dispose();
-              _frame.dispose();
-              super.dispose();
-            }
-
-          void _onVehicleMessage(dynamic message) {
-            if (!mounted) return;
-
-            final update = VehicleLiveUpdate.fromJson(
-              jsonDecode(message as String) as Map<String, dynamic>,
-            );
-
-            final now = _clock.elapsed;
-            final track = _tracks[update.vehicleId];
-            if (track == null) {
-              _tracks[update.vehicleId] = VehicleTrack(update, now);
-            } else {
-              // Out-of-order fixes and GPS glitches are dropped inside.
-              track.push(update, now);
-            }
-
-            _frame.value++;
-            if (!_ticker.isActive) _ticker.start();
-          }
-
-          void _onTick(Duration _) {
-            final now = _clock.elapsed;
-            _frame.value++;
-            if (!_tracks.values.any((t) => t.isAnimating(now))) _ticker.stop();
-          }
-
-          void _refreshVehicles() {
-            _tracks.clear();
-            _frame.value++;
-            _webSocketService?.connect();
-          }
-
-          Future<void> _loadRoutes() async {
-                try {
-                  final routes = await _routesService.getRoutes();
-                  if (!mounted) return;
-
-                  setState(() {
-                    _routes
-                      ..clear()
-                      ..addAll(routes);
-                  });
-
-                  debugPrint(
-                    'Loaded ${routes.length} route(s): '
-                    '${routes.map((route) => route.code).join(', ')}',
-                  );
-                } catch (e) {
-                  debugPrint('Failed to load routes: $e');
-                }
-              }
-      // Method ni siya to request sa Stop and and i Store niya sa _StopsList
-    Future<void> _loadStops() async {
-        try {
-          final stops = await _stopsService.getStops();
-          if (!mounted) return;
-
-          setState(() {
-            _stops
-              ..clear()
-              ..addAll(stops);
-          });
-          _fitToStops();
-        } catch (e) {
-          debugPrint('Failed to load stops: $e');
-        }
-      }
-
-    // I-zoom ang map para makita tanan stops pag load
-    void _fitToStops() {
-      if (!_mapReady || _stops.isEmpty) return;
-      if (_stops.length == 1) {
-        _mapController.move(_stops.first.location, 16);
-        return;
-      }
-      _mapController.fitCamera(
-        CameraFit.coordinates(
-          coordinates: _stops.map((stop) => stop.location).toList(),
-          padding: const EdgeInsets.all(48),
-          maxZoom: 16,
-        ),
-      );
+  Future<void> _load<T>(
+    String what,
+    Future<List<T>> Function() fetch,
+    void Function(List<T>) apply,
+  ) async {
+    try {
+      final items = await fetch();
+      if (mounted) setState(() => apply(items));
+    } catch (e) {
+      debugPrint('Failed to load $what: $e');
     }
+  }
 
-    // Zoom in (+1) or out (-1) while staying on the current map center
-    void _zoomBy(double delta) {
-      final camera = _mapController.camera;
-      final zoom = (camera.zoom + delta).clamp(_minZoom, _maxZoom);
-      _mapController.move(camera.center, zoom);
-    }
-
-    Future<void> _getCurrentLocation(BuildContext context) async {
-      LocationPermission permission = await Geolocator.checkPermission();
-
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        if (!context.mounted) return;
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Location permission was not granted.',
-              ),
-            ),
-          );
-          return;
-        }
-
-        try {
-          final position = await Geolocator.getCurrentPosition();
-              
-              final location = LatLng(
-                position.latitude,
-                position.longitude,
-              );
-
-              setState(() {
-                _currentLocation = location;
-              });
-            _mapController.move(
-              LatLng(
-                position.latitude,
-                position.longitude,
-                ),
-              15,
-            );
-
-          if (!context.mounted) return;
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Location:'
-                '${position.latitude.toStringAsFixed(5)}, '
-                '${position.longitude.toStringAsFixed(5)}',
-              ),
-            ),
-          );
-      } catch (e) {
-        if (!context.mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Unable to get your current location.'
-              ),
-          ),
-        );
-      }
-    }
- 
- 
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (widget.tab.label == 'Map')
-                Container(
-                height: 400,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  boxShadow: AppShadows.card,
-                  border: Border.all(
-                    color: AppColors.secondary.withValues(alpha: 0.25),
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: const LatLng(10.3157, 123.8854),
-                    initialZoom: 13,
-                    minZoom: _minZoom,
-                    maxZoom: _maxZoom,
-                    // I-lock ang map sa Metro Cebu ra para relevant locations ra makita
-                    cameraConstraint: CameraConstraint.contain(
-                      bounds: _serviceArea,
-                    ),
-                    onMapReady: () {
-                      _mapReady = true;
-                      _fitToStops();
-                    },
-                  ),
-                    children: [
-                        TileLayer(
-                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.smartcommute.app',
-                        ),
-
-                        if (_currentLocation != null)
-                          MarkerLayer(
-                            markers: [
-                              Marker(
-                                point: _currentLocation!,
-                                width: 75,
-                                height: 75,
-                                child: Image.asset(
-                                  'assets/icons/current_location_marker.png',
-                                  width: 75,
-                                  height: 75,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ValueListenableBuilder<int>(
-                          valueListenable: _frame,
-                          builder: (context, frame, child) {
-                            final now = _clock.elapsed;
-                            return MarkerLayer(
-                              markers: [
-                                for (final track in _tracks.values)
-                                  if (track.positionAt(now) case final point?)
-                                    Marker(
-                                      point: point,
-                                      width: 50,
-                                      height: 50,
-                                      child: _VehicleMarker(
-                                        vehicle: track.latest,
-                                        heading: track.headingAt(now),
-                                      ),
-                                    ),
-                              ],
-                            );
-                          },
-                        ),
-
-                        if (_stops.isNotEmpty) // Markers ni siya to test if Jeepney Stops is avaible
-                            MarkerLayer(
-                              markers: _stops.map((stop) {
-                                // Photo sa area sa stop imbes na icon para dali ma-ila sa commuter
-                                return Marker(
-                                  point: stop.location,
-                                  width: 56,
-                                  height: 68,
-                                  alignment: Alignment.topCenter,
-                                  child: StopImageMarker(
-                                    stop: stop,
-                                    onTap: () =>
-                                        showStopDetailsSheet(context, stop),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-
-                        // Zoom In / Zoom Out buttons sa map
-                        Align(
-                          alignment: Alignment.bottomRight,
-                          child: Padding(
-                            padding: const EdgeInsets.all(AppSpacing.xs),
-                            child: Material(
-                              color: Colors.white,
-                              elevation: 3,
-                              borderRadius: BorderRadius.circular(AppRadius.card),
-                              clipBehavior: Clip.antiAlias,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Zoom in',
-                                    icon: const Icon(Icons.add),
-                                    color: AppColors.primary,
-                                    onPressed: () => _zoomBy(1),
-                                  ),
-                                  const SizedBox(
-                                    width: 32,
-                                    child: Divider(height: 1),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Zoom out',
-                                    icon: const Icon(Icons.remove),
-                                    color: AppColors.primary,
-                                    onPressed: () => _zoomBy(-1),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                          ],
-
-                ),
-              )
-            else
-              Container(
-                height: 140,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  boxShadow: AppShadows.card,
-                  border: Border.all(
-                    color: AppColors.secondary.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        widget.tab.icon,
-                        size: 48,
-                        color: AppColors.secondary,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '${widget.tab.label} view placeholder',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.md,
-                        ),
-                        child: Text(
-                          widget.tab.description,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          const SizedBox(height: AppSpacing.sm),
-          if (widget.tab.label == 'Map') ...[
-            _PreviewActionTile(
-              icon: AppIcons.myLocation,
-              label: 'Center on my location',
-              onTap: () => _getCurrentLocation(context),
-            ),
-            _PreviewActionTile(
-              icon: AppIcons.vehicle,
-              label: 'Refresh vehicle markers',
-              onTap: _refreshVehicles,
-            ),
-          ],
-          if (widget.tab.label == 'Routes') ...[
-            _PreviewActionTile(
-              icon: AppIcons.search,
-              label: 'Plan a trip',
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
-            ),
-            _PreviewActionTile(
-              icon: AppIcons.fare,
-              label: 'View fare estimate',
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
-            ),
-          ],
-          if (widget.tab.label == 'Feedback') ...[
-            _PreviewActionTile(
-              icon: AppIcons.feedback,
-              label: 'Open feedback form',
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
-            ),
-          ],
-          if (widget.tab.label == 'Profile') ...[
-            if (widget.isGuest)
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.sm),
-                margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-                decoration: BoxDecoration(
-                  color: AppColors.errorBackground,
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                ),
-                child: const Text(
-                  'Guest mode — sign in to access profile and saved trips.',
-                  style: TextStyle(color: AppColors.error, fontSize: 13),
-                ),
-              ),
-            _PreviewActionTile(
-              icon: AppIcons.settings,
-              label: 'Account settings',
-              enabled: !widget.isGuest,
-              onTap: () {
-                // TODO [Velez]: Wire with API/State Provider here
-              },
-            ),
-            _PreviewActionTile(
-              icon: AppIcons.logout,
-              label: 'Sign out',
-              onTap: () async {
-                  await context.read<AuthProvider>().logout();
-
-                     if (!context.mounted) return;
-
-              Navigator.of(context).pushAndRemoveUntil(
-                   MaterialPageRoute(
-                    builder: (_) => const LoginScreenHost(),
-                    ),
+  Future<void> _signOut() async {
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreenHost()),
       (route) => false,
     );
-  },
-),
-          ],
-        ],
-      ),
-    );
   }
-}
 
+  /// Fills From / To on the Route tab with a saved route, then shows it.
+  void _openSavedRoute(SavedRoute route) {
+    final origin = route.origin;
+    final destination = route.destination;
+    if (origin != null) _trip.setOrigin(origin, route.originName);
+    if (destination != null) _trip.setDestination(destination, route.destinationName);
+    setState(() => _currentIndex = _routeTab);
+  }
 
-
-  
-
-
-
-/// Vehicle pin: points along the heading when moving, greys out when the
-/// backend reports signal_lost (last known position is kept).
-class _VehicleMarker extends StatelessWidget {
-  const _VehicleMarker({required this.vehicle, this.heading});
-
-  final VehicleLiveUpdate vehicle;
-  final double? heading; // smoothed, from VehicleTrack
+  void _onTripStarted(RouteOption option, String from, String to) {
+    _profile.recordTrip(option, from: from, to: to);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final lost = vehicle.isSignalLost;
-    final heading = this.heading;
-    final speed = vehicle.speed;
-
-    final Widget icon = heading != null && !lost
-        ? Transform.rotate(
-            angle: heading * math.pi / 180,
-            child: const Icon(
-              Icons.navigation,
-              size: 40,
-              color: Color.fromARGB(255, 233, 4, 4),
-            ),
-          )
-        : Icon(
-            lost ? Icons.signal_cellular_connected_no_internet_0_bar : Icons.directions_car,
-            size: 40,
-            color: lost ? Colors.grey : const Color.fromARGB(255, 233, 4, 4),
-          );
-
-    return Tooltip(
-      message: lost
-          ? 'Signal lost — last known position'
-          : speed != null
-              ? '${speed.toStringAsFixed(0)} km/h'
-              : 'En route',
-      child: icon,
-    );
-  }
-}
-
-class _PreviewActionTile extends StatelessWidget {
-  const _PreviewActionTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.enabled = true,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.2)),
-      ),
-      child: ListTile(
-        enabled: enabled,
-        leading: Icon(icon, color: AppColors.secondary),
-        title: Text(label),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: enabled ? onTap : null,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: _trip),
+        ChangeNotifierProvider.value(value: _alerts),
+        ChangeNotifierProvider.value(value: _profile),
+      ],
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.dark, // dark status-bar icons on the sky header
+        child: Scaffold(
+          backgroundColor: AppColors.backgroundIceBlue,
+          body: Column(
+            children: [
+              // The Profile tab has its own teal header.
+              if (_currentIndex != _profileTab) const CommuterHeader(),
+              Expanded(
+                // IndexedStack keeps every tab alive, so the Home tab's live
+                // vehicle socket stays open while browsing other tabs.
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: [
+                    HomeTab(stops: _stops, routes: _routes, vehicles: _vehicles),
+                    RouteTab(stops: _stops, routes: _routes, onTripStarted: _onTripStarted),
+                    const AlertsTab(),
+                    ProfileTab(
+                      isGuest: widget.isGuest,
+                      stops: _stops,
+                      routes: _routes,
+                      onOpenSavedRoute: _openSavedRoute,
+                      onSignOut: _signOut,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          bottomNavigationBar: CommuterNavBar(
+            items: _navItems,
+            selectedIndex: _currentIndex,
+            onSelected: (index) => setState(() => _currentIndex = index),
+          ),
+        ),
       ),
     );
   }

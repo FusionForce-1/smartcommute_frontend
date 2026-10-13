@@ -53,7 +53,7 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
               minZoom: MapConfig.minZoom,
               maxZoom: MapConfig.maxZoom,
               cameraConstraint: CameraConstraint.contain(
-                bounds: MapConfig.serviceArea,
+                bounds: MapConfig.mapBounds,
               ),
             ),
             children: [

@@ -41,6 +41,12 @@ class AppIcons {
   static const IconData logout = Icons.logout;
   static const IconData settings = Icons.settings_outlined;
 
+  // ---- Commuter bottom navigation ----
+  static const IconData navHome = Icons.location_on_outlined;
+  static const IconData navRoute = Icons.near_me_outlined;
+  static const IconData navAlerts = Icons.notifications_none;
+  static const IconData navProfile = Icons.account_circle_outlined;
+
   // ---- Commuter: Map / Routes / Feedback / Announcements ----
   static const IconData location = Icons.location_on_outlined;
   static const IconData myLocation = Icons.my_location;

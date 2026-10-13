@@ -18,6 +18,11 @@ class LocationException implements Exception {
 /// Gi-abstract ang GPS para ma-test ang TripPlanProvider nga walay Geolocator.
 abstract class LocationSource {
   Future<LatLng> currentLocation();
+
+  /// Position updates while the commuter moves at least [distanceFilterM].
+  /// Permission is checked by [currentLocation] first, so this assumes it.
+  Stream<LatLng> positionStream({int distanceFilterM = 25});
+
   Future<void> openSettings();
 
   /// False kung dili ma-abli ang settings (e.g. web — mo-throw ang geolocator).
@@ -45,6 +50,16 @@ class GeolocatorLocationSource implements LocationSource {
 
     final position = await Geolocator.getCurrentPosition();
     return LatLng(position.latitude, position.longitude);
+  }
+
+  @override
+  Stream<LatLng> positionStream({int distanceFilterM = 25}) {
+    return Geolocator.getPositionStream(
+      locationSettings: LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distanceFilterM,
+      ),
+    ).map((p) => LatLng(p.latitude, p.longitude));
   }
 
   @override
