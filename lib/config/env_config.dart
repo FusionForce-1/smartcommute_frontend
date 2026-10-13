@@ -52,6 +52,15 @@ class EnvConfig {
     return key;
   }
 
+  /// The Google OAuth *Web* client ID (same one the backend verifies).
+  /// Android needs it as serverClientId to get an ID token; web reads its
+  /// own copy from web/index.html. Not a secret.
+  static String? get googleWebClientId {
+    final id = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
+    if (id == null || id.isEmpty) return null;
+    return id;
+  }
+
   static bool get debugLogging {
     return dotenv.env['DEBUG_LOGGING']?.toLowerCase() == 'true';
   }
