@@ -21,6 +21,8 @@ class AuthTextField extends StatefulWidget {
     this.pill = false,
     this.maxLength,
     this.inputFormatters,
+    this.radius,
+    this.height,
   });
 
   final String label;
@@ -34,6 +36,13 @@ class AuthTextField extends StatefulWidget {
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
 
+  /// Overrides the corner radius (default: [AppRadius.inputField], or
+  /// [AppRadius.inputPill] when [pill]).
+  final double? radius;
+
+  /// Fixes the field's height (dense layout) — the Login mockup uses ~35.
+  final double? height;
+
   @override
   State<AuthTextField> createState() => _AuthTextFieldState();
 }
@@ -43,7 +52,12 @@ class _AuthTextFieldState extends State<AuthTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final radius = widget.pill ? AppRadius.inputPill : AppRadius.inputField;
+    final radius = widget.radius ??
+        (widget.pill ? AppRadius.inputPill : AppRadius.inputField);
+    final height = widget.height;
+    final iconBox = height == null
+        ? null
+        : BoxConstraints(minWidth: height + 6, minHeight: height);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -59,6 +73,15 @@ class _AuthTextFieldState extends State<AuthTextField> {
           decoration: InputDecoration(
             counterText: '',
             hintText: widget.hint,
+            isDense: height != null,
+            constraints: height == null
+                ? null
+                : BoxConstraints(minHeight: height, maxHeight: height),
+            contentPadding: height == null
+                ? null
+                : const EdgeInsets.symmetric(horizontal: 12),
+            prefixIconConstraints: iconBox,
+            suffixIconConstraints: iconBox,
             prefixIcon: widget.prefixIcon != null
                 ? Icon(widget.prefixIcon, color: Colors.grey.shade500)
                 : null,
