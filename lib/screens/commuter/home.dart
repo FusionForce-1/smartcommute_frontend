@@ -4,8 +4,10 @@
 // "Nearby Vehicles" list. Opens the live vehicle socket and animates
 // one smoothed track per jeep.
 
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -51,6 +53,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   bool _mapReady = false;
   LatLng? _currentLocation;
 
+  // Keeps the "you are here" marker following the phone as it moves.
+  StreamSubscription<Position>? _positionSub;
+  LatLng? _lastSortedAt; // where "Nearby Vehicles" was last sorted from
+
   // One smoothed track per jeep, so several vehicles broadcasting at once
   // each keep their own marker.
   final Map<String, VehicleTrack> _tracks = {};
@@ -74,6 +80,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _socket = WebSocketService()
       ..connect()
       ..listenForMessages(_onVehicleMessage);
+    _followIfAllowed();
   }
 
   @override
@@ -84,6 +91,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _socket.disconnect();
     _ticker.dispose();
     _frame.dispose();
@@ -204,11 +212,55 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       final position = await Geolocator.getCurrentPosition();
       if (!mounted) return;
       final here = LatLng(position.latitude, position.longitude);
-      setState(() => _currentLocation = here);
-      _fleetVersion.value++; // re-sort "Nearby Vehicles" by distance
+      _setCurrentLocation(here);
       _mapController.move(here, 15);
+      _startFollowing();
     } catch (_) {
       _showMessage('Unable to get your current location.');
+    }
+  }
+
+  /// Follows the phone from the start when location was already allowed
+  /// (never prompts — the locate button does that).
+  Future<void> _followIfAllowed() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse) {
+        _startFollowing();
+      }
+    } catch (_) {
+      // No location support here; the locate button still reports why.
+    }
+  }
+
+  void _startFollowing() {
+    if (_positionSub != null || !mounted) return;
+    final LocationSettings settings = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+        // Ask Android for a fix every second; the default can be much slower.
+        ? AndroidSettings(
+            accuracy: LocationAccuracy.best,
+            distanceFilter: 2,
+            intervalDuration: const Duration(seconds: 1),
+          )
+        : const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 2);
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+      (p) => _setCurrentLocation(LatLng(p.latitude, p.longitude)),
+      onError: (_) {
+        _positionSub?.cancel();
+        _positionSub = null;
+      },
+    );
+  }
+
+  void _setCurrentLocation(LatLng here) {
+    if (!mounted) return;
+    setState(() => _currentLocation = here);
+    // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
+    final last = _lastSortedAt;
+    if (last == null || const Distance().as(LengthUnit.Meter, last, here) > 25) {
+      _lastSortedAt = here;
+      _fleetVersion.value++;
     }
   }
 
