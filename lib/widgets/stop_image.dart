@@ -40,6 +40,20 @@ class StopImageUrls {
   static const String satelliteTiles =
       'https://server.arcgisonline.com/ArcGIS/rest/services/'
       'World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+  /// The single satellite tile containing [location], plus where in that
+  /// tile (0..1 on each axis) the location falls.
+  static ({String url, Offset position}) satelliteTile(LatLng location, {int zoom = 18}) {
+    final n = math.pow(2, zoom).toDouble();
+    final lat = location.latitude * math.pi / 180;
+    final x = (location.longitude + 180) / 360 * n;
+    final y = (1 - math.log(math.tan(lat) + 1 / math.cos(lat)) / math.pi) / 2 * n;
+    final url = satelliteTiles
+        .replaceFirst('{z}', '$zoom')
+        .replaceFirst('{y}', '${y.floor()}')
+        .replaceFirst('{x}', '${x.floor()}');
+    return (url: url, position: Offset(x - x.floor(), y - y.floor()));
+  }
 }
 
 /// Image of the area around [location], with automatic fallbacks.
@@ -141,12 +155,7 @@ class StopImageMarker extends StatelessWidget {
                 boxShadow: AppShadows.card,
                 color: Colors.white,
               ),
-              child: ClipOval(
-                child: StopImage(
-                  location: stop.location,
-                  size: 150,
-                ),
-              ),
+              child: ClipOval(child: _StopThumbnail(location: stop.location)),
             ),
             CustomPaint(
               size: const Size(14, 10),
@@ -155,6 +164,50 @@ class StopImageMarker extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Pin photo: Street View when a key is set, else one satellite tile
+/// cropped around the stop. Not [StopImage] — its fallback is a whole
+/// FlutterMap, and one per pin made the Home map freeze.
+class _StopThumbnail extends StatelessWidget {
+  const _StopThumbnail({required this.location});
+
+  static const double _tileSize = 256;
+
+  final LatLng location;
+
+  @override
+  Widget build(BuildContext context) {
+    final satellite = LayoutBuilder(
+      builder: (context, constraints) {
+        final tile = StopImageUrls.satelliteTile(location);
+        // Alignment that puts the stop's spot in the tile at the center.
+        double align(double fraction, double extent) =>
+            ((fraction * _tileSize - extent / 2) / (_tileSize - extent) * 2 - 1)
+                .clamp(-1.0, 1.0);
+        return Image.network(
+          tile.url,
+          fit: BoxFit.none,
+          alignment: Alignment(
+            align(tile.position.dx, constraints.maxWidth),
+            align(tile.position.dy, constraints.maxHeight),
+          ),
+          errorBuilder: (context, error, stackTrace) =>
+              const ColoredBox(color: AppColors.backgroundIceBlue),
+        );
+      },
+    );
+
+    final streetViewUrl = StopImageUrls.streetView(location, size: 150);
+    if (streetViewUrl == null) return satellite;
+    return Image.network(
+      streetViewUrl,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (context, error, stackTrace) => satellite,
     );
   }
 }
