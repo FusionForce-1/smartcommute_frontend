@@ -221,6 +221,35 @@ void main() {
     });
   }
 
+  // Mobile browsers shrink the window when the keyboard opens (same width,
+  // much shorter). That used to flip the screen into the landscape layout
+  // and squash the panel.
+  testWidgets('opening the keyboard keeps the portrait layout', (tester) async {
+    await pumpLogin(tester, const Size(360, 640));
+    await tester.tap(find.byType(EditableText).first);
+    tester.view.physicalSize = const Size(360, 300);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final logo = tester.getRect(find.byType(SmartCommuteLogo));
+    final card = tester.getRect(find.byKey(const Key('loginCard')));
+    expect(logo.bottom, lessThanOrEqualTo(card.top));
+    expect(tester.getSize(find.byKey(const Key('loginTopPanel'))).height,
+        closeTo(640 * 0.72, 1));
+  });
+
+  testWidgets('keyboard insets keep the portrait layout', (tester) async {
+    await pumpLogin(tester, const Size(360, 640));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 340);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    final logo = tester.getRect(find.byType(SmartCommuteLogo));
+    final card = tester.getRect(find.byKey(const Key('loginCard')));
+    expect(logo.bottom, lessThanOrEqualTo(card.top));
+  });
+
   testWidgets('landscape keeps the logo inside the ice-blue panel', (tester) async {
     await pumpLogin(tester, _landscapePhone);
     final logo = tester.getRect(find.byType(SmartCommuteLogo));

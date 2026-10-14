@@ -119,15 +119,32 @@ class _LoginScreenState extends State<LoginScreen> {
   /// browsers and tablets keep the stacked mobile design.
   static const double _minStackedHeight = 560;
 
+  double _stableWidth = 0;
+  double _stableHeight = 0;
+
+  /// Screen size with the on-screen keyboard ignored. Mobile browsers
+  /// shrink the window when the keyboard opens, which would flip the
+  /// layout to landscape and squash the panel mid-typing. The keyboard
+  /// never changes the width, so only a width change (rotation, resize)
+  /// or a taller window resets the height.
+  Size _layoutSize(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    if (size.width != _stableWidth || size.height > _stableHeight) {
+      _stableWidth = size.width;
+      _stableHeight = size.height;
+    }
+    return Size(_stableWidth, _stableHeight);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.secondary,
       body: LoadingOverlay(
         isLoading: _isLoading,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final size = constraints.biggest;
+        child: Builder(
+          builder: (context) {
+            final size = _layoutSize(context);
             final isLandscape = size.width > size.height &&
                 size.height < _minStackedHeight;
             final scale = _scaleFor(size);
