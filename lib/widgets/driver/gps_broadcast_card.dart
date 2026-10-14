@@ -85,7 +85,7 @@ class GpsBroadcastCard extends StatelessWidget {
                 minimumSize: const Size.fromHeight(46),
                 side: const BorderSide(color: AppColors.divider, width: 1.4),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 17, fontWeight: FontWeight.w500),
               ),
             ),
           ],

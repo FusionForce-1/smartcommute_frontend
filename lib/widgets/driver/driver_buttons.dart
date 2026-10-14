@@ -31,7 +31,7 @@ class StartShiftButton extends StatelessWidget {
         disabledForegroundColor: Colors.white,
         minimumSize: const Size.fromHeight(56),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+        textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: 0.5),
       ),
     );
   }
@@ -55,7 +55,7 @@ class ViewRouteButton extends StatelessWidget {
         minimumSize: const Size.fromHeight(56),
         side: const BorderSide(color: AppColors.infoBlue, width: 1.4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-        textStyle: const TextStyle(fontSize: 19),
+        textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 19),
       ),
     );
   }

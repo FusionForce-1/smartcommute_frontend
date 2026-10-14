@@ -125,10 +125,24 @@ void main() {
 
     testWidgets('fields are 35 tall', (tester) async {
       await pumpLogin(tester, const Size(414, 896));
-      for (final d in tester.widgetList<InputDecorator>(find.byType(InputDecorator))) {
-        expect(d.decoration.constraints?.maxHeight, closeTo(35, 1));
+      for (final field in tester.widgetList(find.byType(InputDecorator))) {
+        expect(tester.getSize(find.byWidget(field)).height, closeTo(35, 1));
       }
     });
+  });
+
+  // The fields used to be capped at 35 including the error text, which
+  // squashed the outline into a line through the hint.
+  testWidgets('error text sits below an intact field outline', (tester) async {
+    await pumpLogin(tester, const Size(414, 896));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Login'));
+    await tester.pump();
+
+    final error = tester.getRect(find.text('Enter your email'));
+    final field = tester.getRect(find.byType(InputDecorator).first);
+    expect(field.height, greaterThan(35 + error.height - 1));
+    expect(error.top, greaterThanOrEqualTo(field.top + 35 - 1));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('sizes scale with the phone width', (tester) async {

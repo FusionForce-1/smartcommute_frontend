@@ -28,6 +28,7 @@ class ProfileTab extends StatelessWidget {
     required this.routes,
     required this.onOpenSavedRoute,
     required this.onSignOut,
+    required this.onCreateAccount,
   });
 
   final bool isGuest;
@@ -38,11 +39,17 @@ class ProfileTab extends StatelessWidget {
   final ValueChanged<SavedRoute> onOpenSavedRoute;
 
   /// Logs out and returns to the login screen (handled by the dashboard).
+  /// Guests use it as "Sign in".
   final VoidCallback onSignOut;
+
+  /// Guests only: leaves guest mode and opens Register.
+  final VoidCallback onCreateAccount;
 
   @override
   Widget build(BuildContext context) {
-    if (isGuest) return _GuestProfile(onSignIn: onSignOut);
+    if (isGuest) {
+      return _GuestProfile(onSignIn: onSignOut, onCreateAccount: onCreateAccount);
+    }
 
     final profile = context.watch<ProfileProvider>();
     final data = profile.profile;
@@ -109,16 +116,7 @@ class ProfileTab extends StatelessWidget {
                       label: 'Privacy & Security',
                       onTap: () => _comingSoon(context),
                     ),
-                    SettingsLinkRow(
-                      icon: Icons.help_outline,
-                      label: 'Help & Support',
-                      onTap: () => _comingSoon(context),
-                    ),
-                    SettingsLinkRow(
-                      icon: Icons.description_outlined,
-                      label: 'Terms & Privacy Policy',
-                      onTap: () => _comingSoon(context),
-                    ),
+                    ..._infoLinks(context),
                     SettingsLinkRow(
                       icon: AppIcons.logout,
                       label: 'Sign out',
@@ -173,11 +171,26 @@ class ProfileTab extends StatelessWidget {
     }
   }
 
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('This page is coming soon.')),
-    );
-  }
+}
+
+/// Help and legal links — shown to guests and signed-in commuters alike.
+List<Widget> _infoLinks(BuildContext context) => [
+      SettingsLinkRow(
+        icon: Icons.help_outline,
+        label: 'Help & Support',
+        onTap: () => _comingSoon(context),
+      ),
+      SettingsLinkRow(
+        icon: Icons.description_outlined,
+        label: 'Terms & Privacy Policy',
+        onTap: () => _comingSoon(context),
+      ),
+    ];
+
+void _comingSoon(BuildContext context) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('This page is coming soon.')),
+  );
 }
 
 class _SectionTitle extends StatelessWidget {
@@ -273,34 +286,65 @@ class _LoadError extends StatelessWidget {
   }
 }
 
+/// Guests have no account data, so the tab offers a way in (sign in or
+/// register), what an account unlocks, and the help/legal links.
 class _GuestProfile extends StatelessWidget {
-  const _GuestProfile({required this.onSignIn});
+  const _GuestProfile({required this.onSignIn, required this.onCreateAccount});
 
   final VoidCallback onSignIn;
+  final VoidCallback onCreateAccount;
+
+  static const _perks = [
+    (Icons.alt_route, 'Plan trips with fares and travel times'),
+    (Icons.bookmark_border, 'Save the routes you ride often'),
+    (Icons.history, 'Keep track of your trips'),
+    (Icons.notifications_none, 'Choose which alerts you get'),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
+    return SafeArea(
+      bottom: false,
+      child: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(AppIcons.navProfile, size: 72, color: AppColors.brandTeal),
-            const SizedBox(height: AppSpacing.sm),
-            const Text(
-              "You're browsing as a guest",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+        children: [
+          const SizedBox(height: AppSpacing.sm),
+          const Icon(AppIcons.navProfile, size: 72, color: AppColors.brandTeal),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            "You're browsing as a guest",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'You can view the live map and alerts as a guest. Sign in to:',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final (icon, text) in _perks)
+            ListTile(
+              dense: true,
+              leading: Icon(icon, color: AppColors.brandTeal),
+              title: Text(text, style: const TextStyle(fontSize: 15, color: AppColors.textPrimary)),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'Sign in to save routes, track your trips and choose your notifications.',
-              textAlign: TextAlign.center,
+          const SizedBox(height: AppSpacing.sm),
+          CommuterPrimaryButton(label: 'Sign in', onPressed: onSignIn),
+          const SizedBox(height: AppSpacing.xs),
+          OutlinedButton(
+            onPressed: onCreateAccount,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.brandTeal,
+              minimumSize: const Size.fromHeight(52),
+              side: const BorderSide(color: AppColors.brandTeal, width: 1.4),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 17, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: AppSpacing.md),
-            CommuterPrimaryButton(label: 'Sign in', onPressed: onSignIn),
-          ],
-        ),
+            child: const Text('Create an account'),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          SettingsGroup(children: _infoLinks(context)),
+        ],
       ),
     );
   }

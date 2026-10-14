@@ -204,7 +204,7 @@ class _StartNewShiftBar extends StatelessWidget {
               backgroundColor: AppColors.shiftGreen,
               minimumSize: const Size.fromHeight(56),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 22, fontWeight: FontWeight.w800),
             ),
             child: const Text('Start New Shift'),
           ),

@@ -123,7 +123,7 @@ class RouteTab extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(0, 44),
                 foregroundColor: AppColors.textPrimary,
-                textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+                textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w400),
                 side: const BorderSide(color: AppColors.divider, width: 1.4),
               ),
               child: const Text('Change'),

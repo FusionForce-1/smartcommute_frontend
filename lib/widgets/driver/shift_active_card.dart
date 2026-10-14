@@ -69,7 +69,7 @@ class ShiftActiveCard extends StatelessWidget {
               minimumSize: const Size.fromHeight(52),
               side: const BorderSide(color: AppColors.error, width: 1.4),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+              textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 0.5),
             ),
             child: const Text('END SHIFT'),
           ),
