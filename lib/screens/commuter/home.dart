@@ -49,6 +49,9 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   static const int _maxNearby = 5;
 
+  /// Phone fixes with a reported error above this (metres) are ignored.
+  static const double _maxFixErrorM = 25;
+
   final MapController _mapController = MapController();
   bool _mapReady = false;
   LatLng? _currentLocation;
@@ -245,7 +248,13 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           )
         : const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 2);
     _positionSub = Geolocator.getPositionStream(locationSettings: settings).listen(
-      (p) => _setCurrentLocation(LatLng(p.latitude, p.longitude)),
+      (p) {
+        // Indoors Android mixes in Wi-Fi/cell fixes that can be 50-100 m off,
+        // which made the dot hop around. Once we have a position, skip any
+        // fix the phone itself rates worse than _maxFixErrorM.
+        if (_currentLocation != null && p.accuracy > _maxFixErrorM) return;
+        _setCurrentLocation(LatLng(p.latitude, p.longitude));
+      },
       onError: (_) {
         _positionSub?.cancel();
         _positionSub = null;
