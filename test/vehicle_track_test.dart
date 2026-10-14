@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:smartcommute_app/models/vehicle_live_update.dart';
@@ -6,12 +8,13 @@ import 'package:smartcommute_app/models/vehicle_track.dart';
 const _distance = Distance();
 final _t0 = DateTime.utc(2026, 9, 30, 4);
 
-VehicleLiveUpdate fix(double lat, double lng, int secs, {double? heading}) =>
+VehicleLiveUpdate fix(double lat, double lng, int secs, {double? heading, double? speed}) =>
     VehicleLiveUpdate(
       vehicleId: 'v1',
       status: 'en_route',
       location: LatLng(lat, lng),
       heading: heading,
+      speed: speed,
       timestamp: _t0.add(Duration(seconds: secs)),
     );
 
@@ -87,6 +90,35 @@ void main() {
     track.push(fix(10.30001, 123.9, 2, heading: 10), Duration.zero);
     final mid = track.headingAt(const Duration(seconds: 1))!;
     expect(mid, closeTo(0, 0.5)); // not 180
+  });
+
+  test('slow: arrow follows the ground covered, not the noisy GPS course', () {
+    const metreLat = 1 / 111320;
+    // Walking north at ~5 km/h; the module reports random courses.
+    final track = VehicleTrack(fix(10.3, 123.9, 0, heading: 200, speed: 5), Duration.zero);
+    final noisy = [250.0, 90.0, 310.0, 160.0, 30.0];
+    for (var i = 1; i <= noisy.length; i++) {
+      track.push(fix(10.3 + metreLat * 2 * i, 123.9, i, heading: noisy[i - 1], speed: 5),
+          Duration(seconds: i));
+    }
+    // 10 m covered due north -> pointing north (0°), whatever GPS said.
+    final h = track.headingAt(const Duration(seconds: 10))!;
+    expect(math.min(h, 360 - h), lessThan(5));
+  });
+
+  test('slow and standing still keeps the last heading', () {
+    final track = VehicleTrack(fix(10.3, 123.9, 0, heading: 90, speed: 30), Duration.zero);
+    // Stopped: jitter of a metre or two with wild courses must not spin it.
+    track.push(fix(10.30001, 123.9, 1, heading: 270, speed: 1), const Duration(seconds: 1));
+    track.push(fix(10.3, 123.90001, 2, heading: 0, speed: 0), const Duration(seconds: 2));
+    expect(track.headingAt(const Duration(seconds: 5)), closeTo(90, 0.5));
+  });
+
+  test('fast: uses the GPS course directly', () {
+    const stepDeg = 20 / 111320;
+    final track = VehicleTrack(fix(10.3, 123.9, 0, heading: 0, speed: 40), Duration.zero);
+    track.push(fix(10.3 + stepDeg, 123.9, 2, heading: 5, speed: 40), Duration.zero);
+    expect(track.headingAt(const Duration(seconds: 5)), closeTo(5, 0.5));
   });
 
   test('stale fix does not pull the marker backwards', () {
