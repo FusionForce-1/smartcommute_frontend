@@ -2,7 +2,9 @@
 //
 // Emae D. Calonia — Flutter Login (Commuter / Driver).
 // Logo lockup over an ice-blue panel (72% of the height, rounded bottom)
-// on teal; sizes follow the screen, landscape puts logo beside the card.
+// on teal; sizes follow the screen. Wide screens (web, tablets) keep the
+// stacked layout centred; only short rotated phones put the logo beside
+// the card.
 // Remember Me, Forgot Password, Login, Continue as Guest, Google, register link.
 //
 // This screen is UI-only. Wire AuthProvider from the parent (see auth_app.dart).
@@ -112,6 +114,11 @@ class _LoginScreenState extends State<LoginScreen> {
   static double _scaleFor(Size size) =>
       (size.shortestSide / _designWidth).clamp(0.8, 1.2);
 
+  /// Below this height the stacked logo + card can't fit, so the logo
+  /// moves beside the card. Only rotated phones are this short — desktop
+  /// browsers and tablets keep the stacked mobile design.
+  static const double _minStackedHeight = 560;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,7 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final size = constraints.biggest;
-            final isLandscape = size.width > size.height;
+            final isLandscape = size.width > size.height &&
+                size.height < _minStackedHeight;
             final scale = _scaleFor(size);
             return Stack(
               children: [

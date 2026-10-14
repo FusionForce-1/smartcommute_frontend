@@ -208,6 +208,19 @@ void main() {
     expect(logo.right, lessThanOrEqualTo(card.left));
   });
 
+  for (final size in const [Size(1920, 950), Size(1366, 650), Size(1280, 800)]) {
+    testWidgets('desktop ${size.width.toInt()}x${size.height.toInt()} keeps '
+        'the stacked mobile layout, centred', (tester) async {
+      await pumpLogin(tester, size);
+      expect(tester.takeException(), isNull);
+      final logo = tester.getRect(find.byType(SmartCommuteLogo));
+      final card = tester.getRect(find.byKey(const Key('loginCard')));
+      expect(logo.bottom, lessThanOrEqualTo(card.top));
+      expect(card.center.dx, closeTo(size.width / 2, 1));
+      expect(card.bottom, lessThanOrEqualTo(size.height));
+    });
+  }
+
   testWidgets('landscape keeps the logo inside the ice-blue panel', (tester) async {
     await pumpLogin(tester, _landscapePhone);
     final logo = tester.getRect(find.byType(SmartCommuteLogo));
