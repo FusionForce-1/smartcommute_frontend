@@ -33,10 +33,19 @@ class EnvConfig {
     await resolveBackend();
   }
 
-  /// The laptop running the backend has a different IP on every network
-  /// (home Wi-Fi, phone hotspot...). API_BASE_URLS lists them all,
-  /// comma-separated; each is asked for /health at the same time and the
-  /// first one in the list that answers is used. Falls back to API_BASE_URL.
+  /// How long a laptop (http://LAN) backend gets to answer /health.
+  static const Duration _lanProbeTimeout = Duration(seconds: 3);
+
+  /// A cloud (https://) backend on a free plan sleeps when idle and takes
+  /// 30-60 s to wake on the first request, so it gets much longer.
+  static const Duration _cloudProbeTimeout = Duration(seconds: 60);
+
+  /// API_BASE_URLS lists every backend the app may use, in order of
+  /// preference (cloud first, then the laptop's IP on each network).
+  /// All are asked for /health at once; the first one IN LIST ORDER that
+  /// answers wins, so an awake cloud is picked at once and a sleeping one
+  /// is waited for, while no internet makes it fail fast to the laptop.
+  /// Falls back to API_BASE_URL.
   static Future<void> resolveBackend() async {
     final candidates = (dotenv.env['API_BASE_URLS'] ?? '')
         .split(',')
@@ -45,24 +54,36 @@ class EnvConfig {
         .toList();
     if (candidates.isEmpty) return;
 
-    final probe = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 3),
-      receiveTimeout: const Duration(seconds: 3),
-    ));
-    final reachable = await Future.wait(candidates.map((url) async {
-      try {
-        final res = await probe.get('$url/health');
-        return res.statusCode == 200;
-      } catch (_) {
-        return false;
-      }
-    }));
-    probe.close();
+    final probes = <Dio>[];
+    final answers = [
+      for (final url in candidates)
+        () async {
+          final timeout = url.startsWith('https://') ? _cloudProbeTimeout : _lanProbeTimeout;
+          final dio = Dio(BaseOptions(connectTimeout: timeout, receiveTimeout: timeout));
+          probes.add(dio);
+          try {
+            final res = await dio.get('$url/health');
+            return res.statusCode == 200;
+          } catch (_) {
+            return false;
+          }
+        }(),
+    ];
 
-    final i = reachable.indexOf(true);
-    _resolvedApiBaseUrl = i >= 0 ? candidates[i] : null;
-    debugPrint(i >= 0
-        ? '[Env] Backend found at ${candidates[i]}'
+    String? picked;
+    for (var i = 0; i < candidates.length; i++) {
+      if (await answers[i]) {
+        picked = candidates[i];
+        break;
+      }
+    }
+    for (final dio in probes) {
+      dio.close(force: true); // abandon slower probes still in flight
+    }
+
+    _resolvedApiBaseUrl = picked;
+    debugPrint(picked != null
+        ? '[Env] Backend found at $picked'
         : '[Env] No backend answered from $candidates — using API_BASE_URL');
   }
 
