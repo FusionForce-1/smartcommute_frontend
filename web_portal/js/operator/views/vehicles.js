@@ -54,7 +54,7 @@ OperatorRouter.register('vehicles', {
         ['Total Vehicles', loaded ? fleet.length : undefined],
         ['Active', count((v) => v.status === 'active' && !v.suspended), 'green'],
         ['Maintenance', count((v) => v.status === 'maintenance'), 'amber'],
-        ['With GPS Signal', count((v) => v.last_position), 'blue'],
+        ['With GPS Signal', count((v) => v.last_position && v.status !== 'signal_lost'), 'blue'],
       ]);
     }
 
@@ -304,5 +304,25 @@ OperatorRouter.register('vehicles', {
     }));
 
     load();
+
+    // Status ("Signal lost") and "Last GPS" change while the page is open,
+    // so the fleet is re-fetched quietly — no spinner, table updated in place.
+    const REFRESH_MS = 10000;
+    let refreshing = false;
+    const refresh = setInterval(async () => {
+      if (refreshing || document.hidden || !Array.isArray(fleet)) return;
+      refreshing = true;
+      try {
+        fleet = await OperatorApi.fleet();
+        renderStats();
+        renderTable();
+      } catch {
+        // Keep showing the last good data; the next tick tries again.
+      } finally {
+        refreshing = false;
+      }
+    }, REFRESH_MS);
+
+    return () => clearInterval(refresh);
   },
 });

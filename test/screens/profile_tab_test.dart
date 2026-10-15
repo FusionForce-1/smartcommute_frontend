@@ -20,6 +20,7 @@ Map<String, Object?> loaded([Map<String, Object?> extra = const {}]) => {
 class TabCalls {
   SavedRoute? opened;
   var signedOut = 0;
+  var createdAccount = 0;
 }
 
 Future<TabCalls> pumpProfileTab(
@@ -47,6 +48,7 @@ Future<TabCalls> pumpProfileTab(
           routes: const [],
           onOpenSavedRoute: (route) => calls.opened = route,
           onSignOut: () => calls.signedOut++,
+          onCreateAccount: () => calls.createdAccount++,
         ),
       ),
     ),
@@ -147,5 +149,17 @@ void main() {
     expect(find.text("You're browsing as a guest"), findsOneWidget);
     await tester.tap(find.text('Sign in'));
     expect(calls.signedOut, 1);
+
+    await tester.tap(find.text('Create an account'));
+    expect(calls.createdAccount, 1);
+  });
+
+  testWidgets('guests can open help and legal links', (tester) async {
+    await pumpProfileTab(tester, fakeBackend(loaded()), isGuest: true);
+
+    expect(find.text('Help & Support'), findsOneWidget);
+    await tester.tap(find.text('Terms & Privacy Policy'));
+    await tester.pump();
+    expect(find.text('This page is coming soon.'), findsOneWidget);
   });
 }

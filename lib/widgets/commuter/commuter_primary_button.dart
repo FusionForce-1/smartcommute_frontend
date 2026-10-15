@@ -27,7 +27,7 @@ class CommuterPrimaryButton extends StatelessWidget {
         disabledBackgroundColor: AppColors.divider,
         minimumSize: const Size.fromHeight(52),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 17, fontWeight: FontWeight.w700),
       ),
       child: Text(label),
     );

@@ -111,13 +111,19 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     }
   }
 
-  Future<void> _signOut() async {
+  /// Ends the session (or guest visit) and returns to Login — opening
+  /// Register on top of it when [createAccount] is set.
+  Future<void> _signOut({bool createAccount = false}) async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
+    final navigator = Navigator.of(context);
+    navigator.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginScreenHost()),
       (route) => false,
     );
+    if (createAccount) {
+      navigator.push(MaterialPageRoute(builder: (_) => const RegisterScreenHost()));
+    }
   }
 
   /// Fills From / To on the Route tab with a saved route, then shows it.
@@ -164,6 +170,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       routes: _routes,
                       onOpenSavedRoute: _openSavedRoute,
                       onSignOut: _signOut,
+                      onCreateAccount: () => _signOut(createAccount: true),
                     ),
                   ],
                 ),

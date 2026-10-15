@@ -196,12 +196,18 @@ class AuthProvider extends ChangeNotifier {
   // ---------------------------------------------------------------
   // LOGOUT
   // ---------------------------------------------------------------
+  // Never throws: ApiService clears the stored tokens even when the
+  // server call fails, so the user is signed out locally either way and
+  // the screen can always return to Login. Guests have no server
+  // session, so they skip the call (it would only 401).
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      await _apiService.logout();
+      if (!_isGuest) await _apiService.logout();
+    } catch (e) {
+      debugPrint('Server logout failed, signed out locally: $e');
     } finally {
       _currentUser = null;
       _role = null;

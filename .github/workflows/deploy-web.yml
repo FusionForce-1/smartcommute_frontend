@@ -1,0 +1,73 @@
+# Continuous deployment of the Flutter web app to Vercel.
+#
+# On every push to main that touches the app, GitHub builds it (Vercel
+# itself can't run Flutter) and uploads the finished build/web folder to
+# the Vercel project "smartcommute-app".
+#
+# One-time setup — repo Settings -> Secrets and variables -> Actions:
+#   APP_ENV_FILE       full contents of the app's .env (it is git-ignored,
+#                      but the build packs it into the app). No real secrets
+#                      belong in it: everything in it is public on the site.
+#   VERCEL_TOKEN       vercel.com -> Account Settings -> Tokens
+#   VERCEL_ORG_ID      "orgId"     from build/web/.vercel/project.json
+#   VERCEL_PROJECT_ID  "projectId" from build/web/.vercel/project.json
+# And in Vercel, disconnect Git for this project (Settings -> Git), or every
+# push also deploys the raw source code over the app.
+
+name: Deploy web app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "web/**"
+      - "assets/**"
+      - "test/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch: # "Run workflow" button for a manual deploy
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: true # a newer push replaces a deploy still running
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.3 # same as the team's local Flutter
+          cache: true
+
+      - name: Write .env from secret
+        env:
+          APP_ENV_FILE: ${{ secrets.APP_ENV_FILE }}
+        run: |
+          if [ -z "$APP_ENV_FILE" ]; then
+            echo "::error::Secret APP_ENV_FILE is missing (contents of the app's .env)"
+            exit 1
+          fi
+          printf '%s\n' "$APP_ENV_FILE" > .env
+
+      - run: flutter pub get
+
+      # Don't ship a broken app: tests must pass first.
+      # (test/widget_test.dart is the empty Flutter template, so it's skipped.)
+      - name: Tests
+        run: flutter test $(find test -name '*_test.dart' ! -name 'widget_test.dart')
+
+      - run: flutter build web --release
+
+      - name: Deploy to Vercel (production)
+        working-directory: build/web
+        run: npx --yes vercel@latest deploy --prod --yes --token "${{ secrets.VERCEL_TOKEN }}"

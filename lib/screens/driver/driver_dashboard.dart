@@ -1,14 +1,19 @@
 // lib/screens/driver/driver_dashboard.dart
 //
-// Emae D. Calonia — Driver test dashboard scaffold.
-// Card-based layout with GPS session toggle and route status triggers.
+// Driver dashboard shell: owns the driver's state (shift, GPS broadcast,
+// live feed) for as long as the dashboard is open, and handles sign-out.
+// The screen itself is DriverDashboardView.
 
 import 'package:flutter/material.dart';
-import '../../config/theme_config.dart';
-import '../../constants/app_icons.dart';
-import '../../models/models.dart';
-import '../../services/api_service.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/auth_provider.dart';
+import '../../providers/driver_provider.dart';
+import '../../router/app_router.dart';
+import '../../services/dio_interceptor.dart';
+import '../../services/driver_service.dart';
 import '../../services/websocket_service.dart';
+import 'driver_dashboard_view.dart';
 
 class DriverDashboard extends StatefulWidget {
   const DriverDashboard({super.key});
@@ -18,441 +23,39 @@ class DriverDashboard extends StatefulWidget {
 }
 
 class _DriverDashboardState extends State<DriverDashboard> {
-  final GpsIngestionSession _gps = GpsIngestionSession();
-  final ApiService _api = ApiService();
-  final TextEditingController _vehicleIdController = TextEditingController();
-
-  List<VehicleModel> _vehicles = [];
-  String? _selectedVehicleId;
-  bool _loadingVehicles = true;
-  String _routeStatus = 'active';
-
-  bool get _gpsSessionActive => _gps.isActive;
-
-  VehicleModel? get _selectedVehicle {
-    for (final v in _vehicles) {
-      if (v.id == _selectedVehicleId) return v;
-    }
-    return null;
-  }
+  late final DriverProvider _driver = DriverProvider(
+    DriverService(buildDioClient()),
+    liveFeed: WebSocketService(),
+  );
 
   @override
   void initState() {
     super.initState();
-    _gps.addListener(_onGpsChanged);
-    _loadVehicles();
+    _driver.load();
   }
 
   @override
   void dispose() {
-    _gps.removeListener(_onGpsChanged);
-    _gps.dispose();
-    _vehicleIdController.dispose();
+    _driver.dispose(); // also stops the GPS broadcast
     super.dispose();
   }
 
-  void _onGpsChanged() {
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _loadVehicles() async {
-    try {
-      final vehicles = await _api.getVehicles();
-      if (!mounted) return;
-      setState(() {
-        _vehicles = vehicles;
-        _selectedVehicleId ??= vehicles.isNotEmpty ? vehicles.first.id : null;
-      });
-    } catch (e) {
-      // Falls back to typing the vehicle id manually.
-      debugPrint('Failed to load vehicles: $e');
-    } finally {
-      if (mounted) setState(() => _loadingVehicles = false);
-    }
-  }
-
-  Future<void> _toggleGps(bool value) async {
-    final messenger = ScaffoldMessenger.of(context);
-    if (!value) {
-      await _gps.stop();
-      messenger.showSnackBar(const SnackBar(content: Text('GPS session stopped')));
-      return;
-    }
-
-    final vehicleId = _vehicles.isNotEmpty
-        ? _selectedVehicleId
-        : _vehicleIdController.text.trim();
-    if (vehicleId == null || vehicleId.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Select a vehicle before starting GPS.')),
-      );
-      return;
-    }
-
-    try {
-      await _gps.start(vehicleId);
-      messenger.showSnackBar(const SnackBar(content: Text('GPS session started')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not start GPS: $e')));
-    }
-  }
-
-  String get _gpsSubtitle {
-    switch (_gps.state) {
-      case GpsSessionState.idle:
-        return 'Location sharing is off';
-      case GpsSessionState.connecting:
-        return 'Connecting to GPS server…';
-      case GpsSessionState.live:
-        final sent = _gps.lastSentAt;
-        return sent == null
-            ? 'Connected — waiting for first GPS fix'
-            : 'Broadcasting to fleet map · ${_gps.framesSent} updates';
-      case GpsSessionState.reconnecting:
-        return 'Connection lost — reconnecting…';
-      case GpsSessionState.paused:
-        return 'Simulating signal loss (sending paused)';
-      case GpsSessionState.error:
-        return _gps.error ?? 'GPS error';
-    }
-  }
-
-  Color get _gpsColor => switch (_gps.state) {
-        GpsSessionState.live => AppColors.success,
-        GpsSessionState.reconnecting || GpsSessionState.paused => AppColors.accent,
-        GpsSessionState.error => AppColors.error,
-        _ => AppColors.textSecondary,
-      };
-
-  Widget _vehiclePicker() {
-    if (_loadingVehicles) {
-      return const Padding(
-        padding: EdgeInsets.only(bottom: AppSpacing.xs),
-        child: LinearProgressIndicator(),
-      );
-    }
-    if (_vehicles.isEmpty) {
-      return TextField(
-        controller: _vehicleIdController,
-        enabled: !_gpsSessionActive,
-        decoration: const InputDecoration(
-          labelText: 'Vehicle ID',
-          helperText: 'Could not load vehicles — enter the vehicle id',
-        ),
-      );
-    }
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedVehicleId,
-      decoration: const InputDecoration(labelText: 'Vehicle'),
-      items: [
-        for (final v in _vehicles)
-          DropdownMenuItem(value: v.id, child: Text(v.plateNumber)),
-      ],
-      // Switching vehicles mid-session would mix two tracks.
-      onChanged: _gpsSessionActive
-          ? null
-          : (id) => setState(() => _selectedVehicleId = id),
-    );
-  }
-
-  void _setRouteStatus(String status) {
-    setState(() => _routeStatus = status);
-    // TODO [Velez]: Wire with API/State Provider here
-    // ApiService.updateRouteStatus(RouteStatusUpdate(...))
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Route status → $status (preview)')),
+  Future<void> _signOut() async {
+    await _driver.gps.stop();
+    if (!mounted) return;
+    await context.read<AuthProvider>().logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreenHost()),
+      (route) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.backgroundIceBlue,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('Driver Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(AppIcons.logout),
-            tooltip: 'Sign out',
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        children: [
-          _DriverCard(
-            title: 'GPS Session',
-            subtitle: _gpsSubtitle,
-            leading: Icon(
-              _gpsSessionActive ? AppIcons.gpsToggleOn : AppIcons.gpsToggleOff,
-              color: _gpsColor,
-              size: 36,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _vehiclePicker(),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Enable GPS broadcast'),
-                  subtitle: const Text('Required while on an active route'),
-                  value: _gpsSessionActive,
-                  activeThumbColor: AppColors.secondary,
-                  onChanged: _toggleGps,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _DriverCard(
-            title: 'Assigned Route',
-            subtitle: 'Route 12 — Downtown Loop (preview)',
-            leading: const Icon(AppIcons.routeStop, color: AppColors.secondary, size: 36),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _InfoRow(
-                  label: 'Vehicle',
-                  value: _selectedVehicle?.plateNumber ?? 'ABC-1234',
-                ),
-                _InfoRow(label: 'Next stop', value: 'Central Terminal'),
-                _InfoRow(label: 'ETA', value: '4 min'),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _DriverCard(
-            title: 'Route Status',
-            subtitle: 'Current: ${_statusLabel(_routeStatus)}',
-            leading: Icon(
-              _statusIcon(_routeStatus),
-              color: _statusColor(_routeStatus),
-              size: 36,
-            ),
-            child: Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              children: [
-                _StatusChip(
-                  label: 'Active',
-                  selected: _routeStatus == 'active',
-                  color: AppColors.success,
-                  onTap: () => _setRouteStatus('active'),
-                ),
-                _StatusChip(
-                  label: 'Congested',
-                  selected: _routeStatus == 'congested',
-                  color: AppColors.accent,
-                  onTap: () => _setRouteStatus('congested'),
-                ),
-                _StatusChip(
-                  label: 'Suspended',
-                  selected: _routeStatus == 'suspended',
-                  color: AppColors.error,
-                  onTap: () => _setRouteStatus('suspended'),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          _DriverCard(
-            title: 'Quick Actions',
-            subtitle: 'Test triggers for driver workflows',
-            leading: const Icon(AppIcons.vehicle, color: AppColors.secondary, size: 36),
-            child: Column(
-              children: [
-                _ActionButton(
-                  icon: AppIcons.speed,
-                  label: 'Report speed / heading',
-                  onPressed: () {
-                    // TODO [Velez]: Wire with API/State Provider here
-                  },
-                ),
-                _ActionButton(
-                  icon: AppIcons.crowdMedium,
-                  label: 'Update crowd level',
-                  onPressed: () {
-                    // TODO [Velez]: Wire with API/State Provider here
-                  },
-                ),
-                _ActionButton(
-                  icon: AppIcons.signalLost,
-                  label: 'Simulate signal loss',
-                  onPressed: () {
-                    final messenger = ScaffoldMessenger.of(context);
-                    if (!_gpsSessionActive) {
-                      messenger.showSnackBar(const SnackBar(
-                        content: Text('Start a GPS session first.'),
-                      ));
-                      return;
-                    }
-                    // Backend watchdog fires after 30 s of silence and
-                    // re-arms when frames resume.
-                    _gps.simulateSignalLoss();
-                    messenger.showSnackBar(const SnackBar(
-                      content: Text('Pausing GPS for 40 s — map should show signal lost'),
-                    ));
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static String _statusLabel(String status) => switch (status) {
-        'active' => 'Active',
-        'congested' => 'Congested',
-        'suspended' => 'Suspended',
-        _ => status,
-      };
-
-  static IconData _statusIcon(String status) => switch (status) {
-        'active' => AppIcons.statusActive,
-        'congested' => AppIcons.statusCongested,
-        'suspended' => AppIcons.statusSuspended,
-        _ => AppIcons.statusActive,
-      };
-
-  static Color _statusColor(String status) => switch (status) {
-        'active' => AppColors.success,
-        'congested' => AppColors.accent,
-        'suspended' => AppColors.error,
-        _ => AppColors.textSecondary,
-      };
-}
-
-class _DriverCard extends StatelessWidget {
-  const _DriverCard({
-    required this.title,
-    required this.subtitle,
-    required this.leading,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget leading;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: AppShadows.card,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              leading,
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodyMedium),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.selected,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      selectedColor: color.withValues(alpha: 0.2),
-      checkmarkColor: color,
-      onSelected: (_) => onTap(),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 20),
-        label: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(label),
-        ),
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(48),
-          alignment: Alignment.centerLeft,
-        ),
-      ),
+    return ChangeNotifierProvider.value(
+      value: _driver,
+      child: DriverDashboardView(onSignOut: _signOut),
     );
   }
 }

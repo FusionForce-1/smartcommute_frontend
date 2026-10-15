@@ -17,6 +17,10 @@ import 'vehicle_live_update.dart';
 // fixes hundreds of metres off. A fix implying an impossible speed is
 // dropped; if several in a row agree, the vehicle really did move (e.g.
 // it drove on while signal was lost) and we snap to it.
+//
+// Heading: a GPS module's course is only trustworthy when moving fast;
+// slow or stopped, it swings at random. Below [trustGpsHeadingKmh] the
+// arrow instead points along the last [headingMinMoveM] actually travelled.
 
 enum TrackResult { animated, snapped, dropped }
 
@@ -27,6 +31,7 @@ class VehicleTrack {
         _to = first.location,
         _fromHeading = first.heading,
         _toHeading = first.heading,
+        _headingAnchor = first.location,
         _start = now,
         _duration = Duration.zero;
 
@@ -35,6 +40,12 @@ class VehicleTrack {
 
   /// Consecutive implausible fixes needed before accepting a real jump.
   static const int confirmJumpAfter = 3;
+
+  /// At or above this speed the GPS course is used as the heading.
+  static const double trustGpsHeadingKmh = 15;
+
+  /// Below it, the heading is re-measured after moving this far.
+  static const double headingMinMoveM = 8;
 
   static const Duration minAnimation = Duration(milliseconds: 200);
   static const Duration maxAnimation = Duration(seconds: 5);
@@ -48,6 +59,7 @@ class VehicleTrack {
   LatLng? _to;
   double? _fromHeading;
   double? _toHeading;
+  LatLng? _headingAnchor; // where the movement-based heading is measured from
   Duration _start;
   Duration _duration;
   Duration? _lastFixArrival;
@@ -88,7 +100,7 @@ class VehicleTrack {
 
     _rejectedInARow = 0;
     _fromHeading = headingAt(now);
-    _toHeading = update.heading ?? _toHeading;
+    _toHeading = _headingFor(update, next) ?? _toHeading;
     _from = current;
     _to = next;
     _start = now;
@@ -125,8 +137,29 @@ class VehicleTrack {
     return t.clamp(0.0, 1.0);
   }
 
+  /// New heading for an accepted fix, or null to keep the current one.
+  double? _headingFor(VehicleLiveUpdate update, LatLng next) {
+    final gps = update.heading, speed = update.speed;
+    // Fast (or speed unknown): the module's course is good.
+    if (gps != null && (speed == null || speed >= trustGpsHeadingKmh)) {
+      _headingAnchor = next;
+      return gps;
+    }
+    // Slow: point along the ground actually covered, once it's far enough
+    // to beat GPS jitter. Standing still keeps the last heading.
+    final anchor = _headingAnchor;
+    if (anchor == null) {
+      _headingAnchor = next;
+      return null;
+    }
+    if (_distance.as(LengthUnit.Meter, anchor, next) < headingMinMoveM) return null;
+    _headingAnchor = next;
+    return (_distance.bearing(anchor, next) + 360) % 360;
+  }
+
   void _jumpTo(LatLng point, double? heading, Duration now) {
     _rejectedInARow = 0;
+    _headingAnchor = point;
     _from = point;
     _to = point;
     _fromHeading = heading;

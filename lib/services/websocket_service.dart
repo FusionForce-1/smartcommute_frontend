@@ -11,6 +11,11 @@
 //     spd is km/h, hdg is degrees from north, ts is the device fix time
 //     (ISO 8601 UTC); the backend stores and re-broadcasts ts as-is.
 //
+// The driver's access token goes in the subprotocols ("bearer", <token>):
+// browsers can't set headers on a WebSocket. Tokens last 15 minutes, so
+// when the backend ends the session for an expired token the driver
+// session reconnects with a fresh one.
+//
 // The backend watchdog marks a vehicle "signal_lost" after 30 s without a
 // frame and re-arms once frames resume. A parked vehicle's GPS stream goes
 // quiet (distance filter), so the driver session re-sends the last fix on
@@ -128,13 +133,22 @@ class WebSocketService {
 
 enum GpsSessionState { idle, connecting, live, reconnecting, paused, error }
 
+/// Returns a current (refreshed if needed) access token, or null.
+typedef AccessTokenProvider = Future<String?> Function();
+
 class GpsIngestionSession extends ChangeNotifier {
   GpsIngestionSession({
+    required this.accessToken,
     this.keepaliveInterval = const Duration(seconds: 10),
   });
 
+  final AccessTokenProvider accessToken;
+
   /// Must stay well under the backend's 30 s watchdog.
   final Duration keepaliveInterval;
+
+  /// Close reason the backend sends when the access token runs out.
+  static const _sessionExpired = 'Session expired';
 
   GpsSessionState _state = GpsSessionState.idle;
   String? _vehicleId;
@@ -238,8 +252,14 @@ class GpsIngestionSession extends ChangeNotifier {
         ? GpsSessionState.connecting
         : GpsSessionState.reconnecting);
 
-    final channel = WebSocketChannel.connect(_wsUri('/ws/gps/$_vehicleId'));
+    final WebSocketChannel channel;
     try {
+      final token = await accessToken();
+      if (!_active) return;
+      channel = WebSocketChannel.connect(
+        _wsUri('/ws/gps/$_vehicleId'),
+        protocols: token == null ? null : ['bearer', token],
+      );
       await channel.ready;
     } catch (e) {
       _scheduleReconnect('Could not reach GPS server');
@@ -257,8 +277,8 @@ class GpsIngestionSession extends ChangeNotifier {
 
     _socketSub = channel.stream.listen(
       (_) {}, // server doesn't send anything on this socket
-      onDone: () => _onSocketClosed(channel.closeCode),
-      onError: (_) => _onSocketClosed(channel.closeCode),
+      onDone: () => _onSocketClosed(channel.closeCode, channel.closeReason),
+      onError: (_) => _onSocketClosed(channel.closeCode, channel.closeReason),
       cancelOnError: true,
     );
 
@@ -266,16 +286,17 @@ class GpsIngestionSession extends ChangeNotifier {
     _sendLastFix();
   }
 
-  void _onSocketClosed(int? code) {
+  void _onSocketClosed(int? code, String? reason) {
     _channel = null;
     _socketSub = null;
     if (!_active) return;
-    // 1008 = backend rejected the vehicle id; retrying won't help.
-    if (code == 1008) {
+    // 1008 = the backend refused this session. An expired token is fixed by
+    // reconnecting (with a fresh one); any other refusal won't change.
+    if (code == 1008 && !(reason ?? '').startsWith(_sessionExpired)) {
       _active = false;
       _keepaliveTimer?.cancel();
       _positionSub?.cancel();
-      _setError('Vehicle not found on server.');
+      _setError(reason ?? 'The server refused GPS for this vehicle.');
       return;
     }
     _scheduleReconnect('Connection lost');

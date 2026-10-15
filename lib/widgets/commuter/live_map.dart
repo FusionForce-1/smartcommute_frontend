@@ -61,6 +61,11 @@ class LiveMap extends StatelessWidget {
           minZoom: MapConfig.minZoom,
           maxZoom: MapConfig.maxZoom,
           cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
+          // North always up: a two-finger twist used to rotate the map with
+          // no way back, making every direction look wrong.
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+          ),
           onMapReady: onMapReady,
         ),
         children: [
