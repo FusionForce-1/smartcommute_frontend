@@ -264,6 +264,14 @@ body.admin-body {
   padding: 0;
 }
 
+/* Long lists (e.g. pending operators) scroll inside the panel instead of
+   pushing everything below them down the page. */
+.panel__body--scroll {
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .panel--fill {
   min-height: 40rem;
 }

@@ -21,7 +21,7 @@ AdminRouter.register('dashboard', {
       <div class="panel-grid">
         ${AdminUi.panel({ title: 'User Accounts', bodyId: 'dash-users', panelClass: 'panel--fill' })}
         <div class="panel-stack">
-          ${AdminUi.panel({ title: 'Pending Operator Verification', bodyId: 'dash-pending' })}
+          ${AdminUi.panel({ title: 'Pending Operator Verification', bodyId: 'dash-pending', bodyClass: 'panel__body--scroll' })}
           ${AdminUi.panel({ title: 'System Health Monitor', bodyId: 'dash-health' })}
         </div>
       </div>`;
