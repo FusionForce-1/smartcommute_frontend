@@ -40,6 +40,7 @@ const TrackerSetup = (() => {
         <label>WiFi the tracker will use <span style="color:var(--op-muted)">(2.4 GHz, e.g. the jeep's hotspot)</span></label>
         <div id="ts-wifi-list">${wifiRows(1)}</div>
         <datalist id="ts-ssids"></datalist>
+        <p class="op-card__sub" style="margin:0 0 8px;">The name must match exactly — capitals, spaces and symbols like "?" count.</p>
         <button type="button" class="btn-sm" id="ts-add-wifi">+ Add a backup network</button>
       </div>`;
   }
@@ -53,13 +54,20 @@ const TrackerSetup = (() => {
     });
   }
 
-  /** The WiFi rows as [{ssid, password}], or throws a readable error. */
-  function readWifi(m) {
+  /**
+   * The WiFi rows as [{ssid, password}], or throws a readable error. Names
+   * are trimmed, except one that exactly matches a scanned network: WiFi
+   * names may really start or end with a space.
+   */
+  function readWifi(m, nearby = []) {
     const nets = [...m.querySelectorAll('.ts-wifi')]
-      .map((row) => ({
-        ssid: row.querySelector('.ts-ssid').value.trim(),
-        password: row.querySelector('.ts-pass').value,
-      }))
+      .map((row) => {
+        const raw = row.querySelector('.ts-ssid').value;
+        return {
+          ssid: nearby.includes(raw) ? raw : raw.trim(),
+          password: row.querySelector('.ts-pass').value,
+        };
+      })
       .filter((n) => n.ssid);
     if (!nets.length) throw new Error('Enter the WiFi name the tracker should connect to.');
     for (const n of nets) {
@@ -212,8 +220,41 @@ const TrackerSetup = (() => {
     }));
   }
 
+  // Lowercase, letters/digits only: "Connect Ka?" and "connect ka" look alike.
+  const looseName = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  /** Stops a near-miss typo (e.g. "connect ka" for "connect ka?") before it strands the tracker. */
+  function checkAgainstNearby(networks, nearby) {
+    for (const n of networks) {
+      if (nearby.includes(n.ssid)) continue;
+      const near = nearby.find((s) => looseName(s) === looseName(n.ssid));
+      if (near) {
+        throw new Error(`There's no WiFi named "${n.ssid}" nearby. Did you mean "${near}"? `
+          + 'The name must match exactly, including capitals and symbols.');
+      }
+      // Not nearby at all: fine (e.g. the jeep's hotspot is off right now).
+    }
+  }
+
   function openUsb(vehicle, onDone) {
     let info = null;
+    let nearby = [];   // WiFi names the tracker can see, from its last scan
+
+    async function scan(modal) {
+      const btn = modal.querySelector('#ts-scan');
+      btn.disabled = true;
+      btn.textContent = 'Scanning nearby WiFi…';
+      try {
+        const { networks } = await command('scan', {}, { timeoutMs: 15000 });
+        nearby = [...new Set(networks.map((n) => n.ssid).filter(Boolean))];
+        modal.querySelector('#ts-ssids').innerHTML = nearby.map((n) => `<option value="${esc(n)}"></option>`).join('');
+        btn.textContent = `${nearby.length} networks nearby — click the WiFi name box to pick one (scan again)`;
+      } catch (err) {
+        btn.textContent = `Scan failed: ${err.message} (scan again)`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
     const m = AdminModal.open({
       title: `USB setup — ${vehicle.plate_number}`,
       body: `
@@ -241,9 +282,11 @@ const TrackerSetup = (() => {
               modal.querySelector('#ts-form').hidden = false;
               modal.querySelector('.admin-modal__foot [data-index="1"]').textContent = 'Save to tracker';
               modal.querySelector('.ts-ssid').focus();
+              await scan(modal);   // fills the name suggestions
               return;
             }
-            const networks = readWifi(modal);
+            const networks = readWifi(modal, nearby);
+            checkAgainstNearby(networks, nearby);
             const { device_key: key } = await OperatorApi.issueDeviceKey(vehicle.vehicle_id);
             const server = serverForTracker();
             await command('configure', {
@@ -256,21 +299,7 @@ const TrackerSetup = (() => {
       ],
     });
     bindWifi(m);
-    m.querySelector('#ts-scan').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
-      btn.disabled = true;
-      btn.textContent = 'Scanning…';
-      try {
-        const { networks } = await command('scan', {}, { timeoutMs: 15000 });
-        m.querySelector('#ts-ssids').innerHTML = [...new Set(networks.map((n) => n.ssid).filter(Boolean))]
-          .map((s) => `<option value="${esc(s)}"></option>`).join('');
-        btn.textContent = `${networks.length} found — pick one in the WiFi name box`;
-      } catch (err) {
-        btn.textContent = err.message;
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    m.querySelector('#ts-scan').addEventListener('click', () => scan(m));
   }
 
   function showDevice(m, info, vehicle) {
