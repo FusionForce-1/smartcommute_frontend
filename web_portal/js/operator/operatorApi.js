@@ -41,6 +41,10 @@ const OperatorApi = {
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),
   deleteVehicle: (id) => ApiClient.delete(`/vehicles/${id}`),
   issueDeviceKey: (id) => ApiClient.post(`/vehicles/${id}/device-key`),
+  // GPS tracker setup by claim code (js/operator/trackerSetup.js)
+  claimTracker: ({ claim_code, vehicle_id, networks }) =>
+    ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks }),
+  trackerSetupStatus: (deviceId) => ApiClient.get(`/devices/${encodeURIComponent(deviceId)}`),
 
   // ---- Routes ----
   myRoutes: () => ApiClient.get('/routes/mine'),

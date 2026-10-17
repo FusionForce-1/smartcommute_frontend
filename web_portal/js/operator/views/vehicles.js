@@ -88,6 +88,7 @@ OperatorRouter.register('vehicles', {
           <td>
             <div class="data-table__actions">
               <button type="button" class="btn-sm btn-sm--teal" data-action="edit" data-id="${v.vehicle_id}">Edit</button>
+              <button type="button" class="btn-sm btn-sm--teal" data-action="setup" data-id="${v.vehicle_id}">Set up GPS</button>
               <button type="button" class="btn-sm" data-action="key" data-id="${v.vehicle_id}">Tracker key</button>
               <button type="button" class="btn-sm btn-sm--danger" data-action="remove" data-id="${v.vehicle_id}">Remove</button>
             </div>
@@ -258,7 +259,7 @@ OperatorRouter.register('vehicles', {
                 title: 'Copy This Key Now',
                 size: 'sm',
                 body: `
-                  <p class="modal-text">Put this key in the tracker's <code>secrets.h</code> as <code>DEVICE_KEY</code>. It can't be shown again.</p>
+                  <p class="modal-text">For developers flashing a tracker by hand: put this key in <code>secrets.h</code> as <code>DEVICE_KEY</code>. It can't be shown again. (Operators: use <strong>Set up GPS</strong> instead.)</p>
                   <div class="op-key" id="device-key">${esc(key)}</div>`,
                 actions: [
                   {
@@ -296,7 +297,12 @@ OperatorRouter.register('vehicles', {
       if (!btn || !Array.isArray(fleet)) return;
       const vehicle = fleet.find((v) => v.vehicle_id === btn.dataset.id);
       if (!vehicle) return;
-      ({ edit: openEdit, key: openDeviceKey, remove: confirmRemove })[btn.dataset.action]?.(vehicle);
+      ({
+        edit: openEdit,
+        setup: (v) => TrackerSetup.open(v, load),
+        key: openDeviceKey,
+        remove: confirmRemove,
+      })[btn.dataset.action]?.(vehicle);
     });
     // Verify first: GET /fleet refuses unverified operators, so `fleet` never loads for them.
     addBtn.addEventListener('click', () => OperatorUi.whenVerified(() => {
