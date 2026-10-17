@@ -26,7 +26,10 @@ OperatorRouter.register('vehicles', {
           <h2>Fleet Vehicles</h2>
           <p>Register vehicles, assign them to routes and drivers, and manage their GPS trackers.</p>
         </div>
-        <button type="button" class="op-btn" id="veh-add">＋ Add Vehicle</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="op-btn op-btn--ghost" id="veh-firmware">Install tracker firmware</button>
+          <button type="button" class="op-btn" id="veh-add">＋ Add Vehicle</button>
+        </div>
       </div>
       <div id="veh-stats"></div>
       <section class="op-card op-card--flush">
@@ -89,6 +92,7 @@ OperatorRouter.register('vehicles', {
             <div class="data-table__actions">
               <button type="button" class="btn-sm btn-sm--teal" data-action="edit" data-id="${v.vehicle_id}">Edit</button>
               <button type="button" class="btn-sm btn-sm--teal" data-action="setup" data-id="${v.vehicle_id}">Set up GPS</button>
+              <button type="button" class="btn-sm" data-action="wifi" data-id="${v.vehicle_id}">WiFi &amp; updates</button>
               <button type="button" class="btn-sm" data-action="key" data-id="${v.vehicle_id}">Tracker key</button>
               <button type="button" class="btn-sm btn-sm--danger" data-action="remove" data-id="${v.vehicle_id}">Remove</button>
             </div>
@@ -300,11 +304,13 @@ OperatorRouter.register('vehicles', {
       ({
         edit: openEdit,
         setup: (v) => TrackerSetup.open(v, load),
+        wifi: (v) => TrackerSetup.openWifi(v),
         key: openDeviceKey,
         remove: confirmRemove,
       })[btn.dataset.action]?.(vehicle);
     });
     // Verify first: GET /fleet refuses unverified operators, so `fleet` never loads for them.
+    el.querySelector('#veh-firmware').addEventListener('click', () => TrackerSetup.openInstaller());
     addBtn.addEventListener('click', () => OperatorUi.whenVerified(() => {
       if (Array.isArray(fleet)) openAdd();
     }));

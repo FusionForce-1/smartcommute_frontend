@@ -267,6 +267,17 @@
   cursor: not-allowed;
 }
 
+/* Secondary action next to a primary .op-btn (e.g. "Install tracker firmware"). */
+.op-btn--ghost {
+  background: #fff;
+  color: var(--op-accent);
+}
+
+.op-btn--ghost:hover {
+  background: #fff;
+  color: var(--admin-teal-dark);
+}
+
 .op-btn--outline-red,
 .op-btn--outline-green,
 .op-btn--outline {

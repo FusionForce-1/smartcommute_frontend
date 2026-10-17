@@ -45,6 +45,11 @@ const OperatorApi = {
   claimTracker: ({ claim_code, vehicle_id, networks }) =>
     ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks }),
   trackerSetupStatus: (deviceId) => ApiClient.get(`/devices/${encodeURIComponent(deviceId)}`),
+  // Remote WiFi for an online tracker (js/operator/trackerSetup.js -> openWifi)
+  trackerWifi: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-wifi`),
+  setTrackerWifi: (vehicleId, networks) => ApiClient.put(`/vehicles/${vehicleId}/tracker-wifi`, { networks }),
+  trackerFirmware: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-firmware`),
+  updateTrackerFirmware: (vehicleId) => ApiClient.post(`/vehicles/${vehicleId}/tracker-firmware/update`),
 
   // ---- Routes ----
   myRoutes: () => ApiClient.get('/routes/mine'),

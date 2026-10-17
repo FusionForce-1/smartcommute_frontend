@@ -181,7 +181,8 @@ const TrackerSetup = (() => {
         clearInterval(retry);
         link.waiters = link.waiters.filter((w) => w !== waiter);
         reject(new Error('The tracker did not answer. Check the cable (it must carry data, not only charge) '
-          + 'and that the tracker runs Smart Commute firmware 2.0 or newer.'));
+          + 'and that the tracker runs Smart Commute firmware 2.0 or newer — a new or blank tracker needs it '
+          + 'installed first: Vehicles → Install tracker firmware.'));
       }, timeoutMs);
     });
   }
@@ -492,5 +493,281 @@ const TrackerSetup = (() => {
     m.querySelector('#ts-vehicle').focus();
   }
 
-  return { open: openChooser, claimFromLabel, printLabel };
+  // ---------- WiFi of a tracker that's already set up (remote) ----------
+  //
+  // Lists what the tracker reported, lets the operator keep, re-password,
+  // remove or add networks (max 3, min 1) and sends the new list over the
+  // tracker's GPS connection. Saved passwords are never shown or needed:
+  // an unchanged network goes as {ssid, keep: true}.
+
+  function wifiStatusLine(s) {
+    if (s.last_error) return `<div class="op-card" style="border-left:4px solid var(--op-red);margin-bottom:12px;"><p class="modal-text" style="margin:0;">${esc(s.last_error)}</p></div>`;
+    if (s.pending) {
+      return `<div class="op-card" style="border-left:4px solid var(--op-amber);margin-bottom:12px;"><p class="modal-text" style="margin:0;">
+        Waiting for the tracker to take the new list (${s.pending.networks.map(esc).join(', ')})${
+          s.online ? '…' : ' — it is offline and gets it as soon as it reconnects.'}</p></div>`;
+    }
+    return '';
+  }
+
+  async function openWifi(vehicle) {
+    const s = await OperatorApi.trackerWifi(vehicle.vehicle_id);
+    if (!s.supports_remote) {
+      AdminModal.open({
+        title: `WiFi — ${vehicle.plate_number}`,
+        size: 'sm',
+        body: `<p class="modal-text">This tracker hasn't reported its WiFi networks yet, so they can't be changed from here.</p>
+               <p class="modal-text">It needs Smart Commute firmware <strong>2.1 or newer</strong> and to have been online once.
+               Until then, change its WiFi with <strong>Set up GPS → USB</strong>.</p>`,
+        actions: [
+          { label: 'Close', variant: 'ghost', onClick: AdminModal.close },
+          { label: 'Set up over USB', variant: 'primary', onClick: () => openUsb(vehicle, null) },
+        ],
+      });
+      return;
+    }
+
+    // One row per network: saved ones start as "keep".
+    const rows = s.saved.map((ssid) => ({ ssid, saved: true, removed: false, changePw: false }));
+
+    const m = AdminModal.open({
+      title: `WiFi — ${vehicle.plate_number}`,
+      body: `
+        <p class="modal-text" id="tw-online"></p>
+        <div id="tw-status"></div>
+        <div id="tw-rows"></div>
+        <button type="button" class="btn-sm" id="tw-add">+ Add a network</button>
+        <p class="op-card__sub" style="margin-top:12px;">The tracker uses whichever of these is strongest. Up to 3; it keeps at least one.
+          If it can't connect to a new network, it goes back to its old ones by itself.</p>
+        <div id="tw-fw" style="margin-top:16px;border-top:1px solid var(--op-border, #e5e7eb);padding-top:12px;"></div>`,
+      actions: [
+        { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+        {
+          label: 'Save to tracker',
+          variant: 'primary',
+          onClick: async (modal) => {
+            const networks = collect(modal);
+            const after = await OperatorApi.setTrackerWifi(vehicle.vehicle_id, networks);
+            render(modal, after);
+            await waitForTracker(modal);
+          },
+        },
+      ],
+    });
+
+    function rowHtml(r, i) {
+      if (r.removed) {
+        return `<div class="op-card" style="margin-bottom:8px;opacity:.6;display:flex;justify-content:space-between;align-items:center;">
+          <span><s>${esc(r.ssid)}</s> — will be removed</span>
+          <button type="button" class="btn-sm" data-undo="${i}">Undo</button></div>`;
+      }
+      if (!r.saved) {
+        return `<div class="op-card" style="margin-bottom:8px;">
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;">
+            <input data-ssid="${i}" maxlength="32" placeholder="WiFi name" value="${esc(r.ssid)}" autocomplete="off" />
+            <input data-pass="${i}" type="password" maxlength="63" placeholder="Password" autocomplete="new-password" />
+            <button type="button" class="btn-sm btn-sm--danger" data-drop="${i}">Remove</button>
+          </div></div>`;
+      }
+      const here = s.connected_to === r.ssid ? ' <span class="op-card__sub">· connected now</span>' : '';
+      return `<div class="op-card" style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <span><strong>${esc(r.ssid)}</strong>${here}</span>
+          <span style="display:flex;gap:6px;">
+            <button type="button" class="btn-sm" data-pw="${i}">${r.changePw ? 'Keep old password' : 'Change password'}</button>
+            <button type="button" class="btn-sm btn-sm--danger" data-remove="${i}">Remove</button>
+          </span>
+        </div>
+        ${r.changePw ? `<input data-pass="${i}" type="password" maxlength="63" placeholder="New password for ${esc(r.ssid)}"
+                               autocomplete="new-password" style="margin-top:8px;width:100%;" />` : ''}
+      </div>`;
+    }
+
+    // Typed values live in `rows`: read them before changing the list,
+    // since redrawing renumbers the inputs.
+    function captureRows(modal) {
+      modal.querySelectorAll('[data-ssid]').forEach((el) => { rows[el.dataset.ssid].ssid = el.value; });
+      modal.querySelectorAll('[data-pass]').forEach((el) => { rows[el.dataset.pass].password = el.value; });
+    }
+
+    function drawRows(modal) {
+      modal.querySelector('#tw-rows').innerHTML = rows.map(rowHtml).join('');
+      modal.querySelectorAll('[data-pass]').forEach((el) => { el.value = rows[el.dataset.pass].password || ''; });
+      const live = rows.filter((r) => !r.removed).length;
+      modal.querySelector('#tw-add').hidden = live >= MAX_NETWORKS;
+    }
+
+    function render(modal, status) {
+      Object.assign(s, status);
+      modal.querySelector('#tw-online').innerHTML = s.online
+        ? `<span style="color:var(--op-green)">●</span> Tracker online${s.connected_to ? ` — connected to <strong>${esc(s.connected_to)}</strong>` : ''}`
+        : '<span style="color:var(--op-muted)">●</span> Tracker offline — changes are sent the next time it connects.';
+      modal.querySelector('#tw-status').innerHTML = wifiStatusLine(s);
+    }
+
+    function collect(modal) {
+      captureRows(modal);
+      const live = rows.filter((r) => !r.removed && (r.saved || r.ssid.trim()));
+      if (!live.length) throw new Error('Keep at least one WiFi network, or the tracker could never reconnect.');
+      const networks = live.map((r) => {
+        if (r.saved && !r.changePw) return { ssid: r.ssid, keep: true };
+        const ssid = r.saved ? r.ssid : r.ssid.trim();
+        const password = r.password || '';
+        if (password && (password.length < 8 || password.length > 63)) {
+          throw new Error(`The password for "${ssid}" must be 8-63 characters (leave it empty for an open network).`);
+        }
+        return { ssid, password };
+      });
+      const names = networks.map((n) => n.ssid);
+      if (new Set(names).size !== names.length) throw new Error('The same WiFi name is listed twice.');
+      return networks;
+    }
+
+    async function waitForTracker(modal) {
+      const started = Date.now();
+      while (Date.now() - started < 60000) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (!modal.isConnected) return;
+        const status = await OperatorApi.trackerWifi(vehicle.vehicle_id).catch(() => null);
+        if (!status) continue;
+        render(modal, status);
+        if (!status.pending) {
+          if (!status.last_error) {
+            rows.splice(0, rows.length, ...status.saved.map((ssid) => ({ ssid, saved: true, removed: false, changePw: false })));
+            drawRows(modal);
+            modal.querySelector('#tw-status').innerHTML = `<div class="op-card" style="border-left:4px solid var(--op-green);margin-bottom:12px;">
+              <p class="modal-text" style="margin:0;">✓ Saved on the tracker. It switches networks by itself when needed.</p></div>`;
+          }
+          return;
+        }
+        if (!status.online) return;   // offline: the banner says it'll get it on reconnect
+      }
+    }
+
+    m.querySelector('#tw-rows').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      captureRows(m);
+      const d = btn.dataset;
+      if (d.remove !== undefined) rows[d.remove].removed = true;
+      if (d.undo !== undefined) rows[d.undo].removed = false;
+      if (d.drop !== undefined) rows.splice(Number(d.drop), 1);
+      if (d.pw !== undefined) rows[d.pw].changePw = !rows[d.pw].changePw;
+      drawRows(m);
+    });
+    m.querySelector('#tw-add').addEventListener('click', () => {
+      captureRows(m);
+      rows.push({ ssid: '', saved: false, removed: false, password: '' });
+      drawRows(m);
+      m.querySelector(`[data-ssid="${rows.length - 1}"]`)?.focus();
+    });
+
+    render(m, s);
+    drawRows(m);
+    showFirmware(m, vehicle);
+  }
+
+  // ---------- Firmware updates over the air ----------
+
+  const FW_STATE = {
+    pending: 'Waiting for the tracker to come online…',
+    sent: 'Sent to the tracker…',
+    downloading: 'Downloading and installing (about a minute — keep the tracker powered)…',
+    done: '✓ Updated.',
+  };
+
+  async function showFirmware(m, vehicle) {
+    const box = m.querySelector('#tw-fw');
+    let fw;
+    try {
+      fw = await OperatorApi.trackerFirmware(vehicle.vehicle_id);
+    } catch {
+      box.innerHTML = '';
+      return;
+    }
+    if (!m.isConnected) return;
+    const job = fw.update;
+    const busy = job && !['done', 'failed'].includes(job.state);
+    const line = job?.state === 'failed'
+      ? `<span style="color:var(--op-red)">${esc(job.error || 'Update failed.')}</span>`
+      : busy ? esc(FW_STATE[job.state] || job.state)
+        : job?.state === 'done' && !fw.update_available ? esc(FW_STATE.done) : '';
+    box.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span><strong>Firmware</strong> ${esc(fw.current || 'unknown')}${
+          fw.latest ? (fw.update_available ? ` · <span style="color:var(--op-amber)">${esc(fw.latest)} available</span>` : ' · up to date') : ''}</span>
+        ${fw.update_available && fw.can_update_remotely && !busy
+          ? `<button type="button" class="btn-sm btn-sm--teal" id="fw-update">Update to ${esc(fw.latest)}</button>` : ''}
+      </div>
+      ${line ? `<p class="op-card__sub" style="margin:6px 0 0;">${line}</p>` : ''}
+      ${fw.update_available && !fw.can_update_remotely
+        ? '<p class="op-card__sub" style="margin:6px 0 0;">This version cannot update itself: use Vehicles → Install tracker firmware once (USB).</p>' : ''}`;
+    box.querySelector('#fw-update')?.addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await OperatorApi.updateTrackerFirmware(vehicle.vehicle_id);
+      } catch (err) {
+        box.insertAdjacentHTML('beforeend', `<p class="op-card__sub" style="color:var(--op-red)">${esc(err.message)}</p>`);
+        return;
+      }
+      showFirmware(m, vehicle);
+    });
+    if (busy) setTimeout(() => { if (m.isConnected) showFirmware(m, vehicle); }, 5000);
+  }
+
+  // ---------- Firmware installer (new / blank trackers) ----------
+  //
+  // ESP Web Tools writes the firmware published in /firmware (see
+  // Smart-Commute-Backend/tools/release_firmware.py) straight from the
+  // browser over USB. It writes only the program, never the settings area,
+  // so reinstalling keeps a tracker's WiFi, vehicle and claim code.
+
+  const ESP_WEB_TOOLS = 'https://unpkg.com/esp-web-tools@10.2.1/dist/web/install-button.js?module';
+  const firmwareUrl = (file) => new URL(`../firmware/${file}`, location.href).href;
+
+  function loadEspWebTools() {
+    if (document.querySelector(`script[src="${ESP_WEB_TOOLS}"]`)) return;
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = ESP_WEB_TOOLS;
+    document.head.appendChild(script);
+  }
+
+  async function openInstaller() {
+    await disconnect();   // the installer needs the USB port to itself
+    loadEspWebTools();
+    const release = await fetch(firmwareUrl('latest.json'), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const m = AdminModal.open({
+      title: 'Install tracker firmware',
+      body: `
+        <p class="modal-text">For a <strong>new or blank</strong> GPS tracker, or to repair one. No Arduino needed.</p>
+        <ol class="modal-text" style="padding-left:18px;">
+          <li>Plug the tracker into this computer with a USB <em>data</em> cable.</li>
+          <li>Close the Arduino Serial Monitor and other portal tabs using the tracker.</li>
+          <li>Click <strong>Install firmware</strong>, pick the tracker (e.g. "USB Serial (COM3)"), then <strong>Install</strong>. About 1 minute — don't unplug it meanwhile.</li>
+          <li>When it's done, close this and use <strong>Set up GPS</strong> on the vehicle (USB or claim code), then <strong>Print label</strong>.</li>
+        </ol>
+        <p class="op-card__sub">${release ? `Installs Smart Commute firmware <strong>${esc(release.version)}</strong>. ` : ''}
+          A tracker that was already set up keeps its WiFi, vehicle and claim code.</p>
+        <esp-web-install-button manifest="${esc(firmwareUrl('manifest.json'))}">
+          <button slot="activate" type="button" class="btn-lg btn-lg--primary" id="fw-install">Install firmware</button>
+          <span slot="unsupported" class="modal-text" style="color:var(--op-red)">This browser can't install firmware. Use Chrome or Edge on a computer.</span>
+          <span slot="not-allowed" class="modal-text" style="color:var(--op-red)">Firmware can only be installed from the portal's https address.</span>
+        </esp-web-install-button>`,
+      actions: [{ label: 'Close', variant: 'ghost', onClick: AdminModal.close }],
+    });
+    // The installer opens its own dialog; don't leave ours on top of it.
+    m.querySelector('#fw-install')?.addEventListener('click', () => {
+      m.style.visibility = 'hidden';
+      const reveal = () => { m.style.visibility = ''; };
+      setTimeout(() => {
+        const dialog = document.querySelector('ewt-install-dialog');
+        if (!dialog) return reveal();
+        dialog.addEventListener('closed', reveal, { once: true });
+      }, 400);
+    });
+  }
+
+  return { open: openChooser, claimFromLabel, printLabel, openWifi, openInstaller };
 })();
