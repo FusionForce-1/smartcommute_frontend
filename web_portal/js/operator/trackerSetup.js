@@ -311,10 +311,72 @@ const TrackerSetup = (() => {
         <strong>Tracker ${esc(info.device_id)}</strong> · firmware ${esc(info.firmware)}<br>
         <span class="op-card__sub">Claim code ${esc(info.claim_code)} · ${esc(current)}${
           info.networks?.length ? ` · saved WiFi: ${info.networks.map(esc).join(', ')}` : ''}</span>
+        <div style="margin-top:10px;">
+          <button type="button" class="btn-sm btn-sm--teal" id="ts-print">Print label for this tracker</button>
+        </div>
       </div>`;
+    m.querySelector('#ts-print').addEventListener('click', () => printLabel(info));
   }
 
-  function openClaim(vehicle, onDone) {
+  // ---------- Label (sticker on the tracker) ----------
+
+  /** Address a phone opens when it scans the label: the portal, with the code filled in. */
+  function claimLink(code) {
+    return `${location.origin}${location.pathname}?claim=${encodeURIComponent(code.replace(/-/g, ''))}`;
+  }
+
+  /**
+   * Opens a printable sticker: big claim code, a QR code that opens the
+   * portal with the code filled in, and the three steps an operator follows.
+   * The QR is drawn in the print window by qrcodejs (no data leaves the browser).
+   */
+  function printLabel(info) {
+    const win = window.open('', '_blank', 'width=480,height=640');
+    if (!win) throw new Error('Allow pop-ups for this site to print the label.');
+    const link = claimLink(info.claim_code);
+    win.document.write(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Tracker label ${esc(info.device_id)}</title>
+<style>
+  @page { size: 70mm 50mm; margin: 3mm; }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #000; }
+  .label { width: 64mm; height: 44mm; border: 0.4mm solid #000; border-radius: 2mm;
+           padding: 2.5mm; box-sizing: border-box; display: grid;
+           grid-template-columns: 19mm 1fr; gap: 2.5mm; align-items: start; }
+  .brand { grid-column: 1 / -1; font-weight: bold; font-size: 2.9mm; letter-spacing: .15mm; white-space: nowrap;
+           border-bottom: 0.3mm solid #000; padding-bottom: 1mm; }
+  #qr img, #qr canvas { width: 19mm !important; height: 19mm !important; }
+  .code { font-family: "Courier New", monospace; font-weight: bold; font-size: 5.6mm; letter-spacing: .6mm; }
+  .small { font-size: 2.3mm; line-height: 1.35; }
+  .steps { grid-column: 1 / -1; font-size: 2.25mm; line-height: 1.3; margin: 0; padding-left: 3.5mm; }
+  .tip { margin: 4mm; font-size: 12px; color: #444; }
+  @media print { .tip { display: none; } }
+</style></head>
+<body>
+  <div class="label">
+    <div class="brand">SMART COMMUTE · GPS TRACKER</div>
+    <div id="qr"></div>
+    <div>
+      <div class="small">Set-up code</div>
+      <div class="code">${esc(info.claim_code)}</div>
+      <div class="small">Device ${esc(info.device_id)}</div>
+    </div>
+    <ol class="steps">
+      <li>Hotspot <b>${SETUP_SSID}</b> / <b>${SETUP_PASS}</b></li>
+      <li>Turn this tracker on near the phone.</li>
+      <li>Scan the QR code to finish set-up.</li>
+    </ol>
+  </div>
+  <p class="tip">Printing on a label printer: choose 70 × 50 mm paper. On normal paper, cut along the border and tape it to the tracker.</p>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+  <script>
+    new QRCode(document.getElementById('qr'), { text: ${JSON.stringify(link)}, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    setTimeout(() => window.print(), 400);
+  <\/script>
+</body></html>`);
+    win.document.close();
+  }
+
+  function openClaim(vehicle, onDone, code = '') {
     const m = AdminModal.open({
       title: `Claim code setup — ${vehicle.plate_number}`,
       body: `
@@ -327,7 +389,7 @@ const TrackerSetup = (() => {
         <form novalidate>
           <div class="form-field">
             <label for="ts-code">Claim code</label>
-            <input id="ts-code" maxlength="12" placeholder="ABCD-EFGH" autocomplete="off"
+            <input id="ts-code" maxlength="12" placeholder="ABCD-EFGH" autocomplete="off" value="${esc(code)}"
                    style="text-transform:uppercase;letter-spacing:2px;font-family:monospace;font-size:1.1em;" />
           </div>
           ${wifiSection()}
@@ -352,7 +414,7 @@ const TrackerSetup = (() => {
       ],
     });
     bindWifi(m);
-    m.querySelector('#ts-code').focus();
+    (code ? m.querySelector('.ts-ssid') : m.querySelector('#ts-code')).focus();
   }
 
   async function waitForDelivery(deviceId, progressEl) {
@@ -384,5 +446,51 @@ const TrackerSetup = (() => {
 
   window.addEventListener('beforeunload', () => { disconnect(); });
 
-  return { open: openChooser };
+  /**
+   * Opened from a scanned label (operator.html?claim=CODE): the code is
+   * already known, so the operator only picks the jeep and the WiFi.
+   */
+  async function claimFromLabel(rawCode) {
+    const code = String(rawCode).toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const shown = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+    const fleet = await OperatorApi.fleet().catch(() => []);
+    if (!fleet.length) {
+      AdminModal.open({
+        title: 'Add the jeep first',
+        size: 'sm',
+        body: `<p class="modal-text">You scanned tracker code <strong>${esc(shown)}</strong>, but you have no vehicles yet.
+               Click <strong>+ Add Vehicle</strong>, then use <strong>Set up GPS → Claim code</strong> and type the code.</p>`,
+        actions: [{ label: 'OK', variant: 'primary', onClick: AdminModal.close }],
+      });
+      return;
+    }
+    if (fleet.length === 1) {
+      openClaim(fleet[0], null, shown);
+      return;
+    }
+    const m = AdminModal.open({
+      title: 'Which jeep is this tracker for?',
+      size: 'sm',
+      body: `
+        <p class="modal-text">Tracker code <strong>${esc(shown)}</strong></p>
+        <div class="form-field">
+          <label for="ts-vehicle">Vehicle</label>
+          <select id="ts-vehicle">${fleet.map((v) => `<option value="${esc(v.vehicle_id)}">${esc(v.plate_number)}</option>`).join('')}</select>
+        </div>`,
+      actions: [
+        { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+        {
+          label: 'Next',
+          variant: 'primary',
+          onClick: (modal) => {
+            const id = modal.querySelector('#ts-vehicle').value;
+            openClaim(fleet.find((v) => v.vehicle_id === id), null, shown);
+          },
+        },
+      ],
+    });
+    m.querySelector('#ts-vehicle').focus();
+  }
+
+  return { open: openChooser, claimFromLabel, printLabel };
 })();
