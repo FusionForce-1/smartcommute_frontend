@@ -317,6 +317,25 @@ const TrackerSetup = (() => {
         </div>
       </div>`;
     m.querySelector('#ts-print').addEventListener('click', () => printLabel(info));
+    offerFirmwareUpdate(m, info);
+  }
+
+  /** On the USB card: point out a newer published firmware and offer to install it. */
+  async function offerFirmwareUpdate(m, info) {
+    const release = await fetch(firmwareUrl('latest.json'), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const num = (v) => String(v || '0.0.0').split('.').map(Number);
+    const newer = (a, b) => { const [x, y] = [num(a), num(b)]; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+    if (!release || !newer(release.version, info.firmware) || !m.isConnected) return;
+    const card = m.querySelector('#ts-device .op-card');
+    card?.insertAdjacentHTML('beforeend', `
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--op-border, #e5e7eb);">
+        <p class="modal-text" style="margin:0 0 8px;"><strong>Firmware ${esc(release.version)} is available</strong>
+          (this tracker has ${esc(info.firmware)}). It adds changing WiFi and updating from the portal, without a cable.
+          Its settings are kept.</p>
+        <button type="button" class="btn-sm btn-sm--teal" id="ts-install-update">Install update</button>
+      </div>`);
+    m.querySelector('#ts-install-update')?.addEventListener('click', () => openInstaller());
   }
 
   // ---------- Label (sticker on the tracker) ----------
