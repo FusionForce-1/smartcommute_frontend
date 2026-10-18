@@ -4,7 +4,8 @@ import 'package:latlong2/latlong.dart';
 // One frame from WSS /ws/live (broadcast by the backend's gps_ingestion).
 //
 //   {"vehicle_id", "lat", "lng", "speed", "heading", "ts",
-//    "status", "crowd", "eta_next_stop", "next_stop", "traffic"}
+//    "status", "crowd", "eta_next_stop", "next_stop", "traffic",
+//    "duty_status"}
 //
 // signal_lost frames have NO lat/lng/ts — only vehicle_id + status —
 // so [location] and [timestamp] are nullable.
@@ -20,6 +21,7 @@ class VehicleLiveUpdate {
     this.etaNextStop,
     this.nextStop,
     this.traffic,
+    this.dutyStatus,
   });
 
   final String vehicleId;
@@ -32,8 +34,12 @@ class VehicleLiveUpdate {
   final int? etaNextStop; // minutes at current traffic speed, -1 when unknown
   final String? nextStop; // name of the stop the jeep reaches next
   final String? traffic; // "light" | "moderate" | "heavy" on this route now
+  final String? dutyStatus; // driver's Route Status: on_route | delayed | unavailable
 
   bool get isSignalLost => status == 'signal_lost';
+
+  /// The driver marked the trip Unavailable, so it can't be boarded.
+  bool get isUnavailable => dutyStatus == 'unavailable';
 
   factory VehicleLiveUpdate.fromJson(Map<String, dynamic> json) {
     final lat = json['lat'] as num?;
@@ -52,6 +58,7 @@ class VehicleLiveUpdate {
       etaNextStop: (json['eta_next_stop'] as num?)?.toInt(),
       nextStop: json['next_stop'] as String?,
       traffic: json['traffic'] as String?,
+      dutyStatus: json['duty_status'] as String?,
     );
   }
 
@@ -71,6 +78,7 @@ class VehicleLiveUpdate {
         timestamp: timestamp,
         crowd: update.crowd ?? crowd,
         etaNextStop: update.etaNextStop,
+        dutyStatus: update.dutyStatus ?? dutyStatus,
       );
     }
 
