@@ -169,6 +169,33 @@
   vertical-align: middle;
 }
 
+/* ---------- Driver monitoring (driverActivity.js) ---------- */
+
+.op-activity__heading {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--admin-ink);
+}
+
+.op-activity__map {
+  height: 260px;
+  margin-bottom: 0;
+}
+
+.op-activity__log {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.data-table tr.op-row--clickable {
+  cursor: pointer;
+}
+
+.data-table tr.op-row--clickable:hover td {
+  background: var(--op-soft);
+}
+
 .op-vehicle-marker {
   width: 18px;
   height: 18px;

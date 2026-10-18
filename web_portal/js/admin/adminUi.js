@@ -230,6 +230,7 @@ const AdminUi = (() => {
 
 const AdminModal = (() => {
   let backdrop = null;
+  let closeHook = null;
 
   function onKeydown(e) {
     if (e.key === 'Escape') close();
@@ -239,9 +240,11 @@ const AdminModal = (() => {
    * Opens a modal. `actions` render in the footer; each gets
    * { label, variant, onClick } where onClick may return a promise —
    * buttons are disabled while it runs and errors show inside the modal.
+   * `onClose` runs once when the modal goes away (e.g. to remove a map).
    */
-  function open({ title, body, actions = [], size = '' }) {
+  function open({ title, body, actions = [], size = '', onClose = null }) {
     close();
+    closeHook = onClose;
     backdrop = document.createElement('div');
     backdrop.className = 'admin-modal-backdrop';
     backdrop.innerHTML = `
@@ -290,6 +293,9 @@ const AdminModal = (() => {
     backdrop.remove();
     backdrop = null;
     document.removeEventListener('keydown', onKeydown);
+    const hook = closeHook;
+    closeHook = null;
+    if (hook) hook();
   }
 
   /** Resolves true when confirmed (after `onConfirm` succeeds). */

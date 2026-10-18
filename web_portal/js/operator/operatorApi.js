@@ -36,6 +36,8 @@ const OperatorApi = {
   updateDriver: (id, changes) => ApiClient.patch(`/drivers/${id}`, changes),
   updateDriverAccount: (id, changes) => ApiClient.patch(`/drivers/${id}/account`, changes),
   deleteDriver: (id) => ApiClient.delete(`/drivers/${id}`),
+  /** Driver monitoring: { name, on_shift, duty_status, current_location, events[] }. */
+  driverActivity: (id) => ApiClient.get(`/drivers/${id}/activity`),
   addVehicle: ({ plate_number, route_id, driver_id }) =>
     ApiClient.post('/vehicles', { plate_number, route_id, driver_id: driver_id || null }),
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),

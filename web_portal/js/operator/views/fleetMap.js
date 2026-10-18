@@ -86,8 +86,25 @@ OperatorRouter.register('fleet', {
 
     function popupHtml(v) {
       const ping = v.last_position?.timestamp ? OperatorUi.timeAgo(v.last_position.timestamp) : 'No GPS yet';
+      // Driver monitoring entry point from the map (see the popupopen hook below).
+      const activity = v.driver_id
+        ? `<br><button type="button" class="btn-sm btn-sm--teal" style="margin-top:6px;"
+             data-driver-activity="${esc(v.driver_id)}" data-plate="${esc(v.plate_number)}">Driver activity</button>`
+        : '';
       return `<strong>${esc(v.plate_number)}</strong><br>${esc(routeLabel(v.route_id))}<br>
-        Status: ${esc(v.suspended ? 'suspended' : v.status)}<br>Last GPS: ${esc(ping)}`;
+        Status: ${esc(v.suspended ? 'suspended' : v.status)}<br>Last GPS: ${esc(ping)}${activity}`;
+    }
+
+    // Leaflet stops clicks inside popups from bubbling, so the button is
+    // wired each time a popup opens rather than delegated from `el`.
+    if (map) {
+      map.on('popupopen', (e) => {
+        const btn = e.popup.getElement()?.querySelector('[data-driver-activity]');
+        if (!btn) return;
+        btn.addEventListener('click', () => {
+          DriverActivity.open(btn.dataset.driverActivity, { title: `Driver of ${btn.dataset.plate} — Activity` });
+        });
+      });
     }
 
     function markerStatus(v) {

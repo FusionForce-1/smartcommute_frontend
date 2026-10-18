@@ -3,11 +3,15 @@
 // Home tab: destination search, Live Map, quick actions and the
 // "Nearby Vehicles" list. Opens the live vehicle socket and animates
 // one smoothed track per jeep.
+//
+// The floating "Nearby Vehicles" button opens a sheet of available jeeps;
+// picking one (there or in the list) draws a line on the Live Map from
+// that jeep's live position to the commuter (LiveMap.selectedVehicleId).
 
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart' show ValueListenable, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -74,6 +78,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   // data instead of on every animation frame.
   final ValueNotifier<int> _fleetVersion = ValueNotifier(0);
 
+  /// The jeep picked from "Nearby Vehicles"; LiveMap draws a line from it to us.
+  String? _selectedVehicleId;
+
   late final WebSocketService _socket;
 
   @override
@@ -135,31 +142,79 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _socket.connect();
   }
 
-  /// Live jeeps on a known route, nearest first (or soonest, without GPS).
-  List<({TransportRoute route, VehicleLiveUpdate update})> _nearbyVehicles() {
+  /// Available live jeeps on a known route, nearest first (or soonest,
+  /// without GPS). Signal-lost jeeps and drivers set to Unavailable are left
+  /// out: they can't be boarded.
+  List<NearbyVehicle> _nearbyVehicles({int limit = _maxNearby}) {
     final routesById = {for (final r in widget.routes) r.id: r};
     final routeByVehicle = {
       for (final v in widget.vehicles) v.id: routesById[v.routeId],
     };
 
+    final here = _currentLocation;
+    const distance = Distance();
     final live = [
       for (final track in _tracks.values)
-        if (!track.latest.isSignalLost && track.latest.location != null)
+        if (!track.latest.isSignalLost && !track.latest.isUnavailable && track.latest.location != null)
           if (routeByVehicle[track.latest.vehicleId] case final route?)
-            (route: route, update: track.latest),
+            (
+              route: route,
+              update: track.latest,
+              metres: here == null ? null : distance.as(LengthUnit.Meter, here, track.latest.location!),
+            ),
     ];
 
-    final here = _currentLocation;
     if (here != null) {
-      const distance = Distance();
-      double metresTo(VehicleLiveUpdate u) => distance.as(LengthUnit.Meter, here, u.location!);
-      live.sort((a, b) => metresTo(a.update).compareTo(metresTo(b.update)));
+      live.sort((a, b) => a.metres!.compareTo(b.metres!));
     } else {
       int eta(VehicleLiveUpdate u) => _etaMinutes(u) ?? 1 << 30;
       live.sort((a, b) => eta(a.update).compareTo(eta(b.update)));
     }
-    return live.take(_maxNearby).toList();
+    return live.take(limit).toList();
   }
+
+  // ---------- Nearby Vehicles → line on the map ----------
+
+  /// The floating button: makes sure we know where the commuter is (the line
+  /// ends there), then lists available jeeps to pick from.
+  Future<void> _openNearbyVehicles() async {
+    if (_currentLocation == null && await _locate() == null) return;
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.backgroundIceBlue,
+      builder: (sheetContext) => _NearbyVehiclesSheet(
+        fleetVersion: _fleetVersion,
+        vehicles: () => _nearbyVehicles(limit: 20),
+        etaOf: _etaMinutes,
+        selectedId: _selectedVehicleId,
+      ),
+    );
+    if (picked != null) _selectVehicle(picked);
+  }
+
+  /// Draws (or, tapped again, clears) the line from [vehicleId] to us and
+  /// frames both ends on the map.
+  void _selectVehicle(String vehicleId) {
+    if (_selectedVehicleId == vehicleId) return _clearSelectedVehicle();
+    setState(() => _selectedVehicleId = vehicleId);
+    final from = _tracks[vehicleId]?.positionAt(_clock.elapsed);
+    final to = _currentLocation;
+    if (!_mapReady || from == null) return;
+    if (to == null) {
+      _showMessage('Turn on location to see the line from this vehicle to you.');
+      _mapController.move(from, 16);
+      return;
+    }
+    _mapController.fitCamera(CameraFit.coordinates(
+      coordinates: [from, to],
+      padding: const EdgeInsets.all(56),
+      maxZoom: 17,
+    ));
+  }
+
+  void _clearSelectedVehicle() => setState(() => _selectedVehicleId = null);
 
   int? _etaMinutes(VehicleLiveUpdate update) {
     final eta = update.etaNextStop;
@@ -201,6 +256,13 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   }
 
   Future<void> _centerOnMyLocation() async {
+    final here = await _locate();
+    if (here != null) _mapController.move(here, 15);
+  }
+
+  /// Asks for permission if needed, takes a fix and starts following the
+  /// phone. Returns null (after telling the commuter why) on failure.
+  Future<LatLng?> _locate() async {
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -208,18 +270,19 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       _showMessage('Location permission was not granted.');
-      return;
+      return null;
     }
 
     try {
       final position = await Geolocator.getCurrentPosition();
-      if (!mounted) return;
+      if (!mounted) return null;
       final here = LatLng(position.latitude, position.longitude);
       _setCurrentLocation(here);
-      _mapController.move(here, 15);
       _startFollowing();
+      return here;
     } catch (_) {
       _showMessage('Unable to get your current location.');
+      return null;
     }
   }
 
@@ -282,8 +345,31 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    // The Stack keeps the "Nearby Vehicles" button in place while the
+    // list scrolls under it.
+    return Stack(
+      children: [
+        _buildContent(context),
+        Positioned(
+          right: AppSpacing.md,
+          bottom: AppSpacing.md,
+          child: FloatingActionButton.extended(
+            heroTag: 'nearby-vehicles',
+            onPressed: _openNearbyVehicles,
+            backgroundColor: AppColors.brandTeal,
+            foregroundColor: Colors.white,
+            icon: const Icon(AppIcons.vehicle),
+            label: const Text('Nearby Vehicles'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      // Extra bottom room so the floating button never hides the last card.
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 88),
       children: [
         _SearchField(onTap: _searchDestination),
         const SizedBox(height: AppSpacing.md),
@@ -297,6 +383,8 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             frame: _frame,
             currentLocation: _currentLocation,
             onMapReady: _onMapReady,
+            selectedVehicleId: _selectedVehicleId,
+            onClearSelection: _clearSelectedVehicle,
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -321,6 +409,8 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           builder: (context, _, __) => _NearbyList(
             vehicles: _nearbyVehicles(),
             etaOf: _etaMinutes,
+            selectedId: _selectedVehicleId,
+            onSelected: _selectVehicle,
           ),
         ),
       ],
@@ -363,11 +453,21 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _NearbyList extends StatelessWidget {
-  const _NearbyList({required this.vehicles, required this.etaOf});
+/// A live jeep in "Nearby Vehicles"; [metres] is null without our location.
+typedef NearbyVehicle = ({TransportRoute route, VehicleLiveUpdate update, double? metres});
 
-  final List<({TransportRoute route, VehicleLiveUpdate update})> vehicles;
+class _NearbyList extends StatelessWidget {
+  const _NearbyList({
+    required this.vehicles,
+    required this.etaOf,
+    required this.selectedId,
+    required this.onSelected,
+  });
+
+  final List<NearbyVehicle> vehicles;
   final int? Function(VehicleLiveUpdate) etaOf;
+  final String? selectedId;
+  final ValueChanged<String> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -384,8 +484,86 @@ class _NearbyList extends StatelessWidget {
             routeCode: v.route.code,
             routeName: v.route.name,
             etaMinutes: etaOf(v.update),
+            distanceM: v.metres,
+            delayed: v.update.dutyStatus == 'delayed',
+            selected: v.update.vehicleId == selectedId,
+            onTap: () => onSelected(v.update.vehicleId),
           ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet behind the "Nearby Vehicles" button. Re-reads the list on
+/// every socket message, and pops with the picked vehicle's id.
+class _NearbyVehiclesSheet extends StatelessWidget {
+  const _NearbyVehiclesSheet({
+    required this.fleetVersion,
+    required this.vehicles,
+    required this.etaOf,
+    required this.selectedId,
+  });
+
+  final ValueListenable<int> fleetVersion;
+  final List<NearbyVehicle> Function() vehicles;
+  final int? Function(VehicleLiveUpdate) etaOf;
+  final String? selectedId;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Nearby Vehicles',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Pick one to see the line from it to you on the map.',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Flexible(
+                child: ValueListenableBuilder<int>(
+                  valueListenable: fleetVersion,
+                  builder: (context, _, __) {
+                    final list = vehicles();
+                    if (list.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.md),
+                        child: Text('No available vehicles nearby right now.'),
+                      );
+                    }
+                    return ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      children: [
+                        for (final v in list)
+                          NearbyVehicleCard(
+                            routeCode: v.route.code,
+                            routeName: v.route.name,
+                            etaMinutes: etaOf(v.update),
+                            distanceM: v.metres,
+                            delayed: v.update.dutyStatus == 'delayed',
+                            selected: v.update.vehicleId == selectedId,
+                            onTap: () => Navigator.of(context).pop(v.update.vehicleId),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

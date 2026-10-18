@@ -3,6 +3,10 @@
 // Live Map card: OSM tiles locked to the service area, stop photo pins,
 // animated vehicle markers, the commuter's location and zoom buttons.
 // Owns no state — the Home tab feeds it data and the map controller.
+//
+// With [selectedVehicleId] set (picked from "Nearby Vehicles") it draws a
+// line from that jeep's animated position to [currentLocation], redrawn
+// on the same per-frame tick as the markers so the line follows the jeep.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -25,6 +29,8 @@ class LiveMap extends StatelessWidget {
     required this.frame,
     required this.onMapReady,
     this.currentLocation,
+    this.selectedVehicleId,
+    this.onClearSelection,
   });
 
   final MapController controller;
@@ -37,6 +43,12 @@ class LiveMap extends StatelessWidget {
 
   final VoidCallback onMapReady;
   final LatLng? currentLocation;
+
+  /// Jeep to draw the "vehicle → you" line from; [onClearSelection] hides it.
+  final String? selectedVehicleId;
+  final VoidCallback? onClearSelection;
+
+  static const Color _selectionLine = AppColors.brandTeal;
 
   void _zoomBy(double delta) {
     final camera = controller.camera;
@@ -73,6 +85,27 @@ class LiveMap extends StatelessWidget {
             urlTemplate: MapConfig.tileUrl,
             userAgentPackageName: MapConfig.userAgentPackageName,
           ),
+          // Vehicle → you, under the markers so both ends stay visible.
+          if ((selectedVehicleId, currentLocation) case (final id?, final here?))
+            ValueListenableBuilder<int>(
+              valueListenable: frame,
+              builder: (context, _, __) {
+                final from = tracks[id]?.positionAt(clock.elapsed);
+                return PolylineLayer(
+                  polylines: [
+                    if (from != null)
+                      Polyline(
+                        points: [from, here],
+                        strokeWidth: 5,
+                        color: _selectionLine,
+                        borderStrokeWidth: 2,
+                        borderColor: Colors.white,
+                        pattern: StrokePattern.dashed(segments: const [14, 8]),
+                      ),
+                  ],
+                );
+              },
+            ),
           if (currentLocation case final here?)
             MarkerLayer(
               markers: [
@@ -122,7 +155,33 @@ class LiveMap extends StatelessWidget {
             ],
           ),
           _ZoomButtons(onZoom: _zoomBy),
+          if (selectedVehicleId != null && onClearSelection != null)
+            _ClearSelectionChip(onPressed: onClearSelection!),
         ],
+      ),
+    );
+  }
+}
+
+/// Top-left "✕ Hide line" chip shown while a vehicle is selected.
+class _ClearSelectionChip extends StatelessWidget {
+  const _ClearSelectionChip({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        child: ActionChip(
+          avatar: const Icon(Icons.close, size: 18, color: LiveMap._selectionLine),
+          label: const Text('Hide line'),
+          backgroundColor: Colors.white,
+          elevation: 3,
+          onPressed: onPressed,
+        ),
       ),
     );
   }
