@@ -8,6 +8,7 @@ AdminRouter.register('dashboard', {
 
   mount(el) {
     const RECENT_USERS = 5;
+    const VISIBLE_PENDING = 2; // more than this and the list scrolls
     const HEALTH_POLL_MS = 30000;
 
     // undefined = still loading (skeleton), null = failed to load ("—")
@@ -21,7 +22,7 @@ AdminRouter.register('dashboard', {
       <div class="panel-grid">
         ${AdminUi.panel({ title: 'User Accounts', bodyId: 'dash-users', panelClass: 'panel--fill' })}
         <div class="panel-stack">
-          ${AdminUi.panel({ title: 'Pending Operator Verification', bodyId: 'dash-pending' })}
+          ${AdminUi.panel({ title: 'Pending Operator Verification', bodyId: 'dash-pending', bodyClass: 'panel__body--scroll' })}
           ${AdminUi.panel({ title: 'System Health Monitor', bodyId: 'dash-health' })}
         </div>
       </div>`;
@@ -62,7 +63,19 @@ AdminRouter.register('dashboard', {
       return AdminUi.loadInto(pendingEl, () => AdminApi.listOperators('pending'), (list) => {
         pending = list;
         pendingEl.innerHTML = AdminUi.pendingOperatorList(pending);
+        fitPending();
       });
+    }
+
+    /** Show exactly VISIBLE_PENDING operators; the rest scroll inside the panel. */
+    function fitPending() {
+      pendingEl.style.maxHeight = '';
+      const items = pendingEl.querySelectorAll('.pending-item');
+      if (items.length <= VISIBLE_PENDING) return;
+      const lastVisible = items[VISIBLE_PENDING - 1].getBoundingClientRect().bottom;
+      // A little room under the last item, but less than the list gap so
+      // the next item stays hidden until scrolled to.
+      pendingEl.style.maxHeight = `${lastVisible - pendingEl.getBoundingClientRect().top + 16}px`;
     }
 
     function renderHealth(h) {
@@ -101,6 +114,11 @@ AdminRouter.register('dashboard', {
     const timer = setInterval(() => {
       AdminApi.systemHealth().then(renderHealth).catch(() => {});
     }, HEALTH_POLL_MS);
-    return () => clearInterval(timer);
+    // Names can wrap differently at another width, changing item heights.
+    window.addEventListener('resize', fitPending);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('resize', fitPending);
+    };
   },
 });

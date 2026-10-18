@@ -90,6 +90,7 @@ const ApiClient = (() => {
     post: (path, body) => send('POST', path, body),
     /** POST a FormData body (multipart file upload). */
     upload: (path, formData) => send('POST', path, formData),
+    put: (path, body) => send('PUT', path, body),
     patch: (path, body) => send('PATCH', path, body),
     delete: (path) => send('DELETE', path),
   };

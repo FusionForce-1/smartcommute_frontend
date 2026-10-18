@@ -32,6 +32,29 @@ const OperatorApp = (() => {
     window.location.replace(LOGIN_URL);
   }
 
+  // A tracker label's QR code opens operator.html?claim=CODE. The code is
+  // kept in this tab (sessionStorage) so it survives a trip to the login page.
+  const PENDING_CLAIM_KEY = 'sc_pending_claim';
+
+  function rememberClaimFromUrl() {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('claim')) return;
+    try { sessionStorage.setItem(PENDING_CLAIM_KEY, params.get('claim')); } catch { /* private mode */ }
+    params.delete('claim');
+    const query = params.toString();
+    history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}#/vehicles`);
+  }
+
+  function takePendingClaim() {
+    try {
+      const code = sessionStorage.getItem(PENDING_CLAIM_KEY);
+      sessionStorage.removeItem(PENDING_CLAIM_KEY);
+      return code;
+    } catch {
+      return null;
+    }
+  }
+
   // Same sidebar markup as the admin portal (see adminApp.js), styled by admin.css.
   function navLink({ route, label, icon }) {
     return `
@@ -107,6 +130,7 @@ const OperatorApp = (() => {
   }
 
   function start() {
+    rememberClaimFromUrl();
     if (!Session.accessToken || Session.role !== 'operator') {
       redirectToLogin();
       return;
@@ -119,6 +143,9 @@ const OperatorApp = (() => {
     document.getElementById('op-subscription').addEventListener('click', OperatorSubscription.open);
     // Back from PayPal (?paypal=return|cancel): reopen the Subscription popup.
     if (new URLSearchParams(location.search).has('paypal')) OperatorSubscription.open();
+    // Scanned a tracker label: go straight to claiming it.
+    const claim = takePendingClaim();
+    if (claim) TrackerSetup.claimFromLabel(claim);
   }
 
   return { start };

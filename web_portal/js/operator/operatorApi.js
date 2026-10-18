@@ -43,6 +43,15 @@ const OperatorApi = {
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),
   deleteVehicle: (id) => ApiClient.delete(`/vehicles/${id}`),
   issueDeviceKey: (id) => ApiClient.post(`/vehicles/${id}/device-key`),
+  // GPS tracker setup by claim code (js/operator/trackerSetup.js)
+  claimTracker: ({ claim_code, vehicle_id, networks }) =>
+    ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks }),
+  trackerSetupStatus: (deviceId) => ApiClient.get(`/devices/${encodeURIComponent(deviceId)}`),
+  // Remote WiFi for an online tracker (js/operator/trackerSetup.js -> openWifi)
+  trackerWifi: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-wifi`),
+  setTrackerWifi: (vehicleId, networks) => ApiClient.put(`/vehicles/${vehicleId}/tracker-wifi`, { networks }),
+  trackerFirmware: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-firmware`),
+  updateTrackerFirmware: (vehicleId) => ApiClient.post(`/vehicles/${vehicleId}/tracker-firmware/update`),
 
   // ---- Routes ----
   myRoutes: () => ApiClient.get('/routes/mine'),

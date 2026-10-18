@@ -264,6 +264,13 @@ body.admin-body {
   padding: 0;
 }
 
+/* Long lists scroll inside the panel; the view sets max-height (the
+   dashboard shows 2 pending operators, then scrolls). */
+.panel__body--scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .panel--fill {
   min-height: 40rem;
 }
