@@ -1,7 +1,7 @@
 // lib/screens/commuter/profile.dart
 //
-// Profile tab: header with stats, saved routes, notification choices and
-// account links. State lives in ProfileProvider (owned by the dashboard);
+// Profile tab: header with stats, "Rate Your Ride" (review the jeep and
+// driver), saved routes, notification choices and account links. State lives in ProfileProvider (owned by the dashboard);
 // guests get a sign-in prompt instead.
 
 import 'package:flutter/material.dart';
@@ -10,12 +10,15 @@ import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../models/commuter_profile.dart';
+import '../../models/ride_review.dart';
+import '../../models/vehicles.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/load_state.dart';
 import '../../providers/profile_provider.dart';
 import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/profile_header.dart';
+import '../../widgets/commuter/review_ride_sheet.dart';
 import '../../widgets/commuter/save_route_sheet.dart';
 import '../../widgets/commuter/saved_route_tile.dart';
 import '../../widgets/commuter/settings_group.dart';
@@ -26,6 +29,7 @@ class ProfileTab extends StatelessWidget {
     required this.isGuest,
     required this.stops,
     required this.routes,
+    this.vehicles = const [],
     required this.onOpenSavedRoute,
     required this.onSignOut,
     required this.onCreateAccount,
@@ -34,6 +38,9 @@ class ProfileTab extends StatelessWidget {
   final bool isGuest;
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
+
+  /// Jeeps by plate, for "Rate Your Ride".
+  final List<Vehicle> vehicles;
 
   /// Plans the saved route on the Route tab (handled by the dashboard).
   final ValueChanged<SavedRoute> onOpenSavedRoute;
@@ -70,6 +77,12 @@ class ProfileTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const _SectionTitle('Rate Your Ride'),
+                _RateYourRide(
+                  reviews: profile.reviews,
+                  onWrite: () => _writeReview(context, profile),
+                ),
+                const SizedBox(height: AppSpacing.sm),
                 _SectionTitle(
                   'Saved Routes',
                   action: TextButton(
@@ -143,6 +156,21 @@ class ProfileTab extends StatelessWidget {
     await _report(context, profile.rename(name));
   }
 
+  Future<void> _writeReview(BuildContext context, ProfileProvider profile) async {
+    if (routes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Routes are still loading. Please try again in a moment.')),
+      );
+      return;
+    }
+    final sent = await showReviewRideSheet(context, profile: profile, routes: routes, vehicles: vehicles);
+    if (sent == true && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thanks! Your review was sent to the operator.')),
+      );
+    }
+  }
+
   Future<void> _confirmRemove(BuildContext context, SavedRoute route) async {
     final profile = context.read<ProfileProvider>();
     final remove = await showDialog<bool>(
@@ -191,6 +219,84 @@ void _comingSoon(BuildContext context) {
   ScaffoldMessenger.of(context).showSnackBar(
     const SnackBar(content: Text('This page is coming soon.')),
   );
+}
+
+/// "Rate Your Ride": a button to review a ride, and the latest reviews sent.
+class _RateYourRide extends StatelessWidget {
+  const _RateYourRide({required this.reviews, required this.onWrite});
+
+  final List<RideReview> reviews;
+  final VoidCallback onWrite;
+
+  static String _stars(int n) => '${'★' * n}${'☆' * (5 - n)}';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(AppSpacing.xs),
+        border: Border.all(color: AppColors.divider, width: 1.4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const CircleAvatar(
+                backgroundColor: AppColors.brandTeal,
+                foregroundColor: Colors.white,
+                child: Icon(Icons.rate_review_outlined),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const Expanded(
+                child: Text(
+                  'How was your jeepney ride? Rate the driver and the jeep — it helps operators improve.',
+                  style: TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FilledButton.icon(
+            onPressed: onWrite,
+            style: FilledButton.styleFrom(backgroundColor: AppColors.brandTeal),
+            icon: const Icon(Icons.star_rounded),
+            label: const Text('Write a review'),
+          ),
+          for (final r in reviews.take(2)) ...[
+            const Divider(height: AppSpacing.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_stars(r.rating), style: const TextStyle(color: Color(0xFFF5A623), fontSize: 15)),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        [r.routeCode, r.plateNumber].whereType<String>().join(' · '),
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      if (r.comment != null || r.tags.isNotEmpty)
+                        Text(
+                          r.comment ?? r.tags.map(ReviewTag.labelOf).join(', '),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionTitle extends StatelessWidget {

@@ -193,6 +193,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       isGuest: widget.isGuest,
                       stops: _stops,
                       routes: _routes,
+                      vehicles: _vehicles,
                       onOpenSavedRoute: _openSavedRoute,
                       onSignOut: _signOut,
                       onCreateAccount: () => _signOut(createAccount: true),

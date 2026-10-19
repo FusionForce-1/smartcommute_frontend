@@ -95,16 +95,17 @@ OperatorRouter.register('fleet', {
         Status: ${esc(v.suspended ? 'suspended' : v.status)}<br>Last GPS: ${esc(ping)}${activity}`;
     }
 
-    // Leaflet stops clicks inside popups from bubbling, so the button is
-    // wired each time a popup opens rather than delegated from `el`.
+    // "Driver activity" inside a vehicle popup. Listened for on the map in the
+    // capture phase: Leaflet stops clicks in popups from bubbling, and the
+    // popup's content is refreshed with live GPS, which would drop a listener
+    // attached to the button itself.
     if (map) {
-      map.on('popupopen', (e) => {
-        const btn = e.popup.getElement()?.querySelector('[data-driver-activity]');
+      map.getContainer().addEventListener('click', (e) => {
+        const btn = e.target.closest?.('[data-driver-activity]');
         if (!btn) return;
-        btn.addEventListener('click', () => {
-          DriverActivity.open(btn.dataset.driverActivity, { title: `Driver of ${btn.dataset.plate} — Activity` });
-        });
-      });
+        e.preventDefault();
+        DriverActivity.open(btn.dataset.driverActivity, { title: `Driver of ${btn.dataset.plate} — Activity` });
+      }, true);
     }
 
     function markerStatus(v) {
@@ -119,14 +120,24 @@ OperatorRouter.register('fleet', {
         if (!pos) return;
         seen.add(v.vehicle_id);
         const latLng = [pos.lat, pos.lng];
+        const status = markerStatus(v);
         let marker = markers.get(v.vehicle_id);
         if (!marker) {
-          marker = L.marker(latLng, { icon: markerIcon(markerStatus(v)) }).addTo(vehicleLayer);
+          marker = L.marker(latLng, { icon: markerIcon(status) }).addTo(vehicleLayer);
+          marker.bindPopup(popupHtml(v));
+          marker._opStatus = status;
           markers.set(v.vehicle_id, marker);
         } else {
-          marker.setLatLng(latLng).setIcon(markerIcon(markerStatus(v)));
+          marker.setLatLng(latLng);
+          // Rebuilding the icon on every GPS update swapped the element under
+          // the pointer, so taps on a moving jeep were lost: only on a change.
+          if (marker._opStatus !== status) {
+            marker.setIcon(markerIcon(status));
+            marker._opStatus = status;
+          }
+          const html = popupHtml(v);
+          if (marker.getPopup()?.getContent() !== html) marker.setPopupContent(html);
         }
-        marker.bindPopup(popupHtml(v));
       });
       markers.forEach((marker, id) => {
         if (!seen.has(id)) {

@@ -38,6 +38,8 @@ const OperatorApi = {
   deleteDriver: (id) => ApiClient.delete(`/drivers/${id}`),
   /** Driver monitoring: { name, on_shift, duty_status, current_location, events[] }. */
   driverActivity: (id) => ApiClient.get(`/drivers/${id}/activity`),
+  /** Commuters' ride reviews of this operator's drivers (+ per-driver summary). */
+  driverReviews: (driverId) => ApiClient.get('/reviews/operator', driverId ? { driver_id: driverId } : undefined),
   addVehicle: ({ plate_number, route_id, driver_id }) =>
     ApiClient.post('/vehicles', { plate_number, route_id, driver_id: driver_id || null }),
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),

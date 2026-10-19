@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/commuter_profile.dart';
+import '../models/ride_review.dart';
 
 class ProfileService {
   ProfileService(this._dio);
@@ -51,6 +52,31 @@ class ProfileService {
   }
 
   Future<void> deleteSavedRoute(String id) => _dio.delete('/users/me/saved-routes/$id');
+
+  /// Rates a ride: [vehicleId] null when the commuter didn't catch the plate.
+  Future<RideReview> submitReview({
+    required String routeId,
+    String? vehicleId,
+    required int rating,
+    required List<String> tags,
+    String? comment,
+  }) async {
+    final response = await _dio.post('/reviews', data: {
+      'route_id': routeId,
+      if (vehicleId != null) 'vehicle_id': vehicleId,
+      'rating': rating,
+      'tags': tags,
+      if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+    });
+    return RideReview.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<List<RideReview>> myReviews() async {
+    final response = await _dio.get('/reviews/mine', queryParameters: {'limit': 10});
+    return [
+      for (final item in response.data as List<dynamic>) RideReview.fromJson(item as Map<String, dynamic>),
+    ];
+  }
 
   Future<void> recordTrip({
     required List<String> routeIds,
