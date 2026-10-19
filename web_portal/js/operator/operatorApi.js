@@ -57,13 +57,17 @@ const OperatorApi = {
   myRoutes: () => ApiClient.get('/routes/mine'),
   /** Active routes with their map geometry (public list). */
   mapRoutes: () => ApiClient.get('/routes'),
-  createRoute: ({ code, name, origin, destination, baseFare }) =>
+  createRoute: ({ code, name, origin, destination, baseFare, originAt, destinationAt, path }) =>
     ApiClient.post('/routes', {
       code,
       name,
       terminal_a: origin,
       terminal_b: destination,
       fare_matrix: { base: baseFare },
+      // Pinned on the Create Route map ([lng, lat]); optional.
+      ...(originAt ? { terminal_a_location: { type: 'Point', coordinates: originAt } } : {}),
+      ...(destinationAt ? { terminal_b_location: { type: 'Point', coordinates: destinationAt } } : {}),
+      ...(path ? { geometry: { type: 'LineString', coordinates: path } } : {}),
     }),
   setRouteActive: (id, isActive) => ApiClient.patch(`/routes/${id}/active`, { is_active: isActive }),
   deleteRoute: (id) => ApiClient.delete(`/routes/${id}`),

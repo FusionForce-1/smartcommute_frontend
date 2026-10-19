@@ -44,8 +44,12 @@ OperatorRouter.register('routes', {
 
     // ---------- Create form ----------
 
+    let formPicker = null;   // the Origin/Destination map while the form is open
+
     function renderForm() {
       toggleBtn.textContent = showForm ? '✕ Cancel' : '＋ Add Route';
+      formPicker?.destroy();
+      formPicker = null;
       if (!showForm) {
         formSlot.innerHTML = '';
         return;
@@ -64,16 +68,12 @@ OperatorRouter.register('routes', {
               <input id="rf-name" maxlength="80" placeholder="e.g. Talamban – Pier 1" />
             </div>
             <div class="op-field">
-              <label for="rf-origin">Origin</label>
-              <input id="rf-origin" maxlength="80" placeholder="Starting terminal" />
-            </div>
-            <div class="op-field">
-              <label for="rf-destination">Destination</label>
-              <input id="rf-destination" maxlength="80" placeholder="End terminal" />
-            </div>
-            <div class="op-field">
               <label for="rf-fare">Base Fare (₱)</label>
               <input id="rf-fare" type="number" min="0.01" max="9999" step="0.01" placeholder="13" />
+            </div>
+            <div class="op-field op-field--full">
+              <label>Origin &amp; Destination</label>
+              <div id="rf-picker"></div>
             </div>
           </div>
           <div class="op-form__error" id="rf-error" hidden></div>
@@ -87,21 +87,47 @@ OperatorRouter.register('routes', {
       const errorEl = field('rf-error');
       const submit = field('rf-submit');
 
-      const values = () => ({
-        code: field('rf-code').value.trim().toUpperCase(),
-        name: field('rf-name').value.trim(),
-        origin: field('rf-origin').value.trim(),
-        destination: field('rf-destination').value.trim(),
-        baseFare: Number(field('rf-fare').value),
-      });
+      // The route name follows the terminals ("Carbon – Banawa") until the
+      // operator types a name of their own.
+      let nameIsAuto = true;
+      const short = (place) => String(place || '').split(',')[0].trim();
+
+      const values = () => {
+        const where = picker.value();
+        return {
+          code: field('rf-code').value.trim().toUpperCase(),
+          name: field('rf-name').value.trim(),
+          origin: where.origin?.name?.trim() || '',
+          destination: where.destination?.name?.trim() || '',
+          originAt: where.origin?.lng != null ? [where.origin.lng, where.origin.lat] : null,
+          destinationAt: where.destination?.lng != null ? [where.destination.lng, where.destination.lat] : null,
+          path: where.path,
+          baseFare: Number(field('rf-fare').value),
+        };
+      };
       const complete = (v) => v.code && v.name && v.origin && v.destination && v.baseFare > 0;
+      const refresh = () => {
+        errorEl.hidden = true;
+        submit.disabled = !complete(values());
+      };
+
+      const picker = RoutePicker.mount(field('rf-picker'), {
+        onChange: () => {
+          const v = values();
+          if (nameIsAuto && v.origin && v.destination) {
+            field('rf-name').value = `${short(v.origin)} – ${short(v.destination)}`.slice(0, 80);
+          }
+          refresh();
+        },
+      });
+      formPicker = picker;
 
       form.addEventListener('input', (e) => {
         if (e.target.id === 'rf-code') {
           e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, '');
         }
-        errorEl.hidden = true;
-        submit.disabled = !complete(values());
+        if (e.target.id === 'rf-name') nameIsAuto = !e.target.value.trim();
+        refresh();
       });
 
       form.addEventListener('submit', async (e) => {
@@ -254,5 +280,7 @@ OperatorRouter.register('routes', {
 
     renderForm();
     load();
+
+    return () => formPicker?.destroy();   // leaving the page: drop the map and its listeners
   },
 });
