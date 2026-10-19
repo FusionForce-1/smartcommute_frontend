@@ -43,6 +43,8 @@ class HomeTab extends StatefulWidget {
     required this.stops,
     required this.routes,
     required this.vehicles,
+    this.onUnknownVehicle,
+    this.onRefresh,
   });
 
   final List<TransportStop> stops;
@@ -50,6 +52,13 @@ class HomeTab extends StatefulWidget {
 
   /// Fleet list from /vehicles, used to tell which route a live jeep is on.
   final List<Vehicle> vehicles;
+
+  /// A live jeep isn't in [vehicles] / [routes] (added after they loaded):
+  /// asks the dashboard to load them again.
+  final VoidCallback? onUnknownVehicle;
+
+  /// "Refresh vehicle markers": reload stops, routes and vehicles now.
+  final VoidCallback? onRefresh;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -111,6 +120,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stops.isEmpty && widget.stops.isNotEmpty) _fitToStops();
+    // New vehicle / route lists: jeeps that were hidden may now be listed.
+    if (!identical(oldWidget.vehicles, widget.vehicles) || !identical(oldWidget.routes, widget.routes)) {
+      _fleetVersion.value++;
+    }
   }
 
   @override
@@ -142,6 +155,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _frame.value++;
     _fleetVersion.value++;
     if (!_ticker.isActive) _ticker.start();
+    // A jeep we can't place on a route is new to us: reload the lists so it
+    // shows up in Nearby Vehicles without restarting the app.
+    if (update.location != null && _routeOf(update.vehicleId) == null) widget.onUnknownVehicle?.call();
     // The selected jeep moved: refresh how far it is from the boarding spot.
     if (update.vehicleId == _selectedVehicleId &&
         DateTime.now().difference(_lastPlanAt) > const Duration(seconds: 3)) {
@@ -159,6 +175,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _frame.value++;
     _fleetVersion.value++;
     _socket.connect();
+    widget.onRefresh?.call();   // also pick up jeeps / routes added since the app opened
   }
 
   /// Available live jeeps on a known route, nearest first (or soonest,
