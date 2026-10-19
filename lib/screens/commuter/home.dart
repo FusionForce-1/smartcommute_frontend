@@ -5,8 +5,10 @@
 // one smoothed track per jeep.
 //
 // The floating "Nearby Vehicles" button opens a sheet of available jeeps;
-// picking one (there or in the list) draws a line on the Live Map from
-// that jeep's live position to the commuter (LiveMap.selectedVehicleId).
+// picking one (there or in the list) shows how to catch it: the closest
+// point on its route to the commuter (the shortest walk), the walking path
+// there with distance, steps and minutes, and how far the jeep still is
+// from that point (services/boarding_planner.dart).
 
 import 'dart:async';
 import 'dart:convert';
@@ -25,6 +27,9 @@ import '../../models/transport_stop.dart';
 import '../../models/vehicle_live_update.dart';
 import '../../models/vehicle_track.dart';
 import '../../models/vehicles.dart';
+import '../../services/boarding_planner.dart';
+import '../../services/place_search.dart';
+import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_action_tile.dart';
 import '../../widgets/commuter/live_map.dart';
@@ -78,8 +83,17 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   // data instead of on every animation frame.
   final ValueNotifier<int> _fleetVersion = ValueNotifier(0);
 
-  /// The jeep picked from "Nearby Vehicles"; LiveMap draws a line from it to us.
+  /// The jeep picked from "Nearby Vehicles"; we show how to catch it.
   String? _selectedVehicleId;
+
+  // How to catch the selected jeep (null until we know where both are).
+  BoardingPlan? _plan;
+  WalkingRoute? _walk;
+  String? _boardName;            // "near Fuente BRT Station"
+  LatLng? _walkPlannedTo;        // boarding spot the current _walk leads to
+  LatLng? _walkPlannedFrom;
+  DateTime _lastPlanAt = DateTime.fromMillisecondsSinceEpoch(0);
+  final WalkingRouteService _walking = WalkingRouteService();
 
   late final WebSocketService _socket;
 
@@ -128,6 +142,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _frame.value++;
     _fleetVersion.value++;
     if (!_ticker.isActive) _ticker.start();
+    // The selected jeep moved: refresh how far it is from the boarding spot.
+    if (update.vehicleId == _selectedVehicleId &&
+        DateTime.now().difference(_lastPlanAt) > const Duration(seconds: 3)) {
+      _updateBoarding();
+    }
   }
 
   void _onTick(Duration _) {
@@ -194,27 +213,92 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     if (picked != null) _selectVehicle(picked);
   }
 
-  /// Draws (or, tapped again, clears) the line from [vehicleId] to us and
-  /// frames both ends on the map.
+  /// Shows (or, tapped again, hides) how to catch [vehicleId], framing the
+  /// jeep, the commuter and the boarding spot on the map.
   void _selectVehicle(String vehicleId) {
     if (_selectedVehicleId == vehicleId) return _clearSelectedVehicle();
-    setState(() => _selectedVehicleId = vehicleId);
+    setState(() {
+      _selectedVehicleId = vehicleId;
+      _plan = null;
+      _walk = null;
+      _boardName = null;
+      _walkPlannedTo = null;
+    });
     final from = _tracks[vehicleId]?.positionAt(_clock.elapsed);
     final to = _currentLocation;
     if (!_mapReady || from == null) return;
     if (to == null) {
-      _showMessage('Turn on location to see the line from this vehicle to you.');
+      _showMessage('Turn on location to see how to reach this vehicle.');
       _mapController.move(from, 16);
       return;
     }
+    _updateBoarding();
     _mapController.fitCamera(CameraFit.coordinates(
-      coordinates: [from, to],
+      coordinates: [from, to, if (_plan != null) _plan!.boardAt],
       padding: const EdgeInsets.all(56),
       maxZoom: 17,
     ));
   }
 
-  void _clearSelectedVehicle() => setState(() => _selectedVehicleId = null);
+  void _clearSelectedVehicle() => setState(() {
+        _selectedVehicleId = null;
+        _plan = null;
+        _walk = null;
+        _boardName = null;
+        _walkPlannedTo = null;
+      });
+
+  TransportRoute? _routeOf(String vehicleId) {
+    for (final v in widget.vehicles) {
+      if (v.id != vehicleId) continue;
+      for (final r in widget.routes) {
+        if (r.id == v.routeId) return r;
+      }
+    }
+    return null;
+  }
+
+  /// Recomputes where to board the selected jeep; fetches a new walking
+  /// path only when the commuter or the boarding spot moved noticeably.
+  void _updateBoarding() {
+    final id = _selectedVehicleId;
+    final here = _currentLocation;
+    final jeep = id == null ? null : _tracks[id]?.positionAt(_clock.elapsed);
+    if (id == null || here == null || jeep == null) return;
+    _lastPlanAt = DateTime.now();
+    final plan = planBoarding(route: _routeOf(id)?.geometry ?? const [], user: here, jeep: jeep);
+    setState(() => _plan = plan);
+
+    const distance = Distance();
+    final movedSpot = _walkPlannedTo == null || distance.as(LengthUnit.Meter, _walkPlannedTo!, plan.boardAt) > 25;
+    final movedUser = _walkPlannedFrom == null || distance.as(LengthUnit.Meter, _walkPlannedFrom!, here) > 25;
+    if (!movedSpot && !movedUser) return;
+    _walkPlannedTo = plan.boardAt;
+    _walkPlannedFrom = here;
+    if (_walk == null) setState(() => _walk = WalkingRouteService.straight(here, plan.boardAt));
+    _walking.route(here, plan.boardAt).then((walk) {
+      if (!mounted || _selectedVehicleId != id) return;
+      setState(() => _walk = walk);
+    });
+    _nameBoardingSpot(plan.boardAt, id);
+  }
+
+  /// Names the boarding spot after the nearest stop or landmark ("near …").
+  Future<void> _nameBoardingSpot(LatLng spot, String vehicleId) async {
+    const distance = Distance();
+    String? name;
+    var best = 120.0;
+    for (final stop in widget.stops) {
+      final m = distance.as(LengthUnit.Meter, spot, stop.location);
+      if (m < best) { best = m; name = stop.name; }
+    }
+    if (name == null) {
+      final landmarks = await PlaceIndex.landmarks();
+      name = landmarks.nearest(spot, maxMetres: 150)?.place.name;
+    }
+    if (!mounted || _selectedVehicleId != vehicleId) return;
+    setState(() => _boardName = name);
+  }
 
   int? _etaMinutes(VehicleLiveUpdate update) {
     final eta = update.etaNextStop;
@@ -328,6 +412,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   void _setCurrentLocation(LatLng here) {
     if (!mounted) return;
     setState(() => _currentLocation = here);
+    if (_selectedVehicleId != null) _updateBoarding();
     // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
     final last = _lastSortedAt;
     if (last == null || const Distance().as(LengthUnit.Meter, last, here) > 25) {
@@ -385,8 +470,22 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             onMapReady: _onMapReady,
             selectedVehicleId: _selectedVehicleId,
             onClearSelection: _clearSelectedVehicle,
+            walkPath: _walk?.points,
+            boardAt: _plan?.boardAt,
+            jeepPath: _plan?.jeepPath,
           ),
         ),
+        if (_selectedVehicleId != null && _plan != null && _walk != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _BoardingCard(
+            routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'Jeep',
+            plan: _plan!,
+            walk: _walk!,
+            boardName: _boardName,
+            jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
+            onHide: _clearSelectedVehicle,
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         CommuterActionTile(
           icon: AppIcons.myLocation,
@@ -447,6 +546,89 @@ class _SearchField extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "How to catch it": the walk to the boarding spot and where the jeep is.
+class _BoardingCard extends StatelessWidget {
+  const _BoardingCard({
+    required this.routeCode,
+    required this.plan,
+    required this.walk,
+    required this.boardName,
+    required this.jeepSpeedKmh,
+    required this.onHide,
+  });
+
+  final String routeCode;
+  final BoardingPlan plan;
+  final WalkingRoute walk;
+  final String? boardName;
+  final double? jeepSpeedKmh;
+  final VoidCallback onHide;
+
+  static String _metres(double m) => m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
+
+  @override
+  Widget build(BuildContext context) {
+    final where = boardName == null ? 'the boarding spot' : 'near $boardName';
+    final jeep = plan.jeepToBoardM;
+    final String jeepLine;
+    if (!plan.onRoute) {
+      jeepLine = 'This route has no map line yet, so the walk goes to where the jeep is now.';
+    } else if (jeep == null) {
+      jeepLine = 'This $routeCode has already passed that spot. Wait there for the next one, or pick another vehicle.';
+    } else if (jeep < 30) {
+      jeepLine = 'The $routeCode is at that spot now.';
+    } else {
+      jeepLine = 'The $routeCode is ${_metres(jeep)} away along its route — about '
+          '${jeepMinutes(jeep, jeepSpeedKmh)} min to reach it.';
+    }
+    final walkMins = walk.minutes;
+    final shortWalk = walk.metres < 15;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.white,
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSpacing.xs),
+        side: const BorderSide(color: AppColors.brandTeal, width: 1.4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.sm, AppSpacing.sm, AppSpacing.xs, AppSpacing.sm),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 2, right: AppSpacing.sm),
+              child: Icon(Icons.directions_walk, color: AppColors.brandTeal, size: 28),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Catch the $routeCode', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    shortWalk
+                        ? 'You are already on its route — wait right where you are.'
+                        : 'Walk ${_metres(walk.metres)} · ≈ ${walk.steps} steps · $walkMins min to $where.',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  if (!walk.byRoad && !shortWalk)
+                    const Text('Straight-line estimate (walking directions unavailable).',
+                        style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                  const SizedBox(height: 4),
+                  Text(jeepLine, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            IconButton(tooltip: 'Hide', onPressed: onHide, icon: const Icon(Icons.close, size: 20)),
+          ],
         ),
       ),
     );
@@ -526,7 +708,7 @@ class _NearbyVehiclesSheet extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Pick one to see the line from it to you on the map.',
+                'Pick one to see the shortest walk to catch it.',
                 style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.sm),

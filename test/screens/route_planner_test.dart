@@ -7,6 +7,7 @@ import 'package:smartcommute_app/screens/commuter/find_routes_screen.dart';
 import 'package:smartcommute_app/screens/commuter/route.dart';
 import 'package:smartcommute_app/screens/commuter/route_map_screen.dart';
 import 'package:smartcommute_app/services/location_source.dart';
+import 'package:smartcommute_app/services/place_search.dart';
 import 'package:smartcommute_app/services/trip_plan_service.dart';
 import 'package:smartcommute_app/widgets/commuter/commuter_primary_button.dart';
 import 'package:smartcommute_app/widgets/fare_breakdown_sheet.dart';
@@ -158,13 +159,19 @@ void main() {
     expect(find.text('Open settings'), findsNothing);
   });
 
-  testWidgets('empty stop list shows a helpful message in the search sheet', (tester) async {
+  testWidgets('To searches Metro Cebu landmarks even with no saved stops', (tester) async {
     await pumpRouteTab(tester);
+    // The bundled landmark list loads from disk; let it finish outside fake time.
+    await tester.runAsync(PlaceIndex.landmarks);
 
     await tester.tap(find.text('Enter destination...'));
     await tester.pumpAndSettle();
+    expect(find.text('Where are you going?'), findsOneWidget);
 
-    expect(find.text('No stops available yet. Try "Pick on map".'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'sm city cebu');
+    await tester.pumpAndSettle();
+    expect(find.text('SM City Cebu'), findsOneWidget);
+    expect(find.textContaining('Search online for'), findsOneWidget);
   });
 
   testWidgets('Change departure time explains it is not available yet', (tester) async {

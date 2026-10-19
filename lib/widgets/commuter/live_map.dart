@@ -4,9 +4,13 @@
 // animated vehicle markers, the commuter's location and zoom buttons.
 // Owns no state — the Home tab feeds it data and the map controller.
 //
-// With [selectedVehicleId] set (picked from "Nearby Vehicles") it draws a
-// line from that jeep's animated position to [currentLocation], redrawn
-// on the same per-frame tick as the markers so the line follows the jeep.
+// With [selectedVehicleId] set (picked from "Nearby Vehicles") it shows how
+// to catch that jeep: the walk from [currentLocation] to [boardAt] along
+// [walkPath] (blue dots) and the jeep's route up to that spot ([jeepPath],
+// teal). Without a boarding plan it falls back to a straight line from the
+// jeep's animated position to the commuter, redrawn every frame.
+//
+// The commuter is a blue circle ("you are here"), not a pin.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -31,6 +35,9 @@ class LiveMap extends StatelessWidget {
     this.currentLocation,
     this.selectedVehicleId,
     this.onClearSelection,
+    this.walkPath,
+    this.boardAt,
+    this.jeepPath,
   });
 
   final MapController controller;
@@ -47,6 +54,17 @@ class LiveMap extends StatelessWidget {
   /// Jeep to draw the "vehicle → you" line from; [onClearSelection] hides it.
   final String? selectedVehicleId;
   final VoidCallback? onClearSelection;
+
+  /// Walk from the commuter to [boardAt] (by road, or straight if unknown).
+  final List<LatLng>? walkPath;
+
+  /// Where to wait for the selected jeep.
+  final LatLng? boardAt;
+
+  /// The jeep's route from where it is now to [boardAt] (empty once passed).
+  final List<LatLng>? jeepPath;
+
+  static const Color _walkLine = Color(0xFF2F6FED);
 
   static const Color _selectionLine = AppColors.brandTeal;
 
@@ -85,8 +103,31 @@ class LiveMap extends StatelessWidget {
             urlTemplate: MapConfig.tileUrl,
             userAgentPackageName: MapConfig.userAgentPackageName,
           ),
-          // Vehicle → you, under the markers so both ends stay visible.
-          if ((selectedVehicleId, currentLocation) case (final id?, final here?))
+          // How to catch the selected jeep: its route to the boarding spot,
+          // and the walk there. Under the markers so every end stays visible.
+          if (selectedVehicleId != null && walkPath != null)
+            PolylineLayer(
+              polylines: [
+                if (jeepPath case final path? when path.length >= 2)
+                  Polyline(
+                    points: path,
+                    strokeWidth: 6,
+                    color: _selectionLine.withValues(alpha: 0.85),
+                    borderStrokeWidth: 2,
+                    borderColor: Colors.white,
+                  ),
+                Polyline(
+                  points: walkPath!,
+                  strokeWidth: 5,
+                  color: _walkLine,
+                  borderStrokeWidth: 1.5,
+                  borderColor: Colors.white,
+                  pattern: const StrokePattern.dotted(spacingFactor: 1.6),
+                ),
+              ],
+            )
+          // Fallback: vehicle → you, straight, following the jeep.
+          else if ((selectedVehicleId, currentLocation) case (final id?, final here?))
             ValueListenableBuilder<int>(
               valueListenable: frame,
               builder: (context, _, __) {
@@ -106,15 +147,21 @@ class LiveMap extends StatelessWidget {
                 );
               },
             ),
-          if (currentLocation case final here?)
+          if (selectedVehicleId != null && boardAt != null)
             MarkerLayer(
               markers: [
                 Marker(
-                  point: here,
-                  width: 75,
-                  height: 75,
-                  child: Image.asset('assets/icons/current_location_marker.png'),
+                  point: boardAt!,
+                  width: 34,
+                  height: 34,
+                  child: const Tooltip(message: 'Wait for the jeep here', child: _BoardHere()),
                 ),
+              ],
+            ),
+          if (currentLocation case final here?)
+            MarkerLayer(
+              markers: [
+                Marker(point: here, width: 44, height: 44, child: const _YouAreHere()),
               ],
             ),
           // Only this layer repaints per animation frame.
@@ -159,6 +206,58 @@ class LiveMap extends StatelessWidget {
             _ClearSelectionChip(onPressed: onClearSelection!),
         ],
       ),
+    );
+  }
+}
+
+/// The commuter on the map: a blue dot with a white ring and a soft halo.
+class _YouAreHere extends StatelessWidget {
+  const _YouAreHere();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'You are here',
+      child: Center(
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: LiveMap._walkLine.withValues(alpha: 0.18),
+          ),
+          alignment: Alignment.center,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: LiveMap._walkLine,
+              border: Border.all(color: Colors.white, width: 3),
+              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where to wait for the selected jeep: a teal-ringed circle with a bus.
+class _BoardHere extends StatelessWidget {
+  const _BoardHere();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white,
+        border: Border.all(color: LiveMap._selectionLine, width: 3),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.directions_bus, size: 18, color: LiveMap._selectionLine),
     );
   }
 }

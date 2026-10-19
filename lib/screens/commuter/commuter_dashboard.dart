@@ -33,6 +33,7 @@ import '../../services/vehicles_service.dart';
 import '../../widgets/commuter/commuter_header.dart';
 import '../../widgets/commuter/commuter_nav_bar.dart';
 import 'alert.dart';
+import '../../services/place_search.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'route.dart';
@@ -79,6 +80,8 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
   @override
   void initState() {
     super.initState();
+    // Metro Cebu landmarks for From / To search: load now so it's instant later.
+    PlaceIndex.landmarks();
     // Each list loads on its own, so one failing doesn't hide the others.
     // Only stops a route serves: a stop no jeepney uses can't be boarded,
     // so it would just clutter the map and the stop search.

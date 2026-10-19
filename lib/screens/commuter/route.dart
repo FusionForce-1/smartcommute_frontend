@@ -17,7 +17,8 @@ import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/preference_selector.dart';
 import '../../widgets/commuter/recent_searches.dart';
 import '../../widgets/commuter/trip_locations_card.dart';
-import '../../widgets/stop_search_sheet.dart';
+import '../../config/map_config.dart';
+import '../../widgets/place_search_sheet.dart';
 import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
 
@@ -30,16 +31,30 @@ class RouteTab extends StatelessWidget {
   /// Called when the commuter opens a chosen route on the map.
   final TripStarted? onTripStarted;
 
+  // From / To search every saved stop and Metro Cebu landmark as you type,
+  // nearest the trip's other end (or the city centre) first.
   Future<void> _chooseFrom(BuildContext context) async {
-    final stop = await showStopSearchSheet(context, stops);
-    if (stop == null || !context.mounted) return;
-    context.read<TripPlanProvider>().setOrigin(stop.location, stop.name);
+    final trip = context.read<TripPlanProvider>();
+    final place = await showPlaceSearchSheet(
+      context,
+      stops: stops,
+      title: 'Where are you starting from?',
+      near: trip.destination ?? trip.origin ?? MapConfig.defaultCenter,
+    );
+    if (place == null || !context.mounted) return;
+    trip.setOrigin(place.location, place.name);
   }
 
   Future<void> _chooseTo(BuildContext context) async {
-    final stop = await showStopSearchSheet(context, stops);
-    if (stop == null || !context.mounted) return;
-    context.read<TripPlanProvider>().setDestination(stop.location, stop.name);
+    final trip = context.read<TripPlanProvider>();
+    final place = await showPlaceSearchSheet(
+      context,
+      stops: stops,
+      title: 'Where are you going?',
+      near: trip.origin ?? MapConfig.defaultCenter,
+    );
+    if (place == null || !context.mounted) return;
+    trip.setDestination(place.location, place.name);
   }
 
   Future<void> _pickOnMap(BuildContext context) async {

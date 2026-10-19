@@ -34,6 +34,7 @@ flutter:
     - assets/images/smart_commute_logo_landscape.png
     - assets/icons/google_logo.svg
     - assets/icons/current_location_marker.png
+    - assets/data/cebu_landmarks.json
     - .env
 
   fonts:
