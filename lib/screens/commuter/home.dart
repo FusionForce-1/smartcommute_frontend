@@ -4,8 +4,7 @@
 // "Nearby Vehicles" list. Opens the live vehicle socket and animates
 // one smoothed track per jeep.
 //
-// The floating "Nearby Vehicles" button opens a sheet of available jeeps;
-// picking one (there or in the list) shows how to catch it: the closest
+// Picking a jeep in the "Nearby Vehicles" list shows how to catch it: the closest
 // point on its route to the commuter (the shortest walk), the walking path
 // there with distance, steps and minutes, and how far the jeep still is
 // from that point (services/boarding_planner.dart).
@@ -13,7 +12,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show ValueListenable, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -211,23 +210,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   // ---------- Nearby Vehicles → line on the map ----------
 
-  /// The floating button: makes sure we know where the commuter is (the line
-  /// ends there), then lists available jeeps to pick from.
-  Future<void> _openNearbyVehicles() async {
-    if (_currentLocation == null && await _locate() == null) return;
-    if (!mounted) return;
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.backgroundIceBlue,
-      builder: (sheetContext) => _NearbyVehiclesSheet(
-        fleetVersion: _fleetVersion,
-        vehicles: () => _nearbyVehicles(limit: 20),
-        etaOf: _etaMinutes,
-        selectedId: _selectedVehicleId,
-      ),
-    );
-    if (picked != null) _selectVehicle(picked);
+  /// A jeep tapped in the list: makes sure we know where the commuter is
+  /// (the walking line starts there), then shows how to catch it.
+  Future<void> _pickNearbyVehicle(String vehicleId) async {
+    if (_selectedVehicleId != vehicleId && _currentLocation == null && await _locate() == null) return;
+    if (mounted) _selectVehicle(vehicleId);
   }
 
   /// Shows (or, tapped again, hides) how to catch [vehicleId], framing the
@@ -446,32 +433,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   // ---------- UI ----------
 
   @override
-  Widget build(BuildContext context) {
-    // The Stack keeps the "Nearby Vehicles" button in place while the
-    // list scrolls under it.
-    return Stack(
-      children: [
-        _buildContent(context),
-        Positioned(
-          right: AppSpacing.md,
-          bottom: AppSpacing.md,
-          child: FloatingActionButton.extended(
-            heroTag: 'nearby-vehicles',
-            onPressed: _openNearbyVehicles,
-            backgroundColor: AppColors.brandTeal,
-            foregroundColor: Colors.white,
-            icon: const Icon(AppIcons.vehicle),
-            label: const Text('Nearby Vehicles'),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => _buildContent(context);
 
   Widget _buildContent(BuildContext context) {
     return ListView(
-      // Extra bottom room so the floating button never hides the last card.
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 88),
+      padding: const EdgeInsets.all(AppSpacing.md),
       children: [
         _SearchField(onTap: _searchDestination),
         const SizedBox(height: AppSpacing.md),
@@ -526,7 +492,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             vehicles: _nearbyVehicles(),
             etaOf: _etaMinutes,
             selectedId: _selectedVehicleId,
-            onSelected: _selectVehicle,
+            onSelected: _pickNearbyVehicle,
           ),
         ),
       ],
@@ -689,80 +655,6 @@ class _NearbyList extends StatelessWidget {
             onTap: () => onSelected(v.update.vehicleId),
           ),
       ],
-    );
-  }
-}
-
-/// Bottom sheet behind the "Nearby Vehicles" button. Re-reads the list on
-/// every socket message, and pops with the picked vehicle's id.
-class _NearbyVehiclesSheet extends StatelessWidget {
-  const _NearbyVehiclesSheet({
-    required this.fleetVersion,
-    required this.vehicles,
-    required this.etaOf,
-    required this.selectedId,
-  });
-
-  final ValueListenable<int> fleetVersion;
-  final List<NearbyVehicle> Function() vehicles;
-  final int? Function(VehicleLiveUpdate) etaOf;
-  final String? selectedId;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.7),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, 0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Nearby Vehicles',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Pick one to see the shortest walk to catch it.',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Flexible(
-                child: ValueListenableBuilder<int>(
-                  valueListenable: fleetVersion,
-                  builder: (context, _, __) {
-                    final list = vehicles();
-                    if (list.isEmpty) {
-                      return const Padding(
-                        padding: EdgeInsets.only(bottom: AppSpacing.md),
-                        child: Text('No available vehicles nearby right now.'),
-                      );
-                    }
-                    return ListView(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                      children: [
-                        for (final v in list)
-                          NearbyVehicleCard(
-                            routeCode: v.route.code,
-                            routeName: v.route.name,
-                            etaMinutes: etaOf(v.update),
-                            distanceM: v.metres,
-                            delayed: v.update.dutyStatus == 'delayed',
-                            selected: v.update.vehicleId == selectedId,
-                            onTap: () => Navigator.of(context).pop(v.update.vehicleId),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

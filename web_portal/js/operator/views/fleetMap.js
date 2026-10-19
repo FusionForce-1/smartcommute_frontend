@@ -1,6 +1,6 @@
 // js/operator/views/fleetMap.js
 //
-// Fleet Map: Leaflet map of the operator's routes and vehicles (live over
+// Fleet Map: Leaflet map of the operator's vehicles (live over
 // /ws/live), plus Active Vehicles, Route Alerts and Recent Feedback.
 
 OperatorRouter.register('fleet', {
@@ -11,7 +11,6 @@ OperatorRouter.register('fleet', {
     const CEBU = [10.3157, 123.8854];
     const POLL_MS = 30000;
     const RECENT_PING_MS = 10 * 60 * 1000;
-    const ROUTE_COLORS = ['#2E86AB', '#F5A623', '#27AE60', '#8E44AD', '#D72F33', '#16A085', '#E67E22'];
     const MARKER_COLORS = { active: '#27AE60', maintenance: '#F5A623', inactive: '#7D868E', signal_lost: '#D72F33' };
     const esc = AdminUi.escapeHtml;
 
@@ -45,7 +44,7 @@ OperatorRouter.register('fleet', {
         </section>
         <section class="op-card">
           <h3>Recent Feedback</h3>
-          <p class="op-card__sub">Commuter reports tied to your routes.</p>
+          <p class="op-card__sub">Latest commuter reports and ride reviews on your routes.</p>
           <div id="panel-feedback"></div>
         </section>
       </div>`;
@@ -66,7 +65,6 @@ OperatorRouter.register('fleet', {
     } else {
       el.querySelector('#fleet-map').innerHTML = AdminUi.stateMessage('The map could not load. Check your internet connection.', { error: true });
     }
-    const routeLayer = map ? L.layerGroup().addTo(map) : null;
     const vehicleLayer = map ? L.layerGroup().addTo(map) : null;
 
     const routeLabel = (id) => {
@@ -150,27 +148,6 @@ OperatorRouter.register('fleet', {
       }
     }
 
-    async function drawRoutes() {
-      if (!map) return;
-      try {
-        const mine = new Set(routes.map((r) => r.id));
-        const withGeometry = (await OperatorApi.mapRoutes()).filter((r) => mine.has(r.id));
-        routeLayer.clearLayers();
-        withGeometry.forEach((r, i) => {
-          const latLngs = (r.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
-          if (latLngs.length < 2) return;
-          L.polyline(latLngs, { color: ROUTE_COLORS[i % ROUTE_COLORS.length], weight: 5, opacity: 0.75 })
-            .bindTooltip(`${r.code} – ${r.name}`, { sticky: true })
-            .addTo(routeLayer);
-        });
-        if (!markers.size && routeLayer.getLayers().length) {
-          map.fitBounds(L.featureGroup(routeLayer.getLayers()).getBounds(), { padding: [30, 30] });
-        }
-      } catch {
-        // The map still shows vehicles without route lines.
-      }
-    }
-
     // ---------- Panels ----------
 
     function renderVehicles() {
@@ -236,23 +213,60 @@ OperatorRouter.register('fleet', {
       alertsEl.insertAdjacentHTML('beforeend', '<a class="op-link" href="#/announcements">Post an announcement →</a>');
     }
 
+    // Newest first: route reports (/feedback/mine) and ride reviews
+    // (/reviews/operator) merged into one list.
+    const FEEDBACK_SHOWN = 5;
+
+    async function loadFeedback() {
+      const [reports, reviews] = await Promise.all([
+        OperatorApi.myFeedback({ limit: FEEDBACK_SHOWN }).catch(() => null),
+        OperatorApi.driverReviews().then((r) => r.reviews || []).catch(() => null),
+      ]);
+      if (reports === null && reviews === null) throw new Error('Could not load feedback.');
+      const items = [
+        ...(reports || []).map((f) => ({ kind: 'report', at: f.created_at, f })),
+        ...(reviews || []).map((r) => ({ kind: 'review', at: r.created_at, r })),
+      ];
+      items.sort((a, b) => (OperatorUi.parseDate(b.at) || 0) - (OperatorUi.parseDate(a.at) || 0));
+      return items.slice(0, FEEDBACK_SHOWN);
+    }
+
+    function feedbackItemHtml(item) {
+      const when = `<span>· ${esc(OperatorUi.timeAgo(item.at))}</span>`;
+      if (item.kind === 'report') {
+        const f = item.f;
+        return `
+          <div class="op-list__item">
+            <div class="op-list__meta">
+              ${OperatorUi.chip(OperatorUi.FEEDBACK_CATEGORY[f.category] || f.category, 'blue')}
+              <span>${esc(routeLabel(f.route_id))}</span>${when}
+            </div>
+            ${esc(f.message)}
+          </div>`;
+      }
+      const r = item.r;
+      const stars = '★'.repeat(r.rating) + '☆'.repeat(5 - r.rating);
+      const about = [r.plate_number, r.driver_name].filter(Boolean).join(' · ') || 'Plate not given';
+      const tone = r.rating >= 4 ? 'green' : r.rating <= 2 ? 'red' : 'amber';
+      return `
+        <div class="op-list__item">
+          <div class="op-list__meta">
+            ${OperatorUi.chip('Ride review', tone)}
+            <span style="color:#F5A623;" aria-label="${r.rating} of 5 stars">${stars}</span>
+            <span>${esc(r.route_code || '')}</span>${when}
+          </div>
+          <span class="op-card__sub" style="margin:0;">${esc(about)}</span>
+          ${r.comment ? `<div>${esc(r.comment)}</div>` : ''}
+        </div>`;
+    }
+
     function renderFeedback(list) {
       if (!list.length) {
         feedbackEl.innerHTML = AdminUi.stateMessage('No commuter feedback on your routes yet.');
         return;
       }
       feedbackEl.innerHTML = `
-        <div class="op-list">
-          ${list.map((f) => `
-            <div class="op-list__item">
-              <div class="op-list__meta">
-                ${OperatorUi.chip(OperatorUi.FEEDBACK_CATEGORY[f.category] || f.category, 'blue')}
-                <span>${esc(routeLabel(f.route_id))}</span>
-                <span>· ${esc(OperatorUi.timeAgo(f.created_at))}</span>
-              </div>
-              ${esc(f.message)}
-            </div>`).join('')}
-        </div>
+        <div class="op-list">${list.map(feedbackItemHtml).join('')}</div>
         <a class="op-link" href="#/reports">See all feedback →</a>`;
     }
 
@@ -274,7 +288,6 @@ OperatorRouter.register('fleet', {
         renderVehicles();
         renderAlerts();
         drawVehicles({ fit: first });
-        if (first) drawRoutes();
       };
 
       if (first) {
@@ -328,10 +341,12 @@ OperatorRouter.register('fleet', {
     // Feedback rows show route names, so they load after the routes.
     feedbackEl.innerHTML = AdminUi.stateMessage('Loading…');
     loadFleet({ first: true }).then(() => {
-      if (!stopped) AdminUi.loadInto(feedbackEl, () => OperatorApi.myFeedback({ limit: 5 }), renderFeedback);
+      if (!stopped) AdminUi.loadInto(feedbackEl, loadFeedback, renderFeedback);
     });
     connectLive();
-    const poll = setInterval(() => loadFleet(), POLL_MS);
+    // New feedback shows up without reloading the page.
+    const refreshFeedback = () => loadFeedback().then((list) => { if (!stopped) renderFeedback(list); }).catch(() => {});
+    const poll = setInterval(() => { loadFleet(); refreshFeedback(); }, POLL_MS);
 
     return () => {
       stopped = true;
