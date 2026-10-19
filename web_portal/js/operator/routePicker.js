@@ -6,9 +6,12 @@
 //
 //  * Click the map: places the pin being set (A first, then B).
 //  * Drag a pin: moves it; the place name is looked up again.
-//  * Type in a box: matching stops appear instantly; Enter / Search looks
-//    the place up on OpenStreetMap (Nominatim), inside the Philippines,
-//    nearest the area on screen first.
+//  * Type in a box: your saved stops and ~6,000 Metro Cebu landmarks
+//    (malls, terminals, schools, churches, barangays... from the same
+//    OpenStreetMap data the map shows: data/cebu_landmarks.json, built by
+//    Smart-Commute-Backend/tools/build_landmarks.py) appear instantly,
+//    nearest the area on screen first. Enter / Search also asks
+//    OpenStreetMap online (Nominatim) for anything not in that list.
 //  * With both pins down, the road path between them is drawn (OSRM) and
 //    can be saved as the route's line, so the route shows up on the
 //    commuter map right away.
@@ -52,6 +55,60 @@ const RoutePicker = (() => {
     return (unique.length ? unique : String(r.display_name || '').split(',').slice(0, 2).map((s) => s.trim()))
       .join(', ').slice(0, 80);
   }
+
+  // ---------- Landmarks, searched as you type ----------
+
+  /** Lowercase, no accents or punctuation: "Santo Niño" -> "santo nino". */
+  const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  let landmarks = null;   // promise of [{ name, folded, words, lat, lng, kind }]
+  function loadLandmarks() {
+    if (!landmarks) {
+      landmarks = fetch(new URL('../data/cebu_landmarks.json', location.href).href)
+        .then((r) => (r.ok ? r.json() : { kinds: [], places: [] }))
+        .then(({ kinds, places }) => places.map(([name, lat, lng, k]) => {
+          const folded = fold(name);
+          return { name, folded, words: folded.split(' '), lat, lng, kind: kinds[k] || 'Place' };
+        }))
+        .catch(() => []);
+    }
+    return landmarks;
+  }
+
+  /**
+   * Places whose words start with every word typed ("sm ceb" -> SM City
+   * Cebu), best first: whole name starts with it, then word starts, then
+   * anywhere in the name; nearer `center` first within each. One per name.
+   */
+  function matchPlaces(list, text, center, limit) {
+    const query = fold(text);
+    if (query.length < 2) return [];
+    const tokens = query.split(' ');
+    const scored = [];
+    for (const p of list) {
+      let rank;
+      if (p.folded.startsWith(query)) rank = 0;
+      else if (tokens.every((t) => p.words.some((w) => w.startsWith(t)))) rank = 1;
+      else if (query.length >= 3 && p.folded.includes(query)) rank = 2;
+      else continue;
+      const km = center ? center.distanceTo([p.lat, p.lng]) / 1000 : 0;
+      scored.push({ p, rank, km });
+    }
+    scored.sort((x, y) => x.rank - y.rank || x.km - y.km);
+    const seen = new Set();
+    const out = [];
+    for (const { p, km } of scored) {
+      const key = p.folded;
+      if (seen.has(key)) continue;   // e.g. one stop on each side of the road
+      seen.add(key);
+      out.push({ p, km });
+      if (out.length >= limit) break;
+    }
+    return out;
+  }
+
+  const away = (km) => (km < 1 ? `${Math.round(km * 1000)} m away` : `${km.toFixed(1)} km away`);
 
   function pinIcon(side) {
     const s = SIDES[side];
@@ -117,6 +174,8 @@ const RoutePicker = (() => {
     setTimeout(() => map.invalidateSize(), 0);
 
     ApiClient.get('/stops').then((list) => { stops = Array.isArray(list) ? list : []; }).catch(() => {});
+    let places = [];
+    loadLandmarks().then((list) => { places = list; });
 
     // ---------- Pins ----------
 
@@ -330,36 +389,42 @@ const RoutePicker = (() => {
       ul._items = items;
     }
 
-    function stopMatches(text) {
-      const q = text.trim().toLowerCase();
-      if (q.length < 2) return [];
-      return stops
-        .filter((s) => s.name?.toLowerCase().includes(q) && s.location?.coordinates)
-        .slice(0, 5)
-        .map((s) => ({ label: s.name, detail: 'Your stop', lat: s.location.coordinates[1], lng: s.location.coordinates[0] }));
+    /** Saved stops first, then landmarks; nearest the map's centre first. */
+    function localMatches(text, limit = 8) {
+      const center = map.getCenter();
+      const savedStops = stops
+        .filter((x) => x.name && x.location?.coordinates)
+        .map((x) => ({ name: x.name, folded: fold(x.name), words: fold(x.name).split(' '),
+                       lat: x.location.coordinates[1], lng: x.location.coordinates[0], kind: 'Your stop' }));
+      const mine = matchPlaces(savedStops, text, center, 4);
+      const taken = new Set(mine.map(({ p }) => p.folded));
+      const others = matchPlaces(places, text, center, limit + mine.length).filter(({ p }) => !taken.has(p.folded));
+      return [...mine, ...others].slice(0, limit).map(({ p, km }) => ({
+        label: p.name, detail: `${p.kind} · ${away(km)}`, lat: p.lat, lng: p.lng,
+      }));
     }
 
     async function searchPlaces(side) {
       const text = $(`#rp-${side}`).value.trim();
       if (text.length < 3) {
-        showSuggestions(side, stopMatches(text), 'Type at least 3 letters, then press Search.');
+        showSuggestions(side, localMatches(text), 'Type at least 3 letters, then press Search.');
         return;
       }
-      showSuggestions(side, stopMatches(text), 'Searching places…');
+      showSuggestions(side, localMatches(text, 5), 'Searching more places online…');
       const b = map.getBounds();
       try {
         const results = await nominatim('search', {
           q: text, countrycodes: 'ph', limit: 6, addressdetails: 1,
           viewbox: [b.getWest(), b.getNorth(), b.getEast(), b.getSouth()].join(','), bounded: 0,
         });
-        const places = results.map((r) => ({
+        const online = results.map((r) => ({
           label: placeLabel(r), detail: String(r.display_name || '').split(',').slice(1, 4).join(',').trim(),
           lat: Number(r.lat), lng: Number(r.lon),
         }));
         // OSM often has several entries with one name (a district, its
         // boundary, a landmark): show each name once.
         const seen = new Set();
-        const all = [...stopMatches(text), ...places].filter((p) => {
+        const all = [...localMatches(text, 5), ...online].filter((p) => {
           const key = p.label.toLowerCase();
           if (seen.has(key)) return false;
           seen.add(key);
@@ -367,7 +432,7 @@ const RoutePicker = (() => {
         });
         showSuggestions(side, all, all.length ? '' : `Nothing found for “${text}”. Try a nearby landmark, or click the map.`);
       } catch (err) {
-        showSuggestions(side, stopMatches(text), err.message);
+        showSuggestions(side, localMatches(text), err.message);
       }
     }
 
@@ -376,8 +441,11 @@ const RoutePicker = (() => {
       if (!side) return;
       state[side].name = e.target.value.trim();
       state[side].auto = false;                       // their own wording wins
-      const matches = stopMatches(e.target.value);
-      showSuggestions(side, matches, e.target.value.trim().length >= 3 ? 'Press Enter to search all places.' : '');
+      const typed = e.target.value.trim();
+      const matches = localMatches(typed);
+      showSuggestions(side, matches, typed.length < 3 ? ''
+        : matches.length ? 'Not listed? Press Enter to search online.'
+          : `No landmark named “${typed}” nearby — press Enter to search online, or click the map.`);
       onChange();
     });
 
