@@ -12,6 +12,7 @@ import '../../config/theme_config.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/trip_plan_provider.dart';
+import '../../services/nearest_stop.dart';
 import '../../widgets/commuter/commuter_field_box.dart';
 import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/preference_selector.dart';
@@ -59,15 +60,18 @@ class RouteTab extends StatelessWidget {
 
   Future<void> _pickOnMap(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
-    final picked = await Navigator.of(context).push<LatLng>(
-      MaterialPageRoute(builder: (_) => PickDestinationScreen(origin: trip.origin)),
+    final picked = await Navigator.of(context).push<PickedPlace>(
+      MaterialPageRoute(
+        builder: (_) => PickDestinationScreen(
+          origin: trip.origin,
+          stops: stops,
+          // Reopening goes back to the pin dropped last time.
+          start: trip.destinationFromMap ? trip.destination : null,
+        ),
+      ),
     );
     if (picked == null) return;
-    trip.setDestination(
-      picked,
-      'Dropped pin (${picked.latitude.toStringAsFixed(4)}, '
-      '${picked.longitude.toStringAsFixed(4)})',
-    );
+    trip.setDestination(picked.point, picked.label, fromMap: true);
   }
 
   Future<void> _findRoutes(BuildContext context) async {
@@ -88,23 +92,11 @@ class RouteTab extends StatelessWidget {
     );
   }
 
-  /// Within this distance, "Use my location" names the nearest stop.
-  static const double _nearStopMeters = 600;
-
   /// What the From box says for the commuter's GPS location, e.g.
   /// "Your location · near Fuente Osmeña", so it's clear where we found them.
   String _myLocationLabel(LatLng here) {
-    TransportStop? nearest;
-    var best = double.infinity;
-    for (final stop in stops) {
-      final d = const Distance().as(LengthUnit.Meter, here, stop.location);
-      if (d < best) {
-        best = d;
-        nearest = stop;
-      }
-    }
-    if (nearest == null || best > _nearStopMeters) return 'Your location';
-    return 'Your location · near ${nearest.name}';
+    final near = nearestStop(stops, here);
+    return near == null ? 'Your location' : 'Your location · near ${near.stop.name}';
   }
 
   void _changeDepartureTime(BuildContext context) {
@@ -138,6 +130,7 @@ class RouteTab extends StatelessWidget {
           toValue: trip.destinationLabel,
           isLocating: trip.isLocating,
           usingMyLocation: trip.origin != null && trip.originLabel == null,
+          destinationOnMap: trip.destinationFromMap,
           fromError: trip.locationError,
           onOpenSettings: trip.canOpenLocationSettings ? trip.openLocationSettings : null,
           onChooseFrom: () => _chooseFrom(context),

@@ -15,6 +15,7 @@ class TripLocationsCard extends StatelessWidget {
     required this.toValue,
     required this.isLocating,
     this.usingMyLocation = false,
+    this.destinationOnMap = false,
     required this.onChooseFrom,
     required this.onUseMyLocation,
     required this.onChooseTo,
@@ -31,6 +32,9 @@ class TripLocationsCard extends StatelessWidget {
 
   /// From is the commuter's own GPS location: the button shows as on.
   final bool usingMyLocation;
+
+  /// To is a pin dropped on the map: the map button shows as on.
+  final bool destinationOnMap;
   final String? fromError;
 
   final VoidCallback onChooseFrom;
@@ -70,8 +74,14 @@ class TripLocationsCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              _MyLocationButton(
-                isLocating: isLocating,
+              _StateIconButton(
+                key: const Key('useMyLocation'),
+                idleIcon: Icons.location_on_outlined,
+                activeIcon: Icons.my_location,
+                tooltip: 'Use my location',
+                activeTooltip: 'Using your location (tap to update)',
+                busyTooltip: 'Finding your location…',
+                busy: isLocating,
                 active: usingMyLocation,
                 onPressed: onUseMyLocation,
               ),
@@ -108,10 +118,15 @@ class TripLocationsCard extends StatelessWidget {
                   onTap: onChooseTo,
                 ),
               ),
-              IconButton(
+              const SizedBox(width: AppSpacing.xs),
+              _StateIconButton(
+                key: const Key('pickOnMap'),
+                idleIcon: Icons.map_outlined,
+                activeIcon: Icons.edit_location_alt,
                 tooltip: 'Pick on map',
+                activeTooltip: 'Move the pin on the map',
+                active: destinationOnMap,
                 onPressed: onPickOnMap,
-                icon: const Icon(Icons.map_outlined, size: 28),
               ),
             ],
           ),
@@ -121,44 +136,51 @@ class TripLocationsCard extends StatelessWidget {
   }
 }
 
-/// "Use my location": an outlined pin; a spinner while finding the
-/// commuter; a filled teal "my location" once From is their location
-/// (tap again to update it).
-class _MyLocationButton extends StatelessWidget {
-  const _MyLocationButton({
-    required this.isLocating,
+/// Round icon button with three looks: idle (grey circle, outlined icon),
+/// busy (teal with a spinner) and active (teal with a white icon) — used for
+/// "Use my location" (on while From is the commuter's GPS) and "Pick on
+/// map" (on while To is a dropped pin). Tap again to update either.
+class _StateIconButton extends StatelessWidget {
+  const _StateIconButton({
+    super.key,
+    required this.idleIcon,
+    required this.activeIcon,
+    required this.tooltip,
+    required this.activeTooltip,
+    this.busyTooltip,
+    this.busy = false,
     required this.active,
     required this.onPressed,
   });
 
-  final bool isLocating;
+  final IconData idleIcon;
+  final IconData activeIcon;
+  final String tooltip;
+  final String activeTooltip;
+  final String? busyTooltip;
+  final bool busy;
   final bool active;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final Widget icon;
-    if (isLocating) {
+    if (busy) {
       icon = const SizedBox.square(
-        key: ValueKey('locating'),
+        key: ValueKey('busy'),
         dimension: 22,
         child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
       );
     } else if (active) {
-      icon = const Icon(Icons.my_location, key: ValueKey('active'), size: 26, color: Colors.white);
+      icon = Icon(activeIcon, key: const ValueKey('active'), size: 26, color: Colors.white);
     } else {
-      icon = const Icon(Icons.location_on_outlined, key: ValueKey('idle'), size: 28, color: AppColors.textPrimary);
+      icon = Icon(idleIcon, key: const ValueKey('idle'), size: 28, color: AppColors.textPrimary);
     }
-    final filled = isLocating || active;
+    final filled = busy || active;
 
     return Tooltip(
-      message: isLocating
-          ? 'Finding your location…'
-          : active
-              ? 'Using your location (tap to update)'
-              : 'Use my location',
+      message: busy ? (busyTooltip ?? tooltip) : (active ? activeTooltip : tooltip),
       child: AnimatedContainer(
-        key: const Key('useMyLocation'),
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
         width: 48,
@@ -175,7 +197,7 @@ class _MyLocationButton extends StatelessWidget {
           shape: const CircleBorder(),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: isLocating ? null : onPressed,
+            onTap: busy ? null : onPressed,
             child: Center(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),

@@ -334,6 +334,24 @@ void main() {
       expect(provider.destination, origin);
       expect(provider.destinationLabel, 'Your location');
     });
+
+    test('a pinned destination swapped to From is no longer "on the map"', () async {
+      final provider = await readyProvider(okAdapter());
+      provider.setDestination(destination, 'Pinned spot', fromMap: true);
+      expect(provider.destinationFromMap, isTrue);
+
+      provider.swapOriginAndDestination();
+      expect(provider.destinationFromMap, isFalse);
+    });
+  });
+
+  test('only a map pin marks the destination as from the map', () {
+    final provider = buildProvider(okAdapter());
+    provider.setDestination(destination, 'Pinned spot', fromMap: true);
+    expect(provider.destinationFromMap, isTrue);
+
+    provider.setDestination(destination, 'IT Park');
+    expect(provider.destinationFromMap, isFalse);
   });
 
   group('recentSearches', () {
