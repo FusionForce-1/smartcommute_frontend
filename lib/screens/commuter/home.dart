@@ -4,6 +4,11 @@
 // "Nearby Vehicles" list. Opens the live vehicle socket and animates
 // one smoothed track per jeep.
 //
+// The map can go full screen (expand button on the map): it then fills the
+// tab with the search bar floating on top, its buttons on the right, and
+// "Nearby Vehicles" in a sheet that drags up, or down to just its handle.
+// The same map (camera, live jeeps, selection) moves between the two layouts.
+//
 // Picking a jeep in the "Nearby Vehicles" list shows how to catch it: the closest
 // point on its route to the commuter (the shortest walk), the walking path
 // there with distance, steps and minutes, and how far the jeep still is
@@ -98,6 +103,26 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   BoardingPlan? _plan;
   WalkingRoute? _walk;
   String? _boardName;            // "near Fuente BRT Station"
+
+  // ---------- Full-screen map ----------
+
+  bool _mapExpanded = false;
+
+  /// Keeps the one map (and its controller) alive as it moves between the
+  /// card layout and the full-screen layout.
+  final GlobalKey _mapKey = GlobalKey();
+
+  final DraggableScrollableController _sheet = DraggableScrollableController();
+
+  /// How much of the full-screen height the sheet covers; the map buttons
+  /// ride just above it.
+  final ValueNotifier<double> _sheetExtent = ValueNotifier(0);
+
+  static const double _sheetOpen = 0.34;
+  static const double _sheetMax = 0.75;
+
+  /// Height of the sheet's drag handle: all that shows when minimized.
+  static const double _sheetHandle = 30;
   LatLng? _walkPlannedTo;        // boarding spot the current _walk leads to
   LatLng? _walkPlannedFrom;
   DateTime _lastPlanAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -132,6 +157,8 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _ticker.dispose();
     _frame.dispose();
     _fleetVersion.dispose();
+    _sheet.dispose();
+    _sheetExtent.dispose();
     super.dispose();
   }
 
@@ -432,55 +459,77 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   // ---------- UI ----------
 
-  @override
-  Widget build(BuildContext context) => _buildContent(context);
+  void _setMapExpanded(bool expanded) {
+    if (expanded == _mapExpanded) return;
+    setState(() => _mapExpanded = expanded);
+    if (!expanded) return;
+    // The sheet starts at its handle and slides up into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_mapExpanded && _sheet.isAttached) {
+        _sheet.animateTo(_sheetOpen, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+      }
+    });
+  }
 
-  Widget _buildContent(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        _SearchField(onTap: _searchDestination),
-        const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 320,
-          child: LiveMap(
-            controller: _mapController,
-            stops: widget.stops,
-            tracks: _tracks,
-            clock: _clock,
-            frame: _frame,
-            currentLocation: _currentLocation,
-            onMapReady: _onMapReady,
-            selectedVehicleId: _selectedVehicleId,
-            onClearSelection: _clearSelectedVehicle,
-            walkPath: _walk?.points,
-            boardAt: _plan?.boardAt,
-            jeepPath: _plan?.jeepPath,
-          ),
-        ),
-        if (_selectedVehicleId != null && _plan != null && _walk != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          _BoardingCard(
-            routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'Jeep',
-            plan: _plan!,
-            walk: _walk!,
-            boardName: _boardName,
-            jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
-            onHide: _clearSelectedVehicle,
-          ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        CommuterActionTile(
-          icon: AppIcons.myLocation,
-          label: 'Center on my location',
-          onTap: _centerOnMyLocation,
-        ),
-        CommuterActionTile(
-          icon: AppIcons.vehicle,
-          label: 'Refresh vehicle markers',
-          onTap: _refreshVehicles,
-        ),
-        const SizedBox(height: AppSpacing.xs),
+  void _toggleSheet(double minSize) {
+    if (!_sheet.isAttached) return;
+    final open = _sheet.size > minSize + 0.02;
+    _sheet.animateTo(
+      open ? minSize : _sheetOpen,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      // Back leaves full screen instead of leaving the app.
+      canPop: !_mapExpanded,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _setMapExpanded(false);
+      },
+      child: _mapExpanded ? _buildFullScreen() : _buildContent(context),
+    );
+  }
+
+  Widget _liveMap({required bool expanded}) {
+    return LiveMap(
+      key: _mapKey,
+      controller: _mapController,
+      stops: widget.stops,
+      tracks: _tracks,
+      clock: _clock,
+      frame: _frame,
+      currentLocation: _currentLocation,
+      onMapReady: _onMapReady,
+      selectedVehicleId: _selectedVehicleId,
+      onClearSelection: _clearSelectedVehicle,
+      walkPath: _walk?.points,
+      boardAt: _plan?.boardAt,
+      jeepPath: _plan?.jeepPath,
+      expanded: expanded,
+      onToggleExpanded: () => _setMapExpanded(!_mapExpanded),
+      // Full screen: the buttons sit above the sheet, placed below.
+      showControls: !expanded,
+      topInset: expanded ? 56 : 0,
+    );
+  }
+
+  /// "Catch the jeep" card, when a jeep is picked and the walk is known.
+  Widget? _boardingCard() {
+    if (_selectedVehicleId == null || _plan == null || _walk == null) return null;
+    return _BoardingCard(
+      routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'Jeep',
+      plan: _plan!,
+      walk: _walk!,
+      boardName: _boardName,
+      jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
+      onHide: _clearSelectedVehicle,
+    );
+  }
+
+  List<Widget> _nearbySection(BuildContext context) => [
         Text(
           'Nearby Vehicles',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
@@ -495,7 +544,135 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             onSelected: _pickNearbyVehicle,
           ),
         ),
+      ];
+
+  Widget _buildContent(BuildContext context) {
+    final boarding = _boardingCard();
+    return ListView(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      children: [
+        _SearchField(onTap: _searchDestination),
+        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: 320, child: _liveMap(expanded: false)),
+        if (boarding != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          boarding,
+        ],
+        const SizedBox(height: AppSpacing.md),
+        CommuterActionTile(
+          icon: AppIcons.myLocation,
+          label: 'Center on my location',
+          onTap: _centerOnMyLocation,
+        ),
+        CommuterActionTile(
+          icon: AppIcons.vehicle,
+          label: 'Refresh vehicle markers',
+          onTap: _refreshVehicles,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        ..._nearbySection(context),
       ],
+    );
+  }
+
+  /// Map edge to edge, search on top, buttons on the right riding above a
+  /// draggable "Nearby Vehicles" sheet.
+  Widget _buildFullScreen() {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final height = box.maxHeight;
+        final minSize = (_sheetHandle / height).clamp(0.02, 0.2);
+        final boarding = _boardingCard();
+        return Stack(
+          children: [
+            Positioned.fill(child: _liveMap(expanded: true)),
+            Positioned(
+              left: AppSpacing.sm,
+              right: AppSpacing.sm,
+              top: AppSpacing.sm,
+              child: Material(
+                elevation: 3,
+                borderRadius: BorderRadius.circular(6),
+                child: _SearchField(onTap: _searchDestination),
+              ),
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: _sheetExtent,
+              builder: (context, extent, controls) {
+                final bottom = extent.clamp(minSize, 1.0) * height + AppSpacing.xs;
+                // Fade the buttons out once the sheet climbs into their way.
+                final hidden = bottom > height * 0.55;
+                return Positioned(
+                  right: AppSpacing.sm,
+                  bottom: bottom,
+                  child: IgnorePointer(
+                    ignoring: hidden,
+                    child: AnimatedOpacity(
+                      opacity: hidden ? 0 : 1,
+                      duration: const Duration(milliseconds: 150),
+                      child: controls,
+                    ),
+                  ),
+                );
+              },
+              child: MapControls(
+                controller: _mapController,
+                expanded: true,
+                onToggleExpanded: () => _setMapExpanded(false),
+                onLocate: _centerOnMyLocation,
+              ),
+            ),
+            NotificationListener<DraggableScrollableNotification>(
+              onNotification: (n) {
+                _sheetExtent.value = n.extent;
+                return false;
+              },
+              child: DraggableScrollableSheet(
+                controller: _sheet,
+                initialChildSize: minSize,
+                minChildSize: minSize,
+                maxChildSize: _sheetMax,
+                snap: true,
+                snapSizes: const [_sheetOpen],
+                builder: (context, scroll) => Material(
+                  key: const Key('nearbySheet'),
+                  color: Colors.white,
+                  elevation: 8,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.sm)),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListView(
+                    controller: scroll,
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+                    children: [
+                      // Drag here, or tap to open / minimize.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _toggleSheet(minSize),
+                        child: SizedBox(
+                          height: _sheetHandle,
+                          child: Center(
+                            child: Container(
+                              key: const Key('nearbySheetHandle'),
+                              width: 64,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: AppColors.divider,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (boarding != null) ...[boarding, const SizedBox(height: AppSpacing.sm)],
+                      ..._nearbySection(context),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -523,9 +700,13 @@ class _SearchField extends StatelessWidget {
             children: [
               Icon(AppIcons.search, color: AppColors.navInactive),
               SizedBox(width: 12),
-              Text(
-                'Search destination...',
-                style: TextStyle(fontSize: 16, color: AppColors.navInactive),
+              Expanded(
+                child: Text(
+                  'Search destination...',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 16, color: AppColors.navInactive),
+                ),
               ),
             ],
           ),
