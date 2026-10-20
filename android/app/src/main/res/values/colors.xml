@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same ice blue as the app's loading screen (AppColors.backgroundIceBlue),
+         so there is no white flash before it appears. -->
+    <color name="splash_background">#EBF4FA</color>
+</resources>

@@ -39,8 +39,60 @@
 
   <title>Smart Commute</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Loading screen while the app downloads. Matches the app's own
+       LoadingScreen (lib/screens/loading_screen.dart), which takes over on
+       the first frame - keep the two alike. -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #EBF4FA; }
+    #splash {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #EBF4FA;
+      font-family: Poppins, "Segoe UI", Roboto, Arial, sans-serif;
+      transition: opacity .25s ease;
+    }
+    #splash.splash--done { opacity: 0; pointer-events: none; }
+    #splash img { height: 196px; width: auto; }
+    #splash p { margin: 13px 0 0; color: #555555; font-size: 13px; }
+    .splash-spinner { position: relative; width: 88px; height: 88px; margin-top: 24px; }
+    .splash-spinner i {
+      position: absolute; left: 38px; top: 0;
+      width: 12px; height: 26px; border-radius: 6px;
+      background: #1A1A1A; transform-origin: 6px 44px;
+      animation: splash-fade 1s linear infinite;
+    }
+    @keyframes splash-fade { from { opacity: 1; } to { opacity: .15; } }
+  </style>
 </head>
 <body>
+  <div id="splash" role="progressbar" aria-label="Loading Smart Commute">
+    <img src="splash/logo.png" alt="Smart Commute">
+    <p>Cebu City Transit Information</p>
+    <div class="splash-spinner">
+      <i style="transform:rotate(0deg);animation-delay:-1.000s"></i>
+      <i style="transform:rotate(30deg);animation-delay:-0.917s"></i>
+      <i style="transform:rotate(60deg);animation-delay:-0.833s"></i>
+      <i style="transform:rotate(90deg);animation-delay:-0.750s"></i>
+      <i style="transform:rotate(120deg);animation-delay:-0.667s"></i>
+      <i style="transform:rotate(150deg);animation-delay:-0.583s"></i>
+      <i style="transform:rotate(180deg);animation-delay:-0.500s"></i>
+      <i style="transform:rotate(210deg);animation-delay:-0.417s"></i>
+      <i style="transform:rotate(240deg);animation-delay:-0.333s"></i>
+      <i style="transform:rotate(270deg);animation-delay:-0.250s"></i>
+      <i style="transform:rotate(300deg);animation-delay:-0.167s"></i>
+      <i style="transform:rotate(330deg);animation-delay:-0.083s"></i>
+    </div>
+  </div>
+  <script>
+    // Flutter's first frame is its own identical loading screen: fade out.
+    window.addEventListener('flutter-first-frame', function () {
+      var splash = document.getElementById('splash');
+      if (!splash) return;
+      splash.classList.add('splash--done');
+      setTimeout(function () { splash.remove(); }, 300);
+    });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
