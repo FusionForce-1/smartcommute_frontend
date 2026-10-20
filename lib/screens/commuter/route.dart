@@ -23,6 +23,7 @@ import '../../config/map_config.dart';
 import '../../widgets/place_search_sheet.dart';
 import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
+import 'route_map_screen.dart' show VehiclesLoader;
 
 class RouteTab extends StatelessWidget {
   const RouteTab({
@@ -31,6 +32,7 @@ class RouteTab extends StatelessWidget {
     required this.routes,
     this.onTripStarted,
     this.onRouteSelected,
+    this.loadVehicles,
   });
 
   final List<TransportStop> stops;
@@ -41,6 +43,9 @@ class RouteTab extends StatelessWidget {
 
   /// "Select this route": the dashboard shows it on the Home map.
   final TripSelected? onRouteSelected;
+
+  /// Fleet list for the live PUVs on a chosen route's map.
+  final VehiclesLoader? loadVehicles;
 
   // From / To search every saved stop and Metro Cebu landmark as you type,
   // nearest the trip's other end (or the city centre) first.
@@ -100,6 +105,7 @@ class RouteTab extends StatelessWidget {
             routes: routes,
             onTripStarted: onTripStarted,
             onRouteSelected: onRouteSelected,
+            loadVehicles: loadVehicles,
           ),
         ),
       ),

@@ -228,6 +228,9 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       routes: _routes,
                       onTripStarted: _onTripStarted,
                       onRouteSelected: _selectTrip,
+                      // Fresh each time a route is opened on the map, so a jeep
+                      // added since the app started shows up there too.
+                      loadVehicles: VehiclesService(_dio).getVehicles,
                     ),
                     const AlertsTab(),
                     ProfileTab(

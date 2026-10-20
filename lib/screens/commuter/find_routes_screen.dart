@@ -29,6 +29,7 @@ class FindRoutesScreen extends StatefulWidget {
     required this.routes,
     this.onTripStarted,
     this.onRouteSelected,
+    this.loadVehicles,
   });
 
   /// Routes from /routes, for route codes, stop counts and map lines.
@@ -39,6 +40,9 @@ class FindRoutesScreen extends StatefulWidget {
 
   /// "Select this route" on the map page: show it on the Home map.
   final TripSelected? onRouteSelected;
+
+  /// Fleet list, so the map can show the PUVs live on the chosen route.
+  final VehiclesLoader? loadVehicles;
 
   @override
   State<FindRoutesScreen> createState() => _FindRoutesScreenState();
@@ -77,6 +81,7 @@ class _FindRoutesScreenState extends State<FindRoutesScreen> {
         builder: (_) => RouteMapScreen(
           option: option,
           routesById: routesById,
+          loadVehicles: widget.loadVehicles,
           onSelect: onRouteSelected == null
               ? null
               : () => onRouteSelected(
