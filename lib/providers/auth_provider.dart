@@ -104,12 +104,20 @@ class AuthProvider extends ChangeNotifier {
   // package), not here. This method only knows what to do once it has
   // a token, matching separation of concerns: AuthProvider talks to
   // YOUR backend, not to Google directly.
+  /// Set by the register screen while its User Agreement / Privacy Policy
+  /// box is ticked. Google sign-in finishes outside that screen (see
+  /// app_router.dart), so the agreement travels with it from here.
+  bool googleSignUpTermsAccepted = false;
+
   Future<void> loginWithGoogle(String idToken) async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      final tokens = await _apiService.loginWithGoogle(idToken);
+      final tokens = await _apiService.loginWithGoogle(
+        idToken,
+        acceptedTerms: googleSignUpTermsAccepted,
+      );
       _role = tokens.role;
       _isGuest = false;
       _status = AuthStatus.authenticated;
@@ -150,6 +158,8 @@ class AuthProvider extends ChangeNotifier {
           email: email.trim(),
           password: password,
           name: fullName.trim(),
+          // The register screen only calls this once the box is ticked.
+          acceptedTerms: true,
         ),
       );
     } finally {
@@ -175,13 +185,12 @@ class AuthProvider extends ChangeNotifier {
   // ---------------------------------------------------------------
   // VERIFY OTP / RESET — POST /auth/reset-password
   // ---------------------------------------------------------------
-  // VerifyOtpScreen only collects the 6-digit code. A new-password step
-  // is not in Emae's mockups; the mock adapter accepts an empty password
-  // for preview. TODO: Velez — collect new_password before calling live API.
+  // VerifyOtpScreen collects the 6-digit code, SetNewPasswordScreen the
+  // new password; the backend checks both in this one call.
   Future<void> verifyOtpAndResetPassword({
     required String email,
     required String otp,
-    String newPassword = '',
+    required String newPassword,
   }) async {
     _isLoading = true;
     notifyListeners();

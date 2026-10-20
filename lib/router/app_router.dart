@@ -17,6 +17,7 @@ import '../providers/auth_provider.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/register_screen.dart';
+import '../screens/auth/set_new_password_screen.dart';
 import '../screens/auth/verify_otp_screen.dart';
 import '../screens/commuter/commuter_dashboard.dart';
 import '../screens/driver/driver_dashboard.dart';
@@ -252,6 +253,7 @@ class RegisterScreenHost extends StatelessWidget {
     final auth = context.read<AuthProvider>();
     return RegisterScreen(
       onBack: () => Navigator.of(context).pop(),
+      onConsentChanged: (agreed) => auth.googleSignUpTermsAccepted = agreed,
       onRegister: (fullName, email, password) async {
         await auth.registerCommuter(
           fullName: fullName,
@@ -307,21 +309,51 @@ class VerifyOtpHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.read<AuthProvider>();
     return VerifyOtpScreen(
       email: email,
       onBack: () => Navigator.of(context).pop(),
+      // The backend checks the code together with the new password, so
+      // the code is carried to the next screen rather than sent here.
       onVerifyOtp: (otp) async {
-        await auth.verifyOtpAndResetPassword(email: email, otp: otp);
-        if (!context.mounted) return;
-        Navigator.of(context).popUntil((route) => route.isFirst);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OTP verified. You can log in.')),
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SetNewPasswordHost(email: email, otp: otp),
+          ),
         );
       },
     );
   }
 }
+
+class SetNewPasswordHost extends StatelessWidget {
+  const SetNewPasswordHost({super.key, required this.email, required this.otp});
+
+  final String email;
+  final String otp;
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    return SetNewPasswordScreen(
+      onBack: () => Navigator.of(context).pop(),
+      onResetPassword: (newPassword) async {
+        await auth.verifyOtpAndResetPassword(
+          email: email,
+          otp: otp,
+          newPassword: newPassword,
+        );
+        if (!context.mounted) return;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Password reset. You can log in with your new password.'),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Second sign-in step for accounts with two-factor authentication on.
 class TwoFactorLoginHost extends StatelessWidget {
   const TwoFactorLoginHost({super.key, required this.challenge});

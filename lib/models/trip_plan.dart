@@ -233,7 +233,7 @@ String formatFare(double fare) => '₱${fare.toStringAsFixed(2)}';
 String formatFareCompact(double fare) =>
     fare == fare.roundToDouble() ? '₱${fare.toStringAsFixed(0)}' : formatFare(fare);
 
-/// "Walk 104 m to Capitol · Next jeep 4 min (live)" — null if the backend
+/// "Walk 104 m to Capitol · Next PUV 4 min (live)" — null if the backend
 /// didn't send walking/wait details.
 String? boardingSummary(RouteLeg leg) {
   final walk = leg.walkToBoardM;
@@ -243,7 +243,7 @@ String? boardingSummary(RouteLeg leg) {
     if (walk != null) walk < 15 ? 'At ${leg.boardLabel}' : 'Walk ${formatDistance(walk)} to ${leg.boardLabel}',
     if (wait != null)
       leg.waitIsLive
-          ? (wait == 0 ? 'Jeep arriving now (live)' : 'Next jeep $wait min (live)')
+          ? (wait == 0 ? 'PUV arriving now (live)' : 'Next PUV $wait min (live)')
           : '~$wait min wait',
   ];
   return parts.join('  •  ');

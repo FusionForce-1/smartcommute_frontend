@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../constants/legal_text.dart';
 import '../../models/commuter_profile.dart';
 import '../../models/ride_review.dart';
 import '../../models/vehicles.dart';
@@ -16,12 +17,15 @@ import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/load_state.dart';
 import '../../providers/profile_provider.dart';
+import '../../widgets/auth/consent_checkbox.dart';
 import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/profile_header.dart';
 import '../../widgets/commuter/review_ride_sheet.dart';
 import '../../widgets/commuter/save_route_sheet.dart';
 import '../../widgets/commuter/saved_route_tile.dart';
 import '../../widgets/commuter/settings_group.dart';
+import 'help_support_screen.dart';
+import 'privacy_security_screen.dart';
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({
@@ -127,7 +131,9 @@ class ProfileTab extends StatelessWidget {
                     SettingsLinkRow(
                       icon: Icons.shield_outlined,
                       label: 'Privacy & Security',
-                      onTap: () => _comingSoon(context),
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => PrivacySecurityScreen(service: profile.service),
+                      )),
                     ),
                     ..._infoLinks(context),
                     SettingsLinkRow(
@@ -206,18 +212,44 @@ List<Widget> _infoLinks(BuildContext context) => [
       SettingsLinkRow(
         icon: Icons.help_outline,
         label: 'Help & Support',
-        onTap: () => _comingSoon(context),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => const HelpSupportScreen(),
+        )),
       ),
       SettingsLinkRow(
         icon: Icons.description_outlined,
         label: 'Terms & Privacy Policy',
-        onTap: () => _comingSoon(context),
+        onTap: () => _showLegalChoices(context),
       ),
     ];
 
-void _comingSoon(BuildContext context) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('This page is coming soon.')),
+/// Lets the commuter pick which document to read.
+void _showLegalChoices(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (icon, doc) in [
+            (Icons.description_outlined, userAgreement),
+            (Icons.privacy_tip_outlined, privacyPolicy),
+          ])
+            ListTile(
+              leading: Icon(icon, color: AppColors.brandTeal),
+              title: Text(doc.title),
+              subtitle: Text('Last updated ${doc.updated}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showLegalDoc(context, doc);
+              },
+            ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+      ),
+    ),
   );
 }
 
@@ -252,7 +284,7 @@ class _RateYourRide extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               const Expanded(
                 child: Text(
-                  'How was your jeepney ride? Rate the driver and the jeep — it helps operators improve.',
+                  'How was your PUV ride? Rate the driver and the vehicle — it helps operators improve.',
                   style: TextStyle(fontSize: 14),
                 ),
               ),

@@ -73,11 +73,15 @@ class UserCreate {
   final String name;
   final String? role;
 
+  /// The User Agreement / Privacy Policy box — the backend requires it.
+  final bool acceptedTerms;
+
   UserCreate({
     required this.email,
     required this.password,
     required this.name,
     this.role,
+    this.acceptedTerms = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -85,6 +89,7 @@ class UserCreate {
         'password': password,
         'name': name,
         if (role != null) 'role': role,
+        'accepted_terms': acceptedTerms,
       };
 }
 

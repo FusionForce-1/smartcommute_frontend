@@ -79,17 +79,9 @@ const AuthPopup = (() => {
       }
       hideError('otp-error');
 
-      // TODO: Velez — AuthModule.resetPassword → POST /auth/reset-password
-      // Collect new_password in a follow-up field if the backend requires it.
-      try {
-        await AuthModule.resetPassword(email, otp, '');
-        AuthModal.close();
-        Router.go('login');
-      } catch (err) {
-        const banner = document.querySelector('#otp-error .error-banner__text');
-        if (banner) banner.textContent = err.message || 'Incorrect or expired code. Try again.';
-        showError('otp-error');
-      }
+      // The backend checks the code together with the new password, so the
+      // code is carried to the next step rather than sent here.
+      AuthPopup.openSetNewPassword(email, otp);
     });
 
     document.getElementById('otp-back').addEventListener('click', () => {
@@ -98,6 +90,65 @@ const AuthPopup = (() => {
 
     document.querySelector('.bottom-link-row a')?.addEventListener('click', () => {
       AuthModal.close();
+    });
+  }
+
+  function setNewPasswordContent() {
+    return `
+      ${Components.popupIcon('forgotKey')}
+      <h1 class="auth-card__title" style="font-size:28px;">Set New Password</h1>
+      <p class="auth-card__subtitle">Choose a new password for your account.</p>
+
+      <form id="new-password-form" novalidate style="text-align:left;">
+        ${Components.field({ id: 'new-password', label: 'New Password', type: 'password', placeholder: 'Enter your new password', withToggle: true })}
+        ${Components.field({ id: 'new-password-repeat', label: 'Repeat Password', type: 'password', placeholder: 'Repeat your new password', withToggle: true })}
+
+        ${Components.errorBanner({ id: 'new-password-error', message: 'Passwords do not match.' })}
+
+        <div class="btn-stack mt-sm">
+          ${Components.button({ id: 'new-password-submit', label: 'Reset Password', variant: 'primary', type: 'submit' })}
+          ${Components.button({ id: 'new-password-back', label: '← Back', variant: 'outline', type: 'button' })}
+        </div>
+      </form>`;
+  }
+
+  function initSetNewPassword(email, otp) {
+    wirePasswordToggle('new-password');
+    wirePasswordToggle('new-password-repeat');
+
+    const showPasswordError = (message) => {
+      const banner = document.querySelector('#new-password-error .error-banner__text');
+      if (banner) banner.textContent = message;
+      showError('new-password-error');
+    };
+
+    document.getElementById('new-password-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('new-password').value;
+      const repeatPassword = document.getElementById('new-password-repeat').value;
+
+      if (password.length < 6) {
+        showPasswordError('Password must be at least 6 characters.');
+        return;
+      }
+      if (password !== repeatPassword) {
+        showPasswordError('Passwords do not match.');
+        return;
+      }
+      hideError('new-password-error');
+
+      // A wrong or expired code is only caught here, by POST /auth/reset-password.
+      try {
+        await AuthModule.resetPassword(email, otp, password);
+        AuthModal.close();
+        Router.go('login');
+      } catch (err) {
+        showPasswordError(err.message || 'Incorrect or expired code. Go back and request a new one.');
+      }
+    });
+
+    document.getElementById('new-password-back').addEventListener('click', () => {
+      AuthPopup.openVerifyOtp(email);
     });
   }
 
@@ -163,5 +214,9 @@ const AuthPopup = (() => {
     AuthModal.setContent(verifyOtpContent(email), { onMount: () => initVerifyOtp(email) });
   }
 
-  return { openForgotPassword, openVerifyOtp, openSignInCode };
+  function openSetNewPassword(email, otp) {
+    AuthModal.setContent(setNewPasswordContent(), { onMount: () => initSetNewPassword(email, otp) });
+  }
+
+  return { openForgotPassword, openVerifyOtp, openSetNewPassword, openSignInCode };
 })();

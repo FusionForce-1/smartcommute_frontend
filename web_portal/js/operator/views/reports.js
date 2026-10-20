@@ -27,7 +27,7 @@ OperatorRouter.register('reports', {
         <div class="op-card__head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
           <div>
             <h3>Driver Reviews</h3>
-            <p class="op-card__sub" style="margin:0;">Ratings commuters gave the drivers of your jeeps. Commuters stay anonymous.</p>
+            <p class="op-card__sub" style="margin:0;">Ratings commuters gave the drivers of your PUVs. Commuters stay anonymous.</p>
           </div>
           <select id="rep-review-driver" aria-label="Filter reviews by driver" style="min-width:200px;">
             <option value="">All drivers</option>
@@ -100,10 +100,10 @@ OperatorRouter.register('reports', {
     // ---------- Driver reviews ----------
 
     const TAGS = {
-      safe_driving: ['Safe driving', true], friendly: ['Friendly', true], clean: ['Clean jeep', true],
+      safe_driving: ['Safe driving', true], friendly: ['Friendly', true], clean: ['Clean PUV', true],
       on_time: ['On time', true], honest_fare: ['Honest fare', true],
       reckless_driving: ['Reckless driving', false], rude: ['Rude', false], overcharging: ['Overcharging', false],
-      overloading: ['Overloading', false], late: ['Long wait / late', false], dirty: ['Dirty jeep', false],
+      overloading: ['Overloading', false], late: ['Long wait / late', false], dirty: ['Dirty PUV', false],
     };
     const tagChip = (key, count) => {
       const [label, good] = TAGS[key] || [key.replace(/_/g, ' '), true];

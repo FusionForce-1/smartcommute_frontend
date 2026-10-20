@@ -129,13 +129,31 @@ class StopImage extends StatelessWidget {
 }
 
 /// Map marker for a stop: a round photo thumbnail with a pointer below it.
-/// Use with `Marker(width: 56, height: 68, alignment: Alignment.topCenter)`
+/// Use with `Marker(width: StopImageMarker.widthFor(photo),
+/// height: StopImageMarker.heightFor(photo), alignment: Alignment.topCenter)`
 /// so the pointer tip sits exactly on the stop's coordinates.
 class StopImageMarker extends StatelessWidget {
-  const StopImageMarker({super.key, required this.stop, this.onTap});
+  const StopImageMarker({
+    super.key,
+    required this.stop,
+    this.onTap,
+    this.photo = maxPhoto,
+  });
+
+  /// Photo diameter when fully zoomed in. Kept small: many stops sit close
+  /// together, and big pins piled up into a mess.
+  static const double maxPhoto = 28;
+  static const double _pointerHeight = 6;
+
+  /// Size of the Marker box that holds a pin with a [photo]-wide photo.
+  static double widthFor(double photo) => photo + 4;
+  static double heightFor(double photo) => photo + _pointerHeight;
 
   final TransportStop stop;
   final VoidCallback? onTap;
+
+  /// Photo diameter in pixels — the map shrinks it as you zoom out.
+  final double photo;
 
   @override
   Widget build(BuildContext context) {
@@ -147,18 +165,18 @@ class StopImageMarker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 52,
-              height: 52,
+              width: photo,
+              height: photo,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(color: AppColors.secondary, width: 3),
+                border: Border.all(color: AppColors.secondary, width: 2),
                 boxShadow: AppShadows.card,
                 color: Colors.white,
               ),
               child: ClipOval(child: _StopThumbnail(location: stop.location)),
             ),
             CustomPaint(
-              size: const Size(14, 10),
+              size: const Size(10, _pointerHeight),
               painter: _PointerPainter(AppColors.secondary),
             ),
           ],

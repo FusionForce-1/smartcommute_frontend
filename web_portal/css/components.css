@@ -54,10 +54,28 @@
   letter-spacing: 0.6px;
 }
 
+/* Same size as the admin / operator sidebar logo (css/admin.css). Those
+   pages scale everything with the screen (html.admin-root sets 1rem to
+   clamp(12px, min(0.8333vw, 1.4815vh), 16px)), so this uses that same unit
+   rather than this page's fixed 16px rem. The sidebar logo is 88% of the
+   sidebar's inner width: 17.82 of those units, 14.96 at <= 1500px.
+   The PNG has blank space around the artwork (~14% of its width above,
+   ~17% below, ~9% at the left); negative margins trim it like the sidebar
+   does, and line the artwork up with the page edge. */
 .brand-header__logo {
-  height: 76px;
-  width: auto;
+  --admin-rem: clamp(12px, min(0.8333vw, 1.4815vh), 16px);
+  --logo-width: calc(17.82 * var(--admin-rem));
+  width: var(--logo-width);
+  height: auto;
   display: block;
+  margin: calc(var(--logo-width) * -0.09) 0 calc(var(--logo-width) * -0.15)
+    calc(var(--logo-width) * -0.089);
+}
+
+@media (max-width: 1500px) {
+  .brand-header__logo {
+    --logo-width: calc(14.96 * var(--admin-rem));
+  }
 }
 
 .brand-header__tagline {
@@ -433,3 +451,94 @@
 /* Utility */
 .mt-sm { margin-top: var(--space-sm); }
 .mt-md { margin-top: var(--space-md); }
+
+/* ---------- Consent checkbox (Register + Complete your Profile) ---------- */
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 var(--space-md);
+  color: var(--color-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.consent-row input {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.consent-row label {
+  cursor: pointer;
+}
+
+.consent-link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.consent-link:hover,
+.consent-link:focus-visible {
+  text-decoration: underline;
+}
+
+/* ---------- User Agreement / Privacy Policy popup (js/legal.js) ---------- */
+
+/* Above the Complete your Profile popup, which it can open on top of. */
+.modal-backdrop--legal {
+  z-index: 1100;
+}
+
+.legal-doc.modal-shell {
+  width: min(600px, 100%);
+  max-width: 600px;
+  text-align: left;
+}
+
+.legal-doc:focus {
+  outline: none;
+}
+
+.legal-doc__title {
+  font-size: 28px;
+  padding-right: 32px; /* clear the close button */
+}
+
+.legal-doc__updated {
+  margin: 0 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.legal-doc__body {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: var(--space-md);
+}
+
+.legal-doc__body h2 {
+  margin: var(--space-sm) 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.legal-doc__body ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.legal-doc__body li + li {
+  margin-top: 4px;
+}

@@ -14,6 +14,8 @@ class TripLocationsCard extends StatelessWidget {
     required this.fromValue,
     required this.toValue,
     required this.isLocating,
+    this.usingMyLocation = false,
+    this.destinationOnMap = false,
     required this.onChooseFrom,
     required this.onUseMyLocation,
     required this.onChooseTo,
@@ -27,6 +29,12 @@ class TripLocationsCard extends StatelessWidget {
   final String? fromValue;
   final String? toValue;
   final bool isLocating;
+
+  /// From is the commuter's own GPS location: the button shows as on.
+  final bool usingMyLocation;
+
+  /// To is a pin dropped on the map: the map button shows as on.
+  final bool destinationOnMap;
   final String? fromError;
 
   final VoidCallback onChooseFrom;
@@ -65,15 +73,17 @@ class TripLocationsCard extends StatelessWidget {
                   onTap: onChooseFrom,
                 ),
               ),
-              IconButton(
+              const SizedBox(width: AppSpacing.xs),
+              _StateIconButton(
+                key: const Key('useMyLocation'),
+                idleIcon: Icons.location_on_outlined,
+                activeIcon: Icons.my_location,
                 tooltip: 'Use my location',
-                onPressed: isLocating ? null : onUseMyLocation,
-                icon: isLocating
-                    ? const SizedBox.square(
-                        dimension: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.location_on_outlined, size: 30),
+                activeTooltip: 'Using your location (tap to update)',
+                busyTooltip: 'Finding your location…',
+                busy: isLocating,
+                active: usingMyLocation,
+                onPressed: onUseMyLocation,
               ),
             ],
           ),
@@ -108,14 +118,96 @@ class TripLocationsCard extends StatelessWidget {
                   onTap: onChooseTo,
                 ),
               ),
-              IconButton(
+              const SizedBox(width: AppSpacing.xs),
+              _StateIconButton(
+                key: const Key('pickOnMap'),
+                idleIcon: Icons.map_outlined,
+                activeIcon: Icons.edit_location_alt,
                 tooltip: 'Pick on map',
+                activeTooltip: 'Move the pin on the map',
+                active: destinationOnMap,
                 onPressed: onPickOnMap,
-                icon: const Icon(Icons.map_outlined, size: 28),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Round icon button with three looks: idle (grey circle, outlined icon),
+/// busy (teal with a spinner) and active (teal with a white icon) — used for
+/// "Use my location" (on while From is the commuter's GPS) and "Pick on
+/// map" (on while To is a dropped pin). Tap again to update either.
+class _StateIconButton extends StatelessWidget {
+  const _StateIconButton({
+    super.key,
+    required this.idleIcon,
+    required this.activeIcon,
+    required this.tooltip,
+    required this.activeTooltip,
+    this.busyTooltip,
+    this.busy = false,
+    required this.active,
+    required this.onPressed,
+  });
+
+  final IconData idleIcon;
+  final IconData activeIcon;
+  final String tooltip;
+  final String activeTooltip;
+  final String? busyTooltip;
+  final bool busy;
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget icon;
+    if (busy) {
+      icon = const SizedBox.square(
+        key: ValueKey('busy'),
+        dimension: 22,
+        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+      );
+    } else if (active) {
+      icon = Icon(activeIcon, key: const ValueKey('active'), size: 26, color: Colors.white);
+    } else {
+      icon = Icon(idleIcon, key: const ValueKey('idle'), size: 28, color: AppColors.textPrimary);
+    }
+    final filled = busy || active;
+
+    return Tooltip(
+      message: busy ? (busyTooltip ?? tooltip) : (active ? activeTooltip : tooltip),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: filled ? AppColors.brandTeal : const Color(0xFFF0F2F5),
+          boxShadow: filled
+              ? [BoxShadow(color: AppColors.brandTeal.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))]
+              : const [],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: busy ? null : onPressed,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child)),
+                child: icon,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

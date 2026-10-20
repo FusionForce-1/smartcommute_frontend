@@ -28,6 +28,9 @@ class ProfileProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _disposed = false;
 
+  /// For screens that call the account endpoints directly (Privacy & Security).
+  ProfileService get service => _service;
+
   LoadState get state => _state;
   CommuterProfile? get profile => _profile;
   List<SavedRoute> get savedRoutes => _savedRoutes;

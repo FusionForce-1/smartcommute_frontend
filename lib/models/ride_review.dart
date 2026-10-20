@@ -17,7 +17,7 @@ class ReviewTag {
   static const all = [
     ReviewTag('safe_driving', 'Safe driving', positive: true),
     ReviewTag('friendly', 'Friendly driver', positive: true),
-    ReviewTag('clean', 'Clean jeep', positive: true),
+    ReviewTag('clean', 'Clean PUV', positive: true),
     ReviewTag('on_time', 'On time', positive: true),
     ReviewTag('honest_fare', 'Honest fare', positive: true),
     ReviewTag('reckless_driving', 'Reckless driving', positive: false),
@@ -25,7 +25,7 @@ class ReviewTag {
     ReviewTag('overcharging', 'Overcharging', positive: false),
     ReviewTag('overloading', 'Overloading', positive: false),
     ReviewTag('late', 'Long wait / late', positive: false),
-    ReviewTag('dirty', 'Dirty jeep', positive: false),
+    ReviewTag('dirty', 'Dirty PUV', positive: false),
   ];
 
   static String labelOf(String key) =>

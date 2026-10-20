@@ -1,7 +1,7 @@
 // lib/widgets/commuter/profile_header.dart
 //
 // Teal profile banner: initials avatar, name (with edit button), email,
-// role badge and the Trips / Saved Routes counters.
+// role badge and the Trips / Saved Routes / Reviews counters.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -80,6 +80,8 @@ class ProfileHeader extends StatelessWidget {
                     _Stat(value: profile.stats.trips, label: 'Trips'),
                     const SizedBox(width: 6),
                     _Stat(value: profile.stats.savedRoutes, label: 'Saved Routes'),
+                    const SizedBox(width: 6),
+                    _Stat(value: profile.stats.reviews, label: 'Reviews'),
                   ],
                 ),
               ],

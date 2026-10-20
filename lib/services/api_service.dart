@@ -86,7 +86,9 @@ class ApiService {
     return tokens;
   }
 
-  Future<TokenResponse> loginWithGoogle(String idToken) async {
+  /// [acceptedTerms]: sent from the register screen once its User
+  /// Agreement / Privacy Policy box is ticked; the backend records it.
+  Future<TokenResponse> loginWithGoogle(String idToken, {bool acceptedTerms = false}) async {
     if (useAuthMocks) {
       final tokens = await _authMocks.loginWithGoogle(idToken);
       await _storeTokens(tokens);
@@ -94,6 +96,7 @@ class ApiService {
     }
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
+      if (acceptedTerms) 'accepted_terms': true,
     });
     final tokens = TokenResponse.fromJson(response.data);
     await _storeTokens(tokens);
@@ -163,18 +166,9 @@ class ApiService {
     await _dio.post('/auth/forgot-password', data: {'email': email});
   }
 
-  // FLAGGED GAP: the backend's OTPRequest schema (per your v5 doc)
-  // requires email + otp + new_password TOGETHER in one call to
-  // /auth/reset-password. But VerifyOtpScreen only collects the OTP
-  // code — there's no "new password" field on that screen. This means
-  // either:
-  //   (a) a "set new password" screen/step is still missing, or
-  //   (b) the backend needs a separate "just verify the code" endpoint
-  //       before the actual reset.
-  // This method is written to match the DOCUMENTED endpoint shape, but
-  // it CANNOT actually be called correctly from VerifyOtpScreen as it
-  // exists today, since newPassword has nothing to be passed in from
-  // that screen. Raise this with your team before wiring it for real.
+  // The backend needs email + otp + new_password together in one call
+  // (new_password at least 6 characters, or it answers 422). The code
+  // comes from VerifyOtpScreen, the password from SetNewPasswordScreen.
   Future<void> verifyOtpAndResetPassword(
     String email,
     String otp,

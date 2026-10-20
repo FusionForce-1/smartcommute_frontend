@@ -1,7 +1,8 @@
 // lib/widgets/commuter/live_map.dart
 //
-// Live Map card: OSM tiles locked to the service area, stop photo pins,
-// animated vehicle markers, the commuter's location and zoom buttons.
+// Live Map card: OSM tiles locked to the service area, stops (small dots
+// when zoomed out, photo pins up close), animated vehicle markers, the
+// commuter's location and zoom buttons.
 // Owns no state — the Home tab feeds it data and the map controller.
 //
 // With [selectedVehicleId] set (picked from "Nearby Vehicles") it shows how
@@ -11,6 +12,9 @@
 // jeep's animated position to the commuter, redrawn every frame.
 //
 // The commuter is a blue circle ("you are here"), not a pin.
+//
+// [expanded] draws it edge to edge (the Home tab's full-screen map) instead
+// of as a rounded card; [onToggleExpanded] adds the expand / collapse button.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -38,6 +42,10 @@ class LiveMap extends StatelessWidget {
     this.walkPath,
     this.boardAt,
     this.jeepPath,
+    this.expanded = false,
+    this.onToggleExpanded,
+    this.showControls = true,
+    this.topInset = 0,
   });
 
   final MapController controller;
@@ -64,24 +72,33 @@ class LiveMap extends StatelessWidget {
   /// The jeep's route from where it is now to [boardAt] (empty once passed).
   final List<LatLng>? jeepPath;
 
+  /// Full screen: no card corners, border or shadow.
+  final bool expanded;
+
+  /// Shows the expand / collapse button in the map controls.
+  final VoidCallback? onToggleExpanded;
+
+  /// False when the parent places [MapControls] itself (e.g. above a sheet).
+  final bool showControls;
+
+  /// Space at the top covered by something floating over the map (the
+  /// full-screen search bar), so the "Hide line" chip sits below it.
+  final double topInset;
+
   static const Color _walkLine = Color(0xFF2F6FED);
 
   static const Color _selectionLine = AppColors.brandTeal;
 
-  void _zoomBy(double delta) {
-    final camera = controller.camera;
-    final zoom = (camera.zoom + delta).clamp(MapConfig.minZoom, MapConfig.maxZoom);
-    controller.move(camera.center, zoom);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.sm),
-        boxShadow: AppShadows.card,
-        border: Border.all(color: AppColors.divider),
-      ),
+      decoration: expanded
+          ? const BoxDecoration()
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(AppSpacing.sm),
+              boxShadow: AppShadows.card,
+              border: Border.all(color: AppColors.divider),
+            ),
       clipBehavior: Clip.antiAlias,
       child: FlutterMap(
         mapController: controller,
@@ -154,7 +171,7 @@ class LiveMap extends StatelessWidget {
                   point: boardAt!,
                   width: 34,
                   height: 34,
-                  child: const Tooltip(message: 'Wait for the jeep here', child: _BoardHere()),
+                  child: const Tooltip(message: 'Wait for the PUV here', child: _BoardHere()),
                 ),
               ],
             ),
@@ -164,6 +181,8 @@ class LiveMap extends StatelessWidget {
                 Marker(point: here, width: 44, height: 44, child: const _YouAreHere()),
               ],
             ),
+          // Under the vehicles, so a stop never hides a jeep.
+          _StopMarkers(stops: stops),
           // Only this layer repaints per animation frame.
           ValueListenableBuilder<int>(
             valueListenable: frame,
@@ -186,25 +205,100 @@ class LiveMap extends StatelessWidget {
               );
             },
           ),
-          MarkerLayer(
-            markers: [
-              for (final stop in stops)
-                Marker(
-                  point: stop.location,
-                  width: 56,
-                  height: 68,
-                  alignment: Alignment.topCenter,
-                  child: StopImageMarker(
-                    stop: stop,
-                    onTap: () => showStopDetailsSheet(context, stop),
-                  ),
+          if (showControls)
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: MapControls(
+                  controller: controller,
+                  expanded: expanded,
+                  onToggleExpanded: onToggleExpanded,
                 ),
-            ],
-          ),
-          _ZoomButtons(onZoom: _zoomBy),
+              ),
+            ),
           if (selectedVehicleId != null && onClearSelection != null)
-            _ClearSelectionChip(onPressed: onClearSelection!),
+            _ClearSelectionChip(onPressed: onClearSelection!, topInset: topInset),
         ],
+      ),
+    );
+  }
+}
+
+/// Stops, sized for how far out the map is — they only ever get SMALLER as
+/// you zoom out, never bigger. Zoomed out, many stops share a few streets,
+/// so each is a dot that shrinks with the map. From street level
+/// ([photoZoom]) in, they spread out enough for photo pins.
+class _StopMarkers extends StatelessWidget {
+  const _StopMarkers({required this.stops});
+
+  final List<TransportStop> stops;
+
+  static const double photoZoom = 15;
+
+  /// Dot diameter: 4 px at zoom 11 or further out, up to 10 px at zoom 14.
+  static double dotSize(double zoom) => (4 + (zoom - 11) * 2).clamp(4.0, 10.0);
+
+  /// Photo diameter: 18 px at zoom 15, up to the full size at zoom 17.
+  static double photoSize(double zoom) =>
+      (18 + (zoom - photoZoom) * 5).clamp(18.0, StopImageMarker.maxPhoto);
+
+  @override
+  Widget build(BuildContext context) {
+    // Rebuilds as the camera moves, so sizes follow the zoom live.
+    final zoom = MapCamera.of(context).zoom;
+    final photo = photoSize(zoom);
+    final dot = dotSize(zoom);
+    return MarkerLayer(
+      markers: [
+        for (final stop in stops)
+          if (zoom >= photoZoom)
+            Marker(
+              point: stop.location,
+              width: StopImageMarker.widthFor(photo),
+              height: StopImageMarker.heightFor(photo),
+              alignment: Alignment.topCenter,
+              child: StopImageMarker(
+                stop: stop,
+                photo: photo,
+                onTap: () => showStopDetailsSheet(context, stop),
+              ),
+            )
+          else
+            Marker(
+              point: stop.location,
+              // Bigger than the dot, so it is still easy to tap.
+              width: 20,
+              height: 20,
+              child: GestureDetector(
+                onTap: () => showStopDetailsSheet(context, stop),
+                child: Tooltip(message: stop.name, child: _StopDot(size: dot)),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _StopDot extends StatelessWidget {
+  const _StopDot({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        key: const Key('stopDot'),
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: AppColors.secondary,
+          shape: BoxShape.circle,
+          // A thinner ring on the tiniest dots, or it hides the colour.
+          border: Border.all(color: Colors.white, width: size >= 8 ? 2 : 1),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2)],
+        ),
       ),
     );
   }
@@ -264,16 +358,17 @@ class _BoardHere extends StatelessWidget {
 
 /// Top-left "✕ Hide line" chip shown while a vehicle is selected.
 class _ClearSelectionChip extends StatelessWidget {
-  const _ClearSelectionChip({required this.onPressed});
+  const _ClearSelectionChip({required this.onPressed, this.topInset = 0});
 
   final VoidCallback onPressed;
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.topLeft,
       child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xs),
+        padding: const EdgeInsets.all(AppSpacing.xs).copyWith(top: AppSpacing.xs + topInset),
         child: ActionChip(
           avatar: const Icon(Icons.close, size: 18, color: LiveMap._selectionLine),
           label: const Text('Hide line'),
@@ -286,42 +381,80 @@ class _ClearSelectionChip extends StatelessWidget {
   }
 }
 
-class _ZoomButtons extends StatelessWidget {
-  const _ZoomButtons({required this.onZoom});
+/// The map's buttons, stacked on the right: expand / collapse (with
+/// [onToggleExpanded]), center on my location (with [onLocate]) and zoom.
+class MapControls extends StatelessWidget {
+  const MapControls({
+    super.key,
+    required this.controller,
+    this.expanded = false,
+    this.onToggleExpanded,
+    this.onLocate,
+  });
 
-  final ValueChanged<double> onZoom;
+  final MapController controller;
+  final bool expanded;
+  final VoidCallback? onToggleExpanded;
+  final VoidCallback? onLocate;
+
+  void _zoomBy(double delta) {
+    final camera = controller.camera;
+    final zoom = (camera.zoom + delta).clamp(MapConfig.minZoom, MapConfig.maxZoom);
+    controller.move(camera.center, zoom);
+  }
+
+  static Widget _card(Widget child) => Material(
+        color: Colors.white,
+        elevation: 3,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        clipBehavior: Clip.antiAlias,
+        child: child,
+      );
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomRight,
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xs),
-        child: Material(
-          color: Colors.white,
-          elevation: 3,
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                tooltip: 'Zoom in',
-                icon: const Icon(Icons.add),
-                color: AppColors.primary,
-                onPressed: () => onZoom(1),
-              ),
-              const SizedBox(width: 32, child: Divider(height: 1)),
-              IconButton(
-                tooltip: 'Zoom out',
-                icon: const Icon(Icons.remove),
-                color: AppColors.primary,
-                onPressed: () => onZoom(-1),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (onToggleExpanded != null) ...[
+          _card(IconButton(
+            key: const Key('mapExpandToggle'),
+            tooltip: expanded ? 'Exit full screen' : 'Full screen map',
+            icon: Icon(expanded ? Icons.close_fullscreen : Icons.open_in_full),
+            color: AppColors.brandTeal,
+            onPressed: onToggleExpanded,
+          )),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        if (onLocate != null) ...[
+          _card(IconButton(
+            tooltip: 'Center on my location',
+            icon: const Icon(Icons.my_location),
+            color: AppColors.brandTeal,
+            onPressed: onLocate,
+          )),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        _card(Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Zoom in',
+              icon: const Icon(Icons.add),
+              color: AppColors.primary,
+              onPressed: () => _zoomBy(1),
+            ),
+            const SizedBox(width: 32, child: Divider(height: 1)),
+            IconButton(
+              tooltip: 'Zoom out',
+              icon: const Icon(Icons.remove),
+              color: AppColors.primary,
+              onPressed: () => _zoomBy(-1),
+            ),
+          ],
+        )),
+      ],
     );
   }
 }

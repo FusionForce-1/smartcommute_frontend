@@ -121,7 +121,7 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
                       ?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
               const Text(
-                "Your review goes to the jeep's operator and counts for its driver. Your name isn't shown to them.",
+                "Your review goes to the PUV's operator and counts for its driver. Your name isn't shown to them.",
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -147,9 +147,9 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
                 initialValue: _vehicleId,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Jeep (plate number)',
+                  labelText: 'PUV (plate number)',
                   helperText:
-                      'The plate is painted on the front and back of the jeepney.',
+                      'The plate is painted on the front and back of the PUV.',
                 ),
                 items: [
                   for (final v in jeeps)
