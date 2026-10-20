@@ -1,7 +1,8 @@
 // js/views/register.js
 //
 // Operator registration. Collects Full Name, Email, Contact Number,
-// Company Name, Franchise Number, Password. Google complete-profile overlay
+// Company Name, Franchise Number, Password, plus the User Agreement /
+// Privacy Policy consent (js/legal.js). Google complete-profile overlay
 // matches OPERATOR_GOOGLE.png.
 
 Router.register('register', {
@@ -23,13 +24,14 @@ Router.register('register', {
                 ${Components.orDivider()}
 
                 <form id="register-form" novalidate>
-                  ${Components.field({ id: 'register-full-name', label: 'Full name', placeholder: 'Enter your firstname' })}
+                  ${Components.field({ id: 'register-full-name', label: 'Full name', placeholder: 'Enter your fullname' })}
                   ${Components.field({ id: 'register-email', label: 'Email Address', type: 'email', placeholder: 'Enter your email' })}
                   ${Components.field({ id: 'register-contact', label: 'Contact Number', type: 'tel', placeholder: 'Enter contact number' })}
                   ${Components.field({ id: 'register-company', label: 'Company Name', placeholder: 'Enter the company name' })}
                   ${Components.field({ id: 'register-franchise', label: 'Franchise Number', placeholder: 'Enter franchise number' })}
                   ${Components.field({ id: 'register-password', label: 'Password', type: 'password', placeholder: 'Enter your password', withToggle: true })}
                   ${Components.field({ id: 'register-repeat-password', label: 'Repeat Password', type: 'password', placeholder: 'Enter your repeat password', withToggle: true })}
+                  ${Consent.checkbox('register-consent')}
 
                   ${Components.button({ id: 'register-submit', label: 'Register', variant: 'primary', type: 'submit' })}
                 </form>
@@ -50,9 +52,12 @@ Router.register('register', {
       const banner = document.querySelector('#register-error .error-banner__text');
       if (banner) banner.textContent = message;
       showError('register-error');
+      // The banner is at the top of a tall form; bring it into view.
+      document.getElementById('register-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     const value = (id) => document.getElementById(id).value.trim();
+    Consent.wire(document.getElementById('register-form'));
 
     document.getElementById('register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -68,7 +73,8 @@ Router.register('register', {
         contact_number: value('register-contact'),
       };
 
-      const problem = validateRegistration({ name, email, password, repeatPassword, profile });
+      const problem = validateRegistration({ name, email, password, repeatPassword, profile })
+        || (document.getElementById('register-consent').checked ? '' : Consent.MESSAGE);
       if (problem) {
         showRegisterError(problem);
         return;
@@ -77,7 +83,7 @@ Router.register('register', {
       const submit = document.getElementById('register-submit');
       submit.disabled = true;
       try {
-        await AuthModule.registerOperator({ name, email, password, profile });
+        await AuthModule.registerOperator({ name, email, password, profile, acceptedTerms: true });
         Router.go('login', { registered: '1' });
       } catch (err) {
         showRegisterError(err.message || 'Registration failed.');
@@ -148,6 +154,7 @@ const OperatorProfilePopup = {
         ${Components.field({ id: 'profile-company', label: 'Company Name', placeholder: 'Enter your company name' })}
         ${Components.field({ id: 'profile-franchise', label: 'Franchise Number', placeholder: 'Enter your franchise number' })}
         ${Components.field({ id: 'profile-contact', label: 'Contact Number', type: 'tel', placeholder: 'Enter your contact number' })}
+        ${Consent.checkbox('profile-consent')}
         ${Components.errorBanner({ id: 'profile-error', message: 'Please complete all fields.' })}
         ${Components.button({ id: 'profile-submit', label: 'Register', variant: 'primary', type: 'submit' })}
       </form>
@@ -170,6 +177,7 @@ const OperatorProfilePopup = {
       onMount: () => {
         document.getElementById('profile-close').addEventListener('click', cancel);
         document.getElementById('profile-change').addEventListener('click', cancel);
+        Consent.wire(document.getElementById('profile-form'));
         document.getElementById('profile-form').addEventListener('submit', async (e) => {
           e.preventDefault();
           const profile = {
@@ -185,11 +193,16 @@ const OperatorProfilePopup = {
             showProfileError('Company name must be at least 2 characters.');
             return;
           }
+          if (!document.getElementById('profile-consent').checked) {
+            showProfileError(Consent.MESSAGE);
+            return;
+          }
           hideError('profile-error');
 
           const submit = document.getElementById('profile-submit');
           submit.disabled = true;
           try {
+            await AuthModule.acceptTerms();
             await AuthModule.createOperatorProfile(profile);
             window.location.href = 'operator/operator.html';
           } catch (err) {

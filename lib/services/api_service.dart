@@ -86,7 +86,9 @@ class ApiService {
     return tokens;
   }
 
-  Future<TokenResponse> loginWithGoogle(String idToken) async {
+  /// [acceptedTerms]: sent from the register screen once its User
+  /// Agreement / Privacy Policy box is ticked; the backend records it.
+  Future<TokenResponse> loginWithGoogle(String idToken, {bool acceptedTerms = false}) async {
     if (useAuthMocks) {
       final tokens = await _authMocks.loginWithGoogle(idToken);
       await _storeTokens(tokens);
@@ -94,6 +96,7 @@ class ApiService {
     }
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
+      if (acceptedTerms) 'accepted_terms': true,
     });
     final tokens = TokenResponse.fromJson(response.data);
     await _storeTokens(tokens);

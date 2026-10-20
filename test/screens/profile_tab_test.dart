@@ -154,12 +154,109 @@ void main() {
     expect(calls.createdAccount, 1);
   });
 
-  testWidgets('guests can open help and legal links', (tester) async {
+  testWidgets('Terms & Privacy Policy lets you read either document', (tester) async {
     await pumpProfileTab(tester, fakeBackend(loaded()), isGuest: true);
 
-    expect(find.text('Help & Support'), findsOneWidget);
     await tester.tap(find.text('Terms & Privacy Policy'));
-    await tester.pump();
-    expect(find.text('This page is coming soon.'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('User Agreement'), findsOneWidget);
+    expect(find.text('Privacy Policy'), findsOneWidget);
+
+    await tester.tap(find.text('Privacy Policy'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('Data Privacy Act of 2012'), findsOneWidget);
+  });
+
+  testWidgets('Help & Support opens the FAQ', (tester) async {
+    await pumpProfileTab(tester, fakeBackend(loaded()), isGuest: true);
+
+    await tester.tap(find.text('Help & Support'));
+    await tester.pumpAndSettle();
+    expect(find.text('Frequently asked questions'), findsOneWidget);
+
+    await tester.tap(find.text('How do I plan a trip?'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('tap Find Routes'), findsOneWidget);
+  });
+
+  group('Privacy & Security', () {
+    Map<String, Object?> security({bool hasPassword = true, bool termsCurrent = true}) => {
+          'two_factor_enabled': false,
+          'has_password': hasPassword,
+          'auth_provider': hasPassword ? 'local' : 'google',
+          'terms_accepted_at': termsCurrent ? '2026-10-20T04:00:00Z' : null,
+          'terms_version': termsCurrent ? '2026-10' : null,
+          'terms_current': termsCurrent,
+        };
+
+    /// Lets real (fake-HTTP) requests finish, then redraws.
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> openPage(WidgetTester tester) async {
+      await tester.tap(find.text('Privacy & Security'));
+      await tester.pumpAndSettle();
+      await settle(tester);
+    }
+
+    testWidgets('shows sign-in options and when you agreed', (tester) async {
+      await pumpProfileTab(tester, fakeBackend(loaded({'GET /users/me/security': security()})));
+      await openPage(tester);
+
+      expect(find.text('Change password'), findsOneWidget);
+      expect(find.text('Two-factor sign-in'), findsOneWidget);
+      expect(find.textContaining('You agreed on October 20, 2026'), findsOneWidget);
+      expect(find.text('I agree'), findsNothing);
+    });
+
+    testWidgets('changes the password', (tester) async {
+      final backend = fakeBackend(loaded({
+        'GET /users/me/security': security(),
+        'POST /users/me/password': null,
+      }));
+      await pumpProfileTab(tester, backend);
+      await openPage(tester);
+
+      await tester.tap(find.text('Change password'));
+      await tester.pumpAndSettle();
+      final fields = find.descendant(of: find.byType(AlertDialog), matching: find.byType(TextField));
+      await tester.enterText(fields.at(0), 'secret123');
+      await tester.enterText(fields.at(1), 'newpass1');
+      await tester.enterText(fields.at(2), 'newpass2');
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      expect(find.text('New passwords do not match.'), findsOneWidget);
+
+      await tester.enterText(fields.at(2), 'newpass1');
+      await tester.tap(find.text('Save'));
+      await settle(tester);
+
+      expect(calls(backend), contains('POST /users/me/password'));
+      expect(find.text('Your password was changed.'), findsOneWidget);
+    });
+
+    testWidgets('Google accounts get no password option and can agree', (tester) async {
+      final backend = fakeBackend(loaded({
+        'GET /users/me/security': security(hasPassword: false, termsCurrent: false),
+        'POST /users/me/accept-terms': security(hasPassword: false),
+      }));
+      await pumpProfileTab(tester, backend);
+      await openPage(tester);
+
+      expect(find.text('Change password'), findsNothing);
+      expect(find.text('You sign in with Google'), findsOneWidget);
+      expect(find.textContaining('agreed to the latest terms'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('I agree'));
+      await tester.tap(find.text('I agree'));
+      await settle(tester);
+
+      expect(calls(backend), contains('POST /users/me/accept-terms'));
+      expect(find.textContaining('You agreed on'), findsOneWidget);
+    });
   });
 }

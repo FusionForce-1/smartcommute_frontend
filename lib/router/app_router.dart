@@ -252,6 +252,7 @@ class RegisterScreenHost extends StatelessWidget {
     final auth = context.read<AuthProvider>();
     return RegisterScreen(
       onBack: () => Navigator.of(context).pop(),
+      onConsentChanged: (agreed) => auth.googleSignUpTermsAccepted = agreed,
       onRegister: (fullName, email, password) async {
         await auth.registerCommuter(
           fullName: fullName,
