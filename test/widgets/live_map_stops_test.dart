@@ -53,4 +53,45 @@ void main() {
     expect(find.byKey(const Key('stopDot')), findsNothing);
     expect(find.byType(StopImageMarker), findsNWidgets(3));
   });
+
+  testWidgets('stops only ever get smaller as you zoom out', (tester) async {
+    final center = MapConfig.defaultCenter;
+    final controller = MapController();
+    final frame = ValueNotifier(0);
+    addTearDown(frame.dispose);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: LiveMap(
+          controller: controller,
+          stops: [
+            TransportStop(id: 's', name: 'Stop', location: center, routeIds: const ['r1'], sequence: 0),
+          ],
+          tracks: const {},
+          clock: Stopwatch(),
+          frame: frame,
+          onMapReady: () {},
+        ),
+      ),
+    ));
+    await tester.pump();
+
+    double stopSize() {
+      final dot = find.byKey(const Key('stopDot'));
+      if (dot.evaluate().isNotEmpty) return tester.getSize(dot).width;
+      return tester.widget<StopImageMarker>(find.byType(StopImageMarker)).photo;
+    }
+
+    final sizes = <double>[];
+    for (final zoom in [18.0, 17.0, 16.0, 15.0, 14.0, 13.0, 12.0, 11.0, 10.0]) {
+      controller.move(center, zoom);
+      await tester.pump();
+      sizes.add(stopSize());
+    }
+    for (var i = 1; i < sizes.length; i++) {
+      expect(sizes[i], lessThanOrEqualTo(sizes[i - 1]), reason: 'sizes by zoom: $sizes');
+    }
+    expect(sizes.first, StopImageMarker.maxPhoto);
+    expect(sizes.last, 4);
+  });
 }

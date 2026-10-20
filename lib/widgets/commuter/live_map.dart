@@ -198,10 +198,10 @@ class LiveMap extends StatelessWidget {
   }
 }
 
-/// Stops, sized for how far out the map is. Zoomed out, many stops share a
-/// few streets, so even small photos pile up — each is a small dot then.
-/// From street level ([photoZoom]) in, they spread out enough for photo pins.
-/// Both stay the same size on screen at every zoom.
+/// Stops, sized for how far out the map is — they only ever get SMALLER as
+/// you zoom out, never bigger. Zoomed out, many stops share a few streets,
+/// so each is a dot that shrinks with the map. From street level
+/// ([photoZoom]) in, they spread out enough for photo pins.
 class _StopMarkers extends StatelessWidget {
   const _StopMarkers({required this.stops});
 
@@ -209,21 +209,31 @@ class _StopMarkers extends StatelessWidget {
 
   static const double photoZoom = 15;
 
+  /// Dot diameter: 4 px at zoom 11 or further out, up to 10 px at zoom 14.
+  static double dotSize(double zoom) => (4 + (zoom - 11) * 2).clamp(4.0, 10.0);
+
+  /// Photo diameter: 18 px at zoom 15, up to the full size at zoom 17.
+  static double photoSize(double zoom) =>
+      (18 + (zoom - photoZoom) * 5).clamp(18.0, StopImageMarker.maxPhoto);
+
   @override
   Widget build(BuildContext context) {
-    // Rebuilds as the camera moves, so the switch happens while zooming.
-    final showPhotos = MapCamera.of(context).zoom >= photoZoom;
+    // Rebuilds as the camera moves, so sizes follow the zoom live.
+    final zoom = MapCamera.of(context).zoom;
+    final photo = photoSize(zoom);
+    final dot = dotSize(zoom);
     return MarkerLayer(
       markers: [
         for (final stop in stops)
-          if (showPhotos)
+          if (zoom >= photoZoom)
             Marker(
               point: stop.location,
-              width: StopImageMarker.width,
-              height: StopImageMarker.height,
+              width: StopImageMarker.widthFor(photo),
+              height: StopImageMarker.heightFor(photo),
               alignment: Alignment.topCenter,
               child: StopImageMarker(
                 stop: stop,
+                photo: photo,
                 onTap: () => showStopDetailsSheet(context, stop),
               ),
             )
@@ -231,11 +241,11 @@ class _StopMarkers extends StatelessWidget {
             Marker(
               point: stop.location,
               // Bigger than the dot, so it is still easy to tap.
-              width: 24,
-              height: 24,
+              width: 20,
+              height: 20,
               child: GestureDetector(
                 onTap: () => showStopDetailsSheet(context, stop),
-                child: Tooltip(message: stop.name, child: const _StopDot()),
+                child: Tooltip(message: stop.name, child: _StopDot(size: dot)),
               ),
             ),
       ],
@@ -244,19 +254,22 @@ class _StopMarkers extends StatelessWidget {
 }
 
 class _StopDot extends StatelessWidget {
-  const _StopDot();
+  const _StopDot({required this.size});
+
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Container(
         key: const Key('stopDot'),
-        width: 12,
-        height: 12,
+        width: size,
+        height: size,
         decoration: BoxDecoration(
           color: AppColors.secondary,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
+          // A thinner ring on the tiniest dots, or it hides the colour.
+          border: Border.all(color: Colors.white, width: size >= 8 ? 2 : 1),
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2)],
         ),
       ),
