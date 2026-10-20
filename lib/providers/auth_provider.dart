@@ -185,13 +185,12 @@ class AuthProvider extends ChangeNotifier {
   // ---------------------------------------------------------------
   // VERIFY OTP / RESET — POST /auth/reset-password
   // ---------------------------------------------------------------
-  // VerifyOtpScreen only collects the 6-digit code. A new-password step
-  // is not in Emae's mockups; the mock adapter accepts an empty password
-  // for preview. TODO: Velez — collect new_password before calling live API.
+  // VerifyOtpScreen collects the 6-digit code, SetNewPasswordScreen the
+  // new password; the backend checks both in this one call.
   Future<void> verifyOtpAndResetPassword({
     required String email,
     required String otp,
-    String newPassword = '',
+    required String newPassword,
   }) async {
     _isLoading = true;
     notifyListeners();
