@@ -65,7 +65,8 @@ void main() {
     expect(find.text('juan.delacruz@gmail.com'), findsOneWidget);
     expect(find.text('Commuter'), findsOneWidget);
     expect(find.text('47'), findsOneWidget);
-    expect(find.text('Reviews'), findsNothing);
+    expect(find.text('Reviews'), findsOneWidget);
+    expect(find.text('12'), findsOneWidget);
     expect(find.text('Home → Office'), findsOneWidget);
     expect(find.text('Talamban → Ayala Center Cebu'), findsOneWidget);
     for (final pref in NotificationPref.values) {
