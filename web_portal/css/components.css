@@ -54,13 +54,17 @@
   letter-spacing: 0.6px;
 }
 
-/* Same size as the admin / operator sidebar logo (css/admin.css): the
-   sidebar's logo width at each screen size. The PNG has blank space around
-   the artwork (~14% of its width above, ~17% below, ~9% at the left);
-   negative margins trim it like the sidebar does, and line the artwork up
-   with the page edge. */
+/* Same size as the admin / operator sidebar logo (css/admin.css). Those
+   pages scale everything with the screen (html.admin-root sets 1rem to
+   clamp(12px, min(0.8333vw, 1.4815vh), 16px)), so this uses that same unit
+   rather than this page's fixed 16px rem. The sidebar logo is 88% of the
+   sidebar's inner width: 17.82 of those units, 14.96 at <= 1500px.
+   The PNG has blank space around the artwork (~14% of its width above,
+   ~17% below, ~9% at the left); negative margins trim it like the sidebar
+   does, and line the artwork up with the page edge. */
 .brand-header__logo {
-  --logo-width: 17.8rem;
+  --admin-rem: clamp(12px, min(0.8333vw, 1.4815vh), 16px);
+  --logo-width: calc(17.82 * var(--admin-rem));
   width: var(--logo-width);
   height: auto;
   display: block;
@@ -70,7 +74,7 @@
 
 @media (max-width: 1500px) {
   .brand-header__logo {
-    --logo-width: 15rem;
+    --logo-width: calc(14.96 * var(--admin-rem));
   }
 }
 
