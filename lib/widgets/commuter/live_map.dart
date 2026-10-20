@@ -191,8 +191,8 @@ class LiveMap extends StatelessWidget {
               for (final stop in stops)
                 Marker(
                   point: stop.location,
-                  width: 56,
-                  height: 68,
+                  width: StopImageMarker.width,
+                  height: StopImageMarker.height,
                   alignment: Alignment.topCenter,
                   child: StopImageMarker(
                     stop: stop,
