@@ -1,7 +1,8 @@
 // lib/widgets/commuter/live_map.dart
 //
-// Live Map card: OSM tiles locked to the service area, stop photo pins,
-// animated vehicle markers, the commuter's location and zoom buttons.
+// Live Map card: OSM tiles locked to the service area, stops (small dots
+// when zoomed out, photo pins up close), animated vehicle markers, the
+// commuter's location and zoom buttons.
 // Owns no state — the Home tab feeds it data and the map controller.
 //
 // With [selectedVehicleId] set (picked from "Nearby Vehicles") it shows how
@@ -164,6 +165,8 @@ class LiveMap extends StatelessWidget {
                 Marker(point: here, width: 44, height: 44, child: const _YouAreHere()),
               ],
             ),
+          // Under the vehicles, so a stop never hides a jeep.
+          _StopMarkers(stops: stops),
           // Only this layer repaints per animation frame.
           ValueListenableBuilder<int>(
             valueListenable: frame,
@@ -186,25 +189,76 @@ class LiveMap extends StatelessWidget {
               );
             },
           ),
-          MarkerLayer(
-            markers: [
-              for (final stop in stops)
-                Marker(
-                  point: stop.location,
-                  width: StopImageMarker.width,
-                  height: StopImageMarker.height,
-                  alignment: Alignment.topCenter,
-                  child: StopImageMarker(
-                    stop: stop,
-                    onTap: () => showStopDetailsSheet(context, stop),
-                  ),
-                ),
-            ],
-          ),
           _ZoomButtons(onZoom: _zoomBy),
           if (selectedVehicleId != null && onClearSelection != null)
             _ClearSelectionChip(onPressed: onClearSelection!),
         ],
+      ),
+    );
+  }
+}
+
+/// Stops, sized for how far out the map is. Zoomed out, many stops share a
+/// few streets, so even small photos pile up — each is a small dot then.
+/// From street level ([photoZoom]) in, they spread out enough for photo pins.
+/// Both stay the same size on screen at every zoom.
+class _StopMarkers extends StatelessWidget {
+  const _StopMarkers({required this.stops});
+
+  final List<TransportStop> stops;
+
+  static const double photoZoom = 15;
+
+  @override
+  Widget build(BuildContext context) {
+    // Rebuilds as the camera moves, so the switch happens while zooming.
+    final showPhotos = MapCamera.of(context).zoom >= photoZoom;
+    return MarkerLayer(
+      markers: [
+        for (final stop in stops)
+          if (showPhotos)
+            Marker(
+              point: stop.location,
+              width: StopImageMarker.width,
+              height: StopImageMarker.height,
+              alignment: Alignment.topCenter,
+              child: StopImageMarker(
+                stop: stop,
+                onTap: () => showStopDetailsSheet(context, stop),
+              ),
+            )
+          else
+            Marker(
+              point: stop.location,
+              // Bigger than the dot, so it is still easy to tap.
+              width: 24,
+              height: 24,
+              child: GestureDetector(
+                onTap: () => showStopDetailsSheet(context, stop),
+                child: Tooltip(message: stop.name, child: const _StopDot()),
+              ),
+            ),
+      ],
+    );
+  }
+}
+
+class _StopDot extends StatelessWidget {
+  const _StopDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        key: const Key('stopDot'),
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: AppColors.secondary,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2)],
+        ),
       ),
     );
   }
