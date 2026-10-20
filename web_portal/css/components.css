@@ -54,10 +54,24 @@
   letter-spacing: 0.6px;
 }
 
+/* Same size as the admin / operator sidebar logo (css/admin.css): the
+   sidebar's logo width at each screen size. The PNG has blank space around
+   the artwork (~14% of its width above, ~17% below, ~9% at the left);
+   negative margins trim it like the sidebar does, and line the artwork up
+   with the page edge. */
 .brand-header__logo {
-  height: 76px;
-  width: auto;
+  --logo-width: 17.8rem;
+  width: var(--logo-width);
+  height: auto;
   display: block;
+  margin: calc(var(--logo-width) * -0.09) 0 calc(var(--logo-width) * -0.15)
+    calc(var(--logo-width) * -0.089);
+}
+
+@media (max-width: 1500px) {
+  .brand-header__logo {
+    --logo-width: 15rem;
+  }
 }
 
 .brand-header__tagline {
