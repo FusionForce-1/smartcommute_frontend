@@ -13,7 +13,7 @@ const LEGAL_DOCS = {
   userAgreement: {
     title: 'User Agreement',
     updated: 'October 2026',
-    intro: 'This agreement covers your use of SmartCommute as a jeepney operator: the operator portal where you manage your routes, vehicles, drivers and announcements for commuters in Cebu City. By creating an operator account you agree to these terms.',
+    intro: 'This agreement covers your use of SmartCommute as a public utility vehicle (PUV) operator: the operator portal where you manage your routes, vehicles, drivers and announcements for commuters in Cebu City. By creating an operator account you agree to these terms.',
     sections: [
       ['Your account', [
         'Give accurate information when you register, including your real company name, franchise number and contact number, and keep it up to date.',
@@ -24,7 +24,7 @@ const LEGAL_DOCS = {
         'You must hold a valid LTFRB franchise for the routes you operate.',
         'You are responsible for the vehicles, drivers, routes, fares and announcements you add, and for keeping them accurate. Commuters rely on them to plan their trips.',
         'Only add drivers who work for you, with their permission. You are responsible for handing them their app login and for how they use it.',
-        'Keep GPS trackers on your vehicles working and assigned to the right vehicle, so commuters see where jeeps really are.',
+        'Keep GPS trackers on your vehicles working and assigned to the right vehicle, so commuters see where your PUVs really are.',
       ]],
       ['Subscription', [
         'Your first 3 months are free. After that the plan is ₱1,000 a year, paid through PayPal, for unlimited vehicles.',

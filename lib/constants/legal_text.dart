@@ -27,7 +27,7 @@ const LegalDoc userAgreement = LegalDoc(
   updated: 'October 2026',
   intro:
       'This agreement covers your use of the SmartCommute app, a transit information service '
-      'that helps commuters in Cebu City find jeepney routes, fares and live vehicle locations. '
+      'that helps commuters in Cebu City find public utility vehicle (PUV) routes, fares and live vehicle locations. '
       'By creating an account you agree to these terms.',
   sections: [
     (
@@ -44,7 +44,7 @@ const LegalDoc userAgreement = LegalDoc(
         'Routes, stops, fares and arrival estimates are for information only. Vehicles can be '
             'delayed, rerouted or off duty, so plan with some allowance.',
         'Official fares are set by the LTFRB. Fare estimates in the app may differ from what you pay.',
-        'Stay safe: watch the road, not your phone, when walking to a stop or boarding a jeep.',
+        'Stay safe: watch the road, not your phone, when walking to a stop or boarding a PUV.',
       ],
     ),
     (
@@ -101,7 +101,7 @@ const LegalDoc privacyPolicy = LegalDoc(
       [
         'Account details: your name, email address, and password (stored encrypted, never in plain '
             'text). If you sign in with Google, we receive your name and email from Google.',
-        'Location: only when you allow it, for example to show nearby stops and jeeps or to plan a '
+        'Location: only when you allow it, for example to show nearby stops and PUVs or to plan a '
             'trip from where you are.',
         'Activity: the trips you plan, your saved routes, ride reviews, feedback and notification '
             'settings.',
@@ -110,7 +110,7 @@ const LegalDoc privacyPolicy = LegalDoc(
     (
       'How we use it',
       [
-        'To run the app: show live jeeps, plan trips, estimate fares and send the alerts you have '
+        'To run the app: show live PUVs, plan trips, estimate fares and send the alerts you have '
             'turned on.',
         'To keep your account secure, including sign-in codes when two-factor authentication is on.',
         'To improve SmartCommute.',
