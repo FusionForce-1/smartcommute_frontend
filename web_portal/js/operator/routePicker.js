@@ -528,5 +528,5 @@ const RoutePicker = (() => {
     };
   }
 
-  return { mount };
+  return { mount, loadLandmarks };
 })();
