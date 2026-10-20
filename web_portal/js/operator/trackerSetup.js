@@ -37,7 +37,7 @@ const TrackerSetup = (() => {
   function wifiSection() {
     return `
       <div class="form-field">
-        <label>WiFi the tracker will use <span style="color:var(--op-muted)">(2.4 GHz, e.g. the jeep's hotspot)</span></label>
+        <label>WiFi the tracker will use <span style="color:var(--op-muted)">(2.4 GHz, e.g. the PUV's hotspot)</span></label>
         <div id="ts-wifi-list">${wifiRows(1)}</div>
         <datalist id="ts-ssids"></datalist>
         <p class="op-card__sub" style="margin:0 0 8px;">The name must match exactly — capitals, spaces and symbols like "?" count.</p>
@@ -476,7 +476,7 @@ const TrackerSetup = (() => {
     const fleet = await OperatorApi.fleet().catch(() => []);
     if (!fleet.length) {
       AdminModal.open({
-        title: 'Add the jeep first',
+        title: 'Add the PUV first',
         size: 'sm',
         body: `<p class="modal-text">You scanned tracker code <strong>${esc(shown)}</strong>, but you have no vehicles yet.
                Click <strong>+ Add Vehicle</strong>, then use <strong>Set up GPS → Claim code</strong> and type the code.</p>`,
@@ -489,7 +489,7 @@ const TrackerSetup = (() => {
       return;
     }
     const m = AdminModal.open({
-      title: 'Which jeep is this tracker for?',
+      title: 'Which PUV is this tracker for?',
       size: 'sm',
       body: `
         <p class="modal-text">Tracker code <strong>${esc(shown)}</strong></p>

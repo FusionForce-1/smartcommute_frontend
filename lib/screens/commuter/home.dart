@@ -520,7 +520,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   Widget? _boardingCard() {
     if (_selectedVehicleId == null || _plan == null || _walk == null) return null;
     return _BoardingCard(
-      routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'Jeep',
+      routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'PUV',
       plan: _plan!,
       walk: _walk!,
       boardName: _boardName,
@@ -742,7 +742,7 @@ class _BoardingCard extends StatelessWidget {
     final jeep = plan.jeepToBoardM;
     final String jeepLine;
     if (!plan.onRoute) {
-      jeepLine = 'This route has no map line yet, so the walk goes to where the jeep is now.';
+      jeepLine = 'This route has no map line yet, so the walk goes to where the PUV is now.';
     } else if (jeep == null) {
       jeepLine = 'This $routeCode has already passed that spot. Wait there for the next one, or pick another vehicle.';
     } else if (jeep < 30) {

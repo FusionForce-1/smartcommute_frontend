@@ -171,7 +171,7 @@ class LiveMap extends StatelessWidget {
                   point: boardAt!,
                   width: 34,
                   height: 34,
-                  child: const Tooltip(message: 'Wait for the jeep here', child: _BoardHere()),
+                  child: const Tooltip(message: 'Wait for the PUV here', child: _BoardHere()),
                 ),
               ],
             ),
