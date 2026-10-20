@@ -14,6 +14,7 @@ class TripLocationsCard extends StatelessWidget {
     required this.fromValue,
     required this.toValue,
     required this.isLocating,
+    this.usingMyLocation = false,
     required this.onChooseFrom,
     required this.onUseMyLocation,
     required this.onChooseTo,
@@ -27,6 +28,9 @@ class TripLocationsCard extends StatelessWidget {
   final String? fromValue;
   final String? toValue;
   final bool isLocating;
+
+  /// From is the commuter's own GPS location: the button shows as on.
+  final bool usingMyLocation;
   final String? fromError;
 
   final VoidCallback onChooseFrom;
@@ -65,15 +69,11 @@ class TripLocationsCard extends StatelessWidget {
                   onTap: onChooseFrom,
                 ),
               ),
-              IconButton(
-                tooltip: 'Use my location',
-                onPressed: isLocating ? null : onUseMyLocation,
-                icon: isLocating
-                    ? const SizedBox.square(
-                        dimension: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.location_on_outlined, size: 30),
+              const SizedBox(width: AppSpacing.xs),
+              _MyLocationButton(
+                isLocating: isLocating,
+                active: usingMyLocation,
+                onPressed: onUseMyLocation,
               ),
             ],
           ),
@@ -116,6 +116,76 @@ class TripLocationsCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// "Use my location": an outlined pin; a spinner while finding the
+/// commuter; a filled teal "my location" once From is their location
+/// (tap again to update it).
+class _MyLocationButton extends StatelessWidget {
+  const _MyLocationButton({
+    required this.isLocating,
+    required this.active,
+    required this.onPressed,
+  });
+
+  final bool isLocating;
+  final bool active;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget icon;
+    if (isLocating) {
+      icon = const SizedBox.square(
+        key: ValueKey('locating'),
+        dimension: 22,
+        child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+      );
+    } else if (active) {
+      icon = const Icon(Icons.my_location, key: ValueKey('active'), size: 26, color: Colors.white);
+    } else {
+      icon = const Icon(Icons.location_on_outlined, key: ValueKey('idle'), size: 28, color: AppColors.textPrimary);
+    }
+    final filled = isLocating || active;
+
+    return Tooltip(
+      message: isLocating
+          ? 'Finding your location…'
+          : active
+              ? 'Using your location (tap to update)'
+              : 'Use my location',
+      child: AnimatedContainer(
+        key: const Key('useMyLocation'),
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: filled ? AppColors.brandTeal : const Color(0xFFF0F2F5),
+          boxShadow: filled
+              ? [BoxShadow(color: AppColors.brandTeal.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 2))]
+              : const [],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: isLocating ? null : onPressed,
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child)),
+                child: icon,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

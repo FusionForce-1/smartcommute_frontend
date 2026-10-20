@@ -88,6 +88,25 @@ class RouteTab extends StatelessWidget {
     );
   }
 
+  /// Within this distance, "Use my location" names the nearest stop.
+  static const double _nearStopMeters = 600;
+
+  /// What the From box says for the commuter's GPS location, e.g.
+  /// "Your location · near Fuente Osmeña", so it's clear where we found them.
+  String _myLocationLabel(LatLng here) {
+    TransportStop? nearest;
+    var best = double.infinity;
+    for (final stop in stops) {
+      final d = const Distance().as(LengthUnit.Meter, here, stop.location);
+      if (d < best) {
+        best = d;
+        nearest = stop;
+      }
+    }
+    if (nearest == null || best > _nearStopMeters) return 'Your location';
+    return 'Your location · near ${nearest.name}';
+  }
+
   void _changeDepartureTime(BuildContext context) {
     // The backend plans for "now" only; scheduled trips need API support.
     ScaffoldMessenger.of(context).showSnackBar(
@@ -115,9 +134,10 @@ class RouteTab extends StatelessWidget {
         TripLocationsCard(
           fromValue: trip.isLocating
               ? 'Finding your location…'
-              : trip.originLabel ?? (trip.origin != null ? 'Your location' : null),
+              : trip.originLabel ?? (trip.origin != null ? _myLocationLabel(trip.origin!) : null),
           toValue: trip.destinationLabel,
           isLocating: trip.isLocating,
+          usingMyLocation: trip.origin != null && trip.originLabel == null,
           fromError: trip.locationError,
           onOpenSettings: trip.canOpenLocationSettings ? trip.openLocationSettings : null,
           onChooseFrom: () => _chooseFrom(context),
