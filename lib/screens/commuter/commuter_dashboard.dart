@@ -187,7 +187,14 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       onUnknownVehicle: () => _reloadFleet(),
                       onRefresh: () => _reloadFleet(force: true),
                     ),
-                    RouteTab(stops: _stops, routes: _routes, onTripStarted: _onTripStarted),
+                    RouteTab(
+                      stops: _stops,
+                      routes: _routes,
+                      onTripStarted: _onTripStarted,
+                      // Fresh each time a route is opened on the map, so a jeep
+                      // added since the app started shows up there too.
+                      loadVehicles: VehiclesService(_dio).getVehicles,
+                    ),
                     const AlertsTab(),
                     ProfileTab(
                       isGuest: widget.isGuest,

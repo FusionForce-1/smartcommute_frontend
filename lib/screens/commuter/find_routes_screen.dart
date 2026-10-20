@@ -23,13 +23,16 @@ import 'route_map_screen.dart';
 typedef TripStarted = void Function(RouteOption option, String from, String to);
 
 class FindRoutesScreen extends StatefulWidget {
-  const FindRoutesScreen({super.key, required this.routes, this.onTripStarted});
+  const FindRoutesScreen({super.key, required this.routes, this.onTripStarted, this.loadVehicles});
 
   /// Routes from /routes, for route codes, stop counts and map lines.
   final List<TransportRoute> routes;
 
   /// Called when the selected route is opened on the map (records a trip).
   final TripStarted? onTripStarted;
+
+  /// Fleet list, so the map can show the jeeps live on the chosen route.
+  final VehiclesLoader? loadVehicles;
 
   @override
   State<FindRoutesScreen> createState() => _FindRoutesScreenState();
@@ -61,7 +64,7 @@ class _FindRoutesScreenState extends State<FindRoutesScreen> {
     final trip = context.read<TripPlanProvider>();
     widget.onTripStarted?.call(option, trip.originLabel ?? 'Your location', trip.destinationLabel ?? 'Destination');
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RouteMapScreen(option: option, routesById: routesById)),
+      MaterialPageRoute(builder: (_) => RouteMapScreen(option: option, routesById: routesById, loadVehicles: widget.loadVehicles)),
     );
   }
 

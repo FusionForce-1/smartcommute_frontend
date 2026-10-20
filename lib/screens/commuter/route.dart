@@ -21,15 +21,19 @@ import '../../config/map_config.dart';
 import '../../widgets/place_search_sheet.dart';
 import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
+import 'route_map_screen.dart' show VehiclesLoader;
 
 class RouteTab extends StatelessWidget {
-  const RouteTab({super.key, required this.stops, required this.routes, this.onTripStarted});
+  const RouteTab({super.key, required this.stops, required this.routes, this.onTripStarted, this.loadVehicles});
 
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
   /// Called when the commuter opens a chosen route on the map.
   final TripStarted? onTripStarted;
+
+  /// Fleet list for the live jeeps on a chosen route's map.
+  final VehiclesLoader? loadVehicles;
 
   // From / To search every saved stop and Metro Cebu landmark as you type,
   // nearest the trip's other end (or the city centre) first.
@@ -82,7 +86,7 @@ class RouteTab extends StatelessWidget {
         // A pushed page sits outside the dashboard's provider scope.
         builder: (_) => ChangeNotifierProvider.value(
           value: trip,
-          child: FindRoutesScreen(routes: routes, onTripStarted: onTripStarted),
+          child: FindRoutesScreen(routes: routes, onTripStarted: onTripStarted, loadVehicles: loadVehicles),
         ),
       ),
     );
