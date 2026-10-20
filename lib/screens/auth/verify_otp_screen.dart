@@ -26,10 +26,8 @@ class VerifyOtpScreen extends StatefulWidget {
   /// Banner heading; the two-factor sign-in step reuses this screen.
   final String title;
 
-  /// TODO: Velez — AuthProvider.verifyOtpAndResetPassword(email, otp, newPassword)
-  /// → ApiService.verifyOtpAndResetPassword() → POST /auth/reset-password
-  /// Mockups do not collect a new password on this screen; pass '' for preview
-  /// or add a follow-up set-password step before the live endpoint.
+  /// Password reset: opens SetNewPasswordScreen with the code, which then
+  /// calls POST /auth/reset-password. Two-factor sign-in: POST /auth/login/verify.
   final Future<void> Function(String otp)? onVerifyOtp;
   final VoidCallback? onBack;
 
