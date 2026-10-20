@@ -93,7 +93,18 @@ void main() {
 
       expect(provider.isLocating, isFalse);
       expect(provider.origin, isNull);
-      expect(provider.locationError, 'Unable to get your current location.');
+      expect(provider.locationError, startsWith('Finding your location took too long.'));
+    });
+
+    test('a device that cannot find itself says what to check', () async {
+      final provider = buildProvider(
+        okAdapter(),
+        location: FakeLocationSource(failure: LocationFailure.unavailable),
+      );
+      await provider.locateOrigin();
+      expect(provider.origin, isNull);
+      expect(provider.locationError, contains("Couldn't get a location fix"));
+      expect(provider.locationError, contains('choose a starting point'));
     });
 
     test('openLocationSettings delegates to the location source', () async {

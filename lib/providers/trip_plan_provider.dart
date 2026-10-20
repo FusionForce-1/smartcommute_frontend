@@ -25,7 +25,9 @@ class TripPlanProvider extends ChangeNotifier {
   TripPlanProvider({
     required TripPlanService service,
     required LocationSource locationSource,
-    Duration locateTimeout = const Duration(seconds: 15),
+    // Covers a precise GPS attempt plus the quicker fallback
+    // (see GeolocatorLocationSource).
+    Duration locateTimeout = const Duration(seconds: 25),
     Duration refreshInterval = const Duration(seconds: 45),
   })  : _service = service,
         _locationSource = locationSource,
@@ -134,6 +136,9 @@ class TripPlanProvider extends ChangeNotifier {
     } on LocationException catch (e) {
       _origin = null;
       _locationError = e.message;
+    } on TimeoutException {
+      _origin = null;
+      _locationError = const LocationException(LocationFailure.timeout).message;
     } catch (_) {
       _origin = null;
       _locationError = 'Unable to get your current location.';
