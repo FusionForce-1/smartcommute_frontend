@@ -3,14 +3,16 @@
 // Loading screen: the logo lockup with "Cebu City Transit Information" and a
 // spinner on ice blue, shown while the app starts (loading .env and finding
 // which backend answers — up to a minute if the cloud server is asleep).
-// web/index.html draws the same screen in HTML while the app downloads, so
-// the hand-over is seamless — keep the two looking alike.
+// On web, web/index.html shows its HTML copy of this screen the whole time
+// instead (see web_splash.dart), so only one loading screen ever appears.
+// This Flutter one is what Android / iOS show.
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../config/theme_config.dart';
 import '../widgets/auth/smart_commute_logo.dart';
+import 'web_splash.dart';
 
 class LoadingScreen extends StatelessWidget {
   const LoadingScreen({super.key});
@@ -68,7 +70,11 @@ class _AppLoaderState extends State<AppLoader> {
       // messages, which beats being stuck on the loading screen.
       debugPrint('Startup failed: $e');
     }
-    if (mounted) setState(() => _ready = true);
+    if (!mounted) return;
+    setState(() => _ready = true);
+    // Lift the web page's HTML loading screen once the app's first real
+    // screen is drawn beneath it.
+    WidgetsBinding.instance.addPostFrameCallback((_) => removeWebSplash());
   }
 
   @override

@@ -44,10 +44,17 @@
   <title>Smart Commute</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- Loading screen while the app downloads. Matches the app's own
-       LoadingScreen (lib/screens/loading_screen.dart), which takes over on
-       the first frame - keep the two alike. -->
+  <!-- Loading screen, shown from the first moment until the app has
+       started and connected (the app calls smartCommuteRemoveSplash, see
+       lib/screens/web_splash.dart). It stays on top of the app's own
+       loading screen, so web visitors only ever see this one. -->
   <style>
+    @font-face {
+      font-family: "Poppins";
+      src: url("assets/assets/fonts/Poppins-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-display: swap;
+    }
     html, body { margin: 0; height: 100%; background: #EBF4FA; }
     #splash {
       position: fixed; inset: 0; z-index: 10;
@@ -89,13 +96,13 @@
     </div>
   </div>
   <script>
-    // Flutter's first frame is its own identical loading screen: fade out.
-    window.addEventListener('flutter-first-frame', function () {
+    // Called by the app once it is ready (lib/screens/web_splash_web.dart).
+    window.smartCommuteRemoveSplash = function () {
       var splash = document.getElementById('splash');
       if (!splash) return;
       splash.classList.add('splash--done');
       setTimeout(function () { splash.remove(); }, 300);
-    });
+    };
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
