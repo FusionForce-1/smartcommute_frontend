@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/theme_config.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/trip_plan_provider.dart';
@@ -24,13 +25,22 @@ import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
 
 class RouteTab extends StatelessWidget {
-  const RouteTab({super.key, required this.stops, required this.routes, this.onTripStarted});
+  const RouteTab({
+    super.key,
+    required this.stops,
+    required this.routes,
+    this.onTripStarted,
+    this.onRouteSelected,
+  });
 
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
   /// Called when the commuter opens a chosen route on the map.
   final TripStarted? onTripStarted;
+
+  /// "Select this route": the dashboard shows it on the Home map.
+  final TripSelected? onRouteSelected;
 
   // From / To search every saved stop and Metro Cebu landmark as you type,
   // nearest the trip's other end (or the city centre) first.
@@ -86,7 +96,11 @@ class RouteTab extends StatelessWidget {
         // A pushed page sits outside the dashboard's provider scope.
         builder: (_) => ChangeNotifierProvider.value(
           value: trip,
-          child: FindRoutesScreen(routes: routes, onTripStarted: onTripStarted),
+          child: FindRoutesScreen(
+            routes: routes,
+            onTripStarted: onTripStarted,
+            onRouteSelected: onRouteSelected,
+          ),
         ),
       ),
     );

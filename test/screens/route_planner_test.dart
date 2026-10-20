@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:smartcommute_app/models/selected_trip.dart';
 import 'package:smartcommute_app/models/transport_stop.dart';
 import 'package:smartcommute_app/providers/trip_plan_provider.dart';
 import 'package:smartcommute_app/screens/commuter/find_routes_screen.dart';
@@ -27,6 +28,7 @@ Future<TripPlanProvider> pumpRouteTab(
   WidgetTester tester, {
   FakeLocationSource? location,
   List<TransportStop> stops = const [],
+  TripSelected? onRouteSelected,
 }) async {
   // Tall window so the whole Plan Your Route form is laid out.
   tester.view.physicalSize = const Size(430, 1600);
@@ -43,7 +45,7 @@ Future<TripPlanProvider> pumpRouteTab(
     home: Scaffold(
       body: ChangeNotifierProvider<TripPlanProvider>.value(
         value: provider,
-        child: RouteTab(stops: stops, routes: const []),
+        child: RouteTab(stops: stops, routes: const [], onRouteSelected: onRouteSelected),
       ),
     ),
   ));
@@ -147,6 +149,25 @@ void main() {
 
     expect(find.byType(RouteMapScreen), findsOneWidget);
     expect(find.byType(FareBreakdownSheet), findsOneWidget);
+  });
+
+  testWidgets('Select this route hands the route (and its ends) to the dashboard', (tester) async {
+    final selected = <SelectedTrip>[];
+    final provider = await pumpRouteTab(tester, onRouteSelected: selected.add);
+    provider.setDestination(itPark, 'IT Park');
+    await tester.pump();
+    await tester.tap(find.text('Find Routes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View Selected Route on Map'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select this route'));
+    await tester.pump();
+
+    final trip = selected.single;
+    expect(trip.option.routeSummary, '01K → 13C');
+    expect(trip.from, 'Your location');
+    expect(trip.to, 'IT Park');
   });
 
   testWidgets('a planned destination shows up in Recent Searches', (tester) async {

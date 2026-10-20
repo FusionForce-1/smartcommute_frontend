@@ -9,6 +9,10 @@
 // "Nearby Vehicles" in a sheet that drags up, or down to just its handle.
 // The same map (camera, live jeeps, selection) moves between the two layouts.
 //
+// A route picked with "Select this route" on the Route tab ([selectedTrip])
+// is drawn on the map, framed to fit, with a card above it to open its
+// details or cancel it ([onCancelTrip]).
+//
 // Picking a jeep in the "Nearby Vehicles" list shows how to catch it: the closest
 // point on its route to the commuter (the shortest walk), the walking path
 // there with distance, steps and minutes, and how far the jeep still is
@@ -26,6 +30,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../models/vehicle_live_update.dart';
@@ -38,8 +43,11 @@ import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_action_tile.dart';
 import '../../widgets/commuter/live_map.dart';
 import '../../widgets/commuter/nearby_vehicle_card.dart';
+import '../../widgets/commuter/selected_trip_card.dart';
+import '../../widgets/commuter/trip_route_layers.dart';
 import '../../widgets/stop_image.dart';
 import '../../widgets/stop_search_sheet.dart';
+import 'route_map_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({
@@ -49,6 +57,8 @@ class HomeTab extends StatefulWidget {
     required this.vehicles,
     this.onUnknownVehicle,
     this.onRefresh,
+    this.selectedTrip,
+    this.onCancelTrip,
   });
 
   final List<TransportStop> stops;
@@ -63,6 +73,10 @@ class HomeTab extends StatefulWidget {
 
   /// "Refresh vehicle markers": reload stops, routes and vehicles now.
   final VoidCallback? onRefresh;
+
+  /// The route picked with "Select this route", shown until cancelled.
+  final SelectedTrip? selectedTrip;
+  final VoidCallback? onCancelTrip;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -104,6 +118,12 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   WalkingRoute? _walk;
   String? _boardName;            // "near Fuente BRT Station"
 
+  /// How [HomeTab.selectedTrip] is drawn; null when none is selected.
+  late TripRouteLayers? _tripLayers = _layersFor(widget.selectedTrip);
+
+  static TripRouteLayers? _layersFor(SelectedTrip? trip) =>
+      trip == null ? null : TripRouteLayers.of(trip.option, trip.routesById);
+
   // ---------- Full-screen map ----------
 
   bool _mapExpanded = false;
@@ -143,6 +163,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   @override
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.selectedTrip, widget.selectedTrip)) {
+      _tripLayers = _layersFor(widget.selectedTrip);
+      _showTrip();
+    }
     if (oldWidget.stops.isEmpty && widget.stops.isNotEmpty) _fitToStops();
     // New vehicle / route lists: jeeps that were hidden may now be listed.
     if (!identical(oldWidget.vehicles, widget.vehicles) || !identical(oldWidget.routes, widget.routes)) {
@@ -340,12 +364,51 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   void _onMapReady() {
     _mapReady = true;
-    _fitToStops();
+    if (_tripLayers != null) {
+      _showTrip();
+    } else {
+      _fitToStops();
+    }
+  }
+
+  /// Frames the selected route on the map.
+  void _showTrip() {
+    final fit = _tripLayers?.cameraFit;
+    if (_mapReady && fit != null) _mapController.fitCamera(fit);
+  }
+
+  void _openSelectedTrip() {
+    final trip = widget.selectedTrip;
+    if (trip == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => RouteMapScreen(option: trip.option, routesById: trip.routesById),
+    ));
+  }
+
+  /// The selected route's card, sliding in and out as it's chosen / cancelled.
+  Widget _selectedTripSlot({required EdgeInsets padding}) {
+    final trip = widget.selectedTrip;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      alignment: Alignment.topCenter,
+      child: trip == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: padding,
+              child: SelectedTripCard(
+                trip: trip,
+                onOpen: _openSelectedTrip,
+                onCancel: widget.onCancelTrip ?? () {},
+              ),
+            ),
+    );
   }
 
   void _fitToStops() {
     final stops = widget.stops;
-    if (!_mapReady || stops.isEmpty) return;
+    // A selected route keeps the map framed on it.
+    if (!_mapReady || stops.isEmpty || _tripLayers != null) return;
     if (stops.length == 1) {
       _mapController.move(stops.first.location, 16);
       return;
@@ -513,6 +576,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       // Full screen: the buttons sit above the sheet, placed below.
       showControls: !expanded,
       topInset: expanded ? 56 : 0,
+      trip: _tripLayers,
     );
   }
 
@@ -552,6 +616,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
         _SearchField(onTap: _searchDestination),
+        _selectedTripSlot(padding: const EdgeInsets.only(top: AppSpacing.sm)),
         const SizedBox(height: AppSpacing.md),
         SizedBox(height: 320, child: _liveMap(expanded: false)),
         if (boarding != null) ...[
@@ -663,6 +728,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                           ),
                         ),
                       ),
+                      _selectedTripSlot(padding: const EdgeInsets.only(bottom: AppSpacing.sm)),
                       if (boarding != null) ...[boarding, const SizedBox(height: AppSpacing.sm)],
                       ..._nearbySection(context),
                     ],

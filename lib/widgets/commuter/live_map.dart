@@ -25,6 +25,7 @@ import '../../config/theme_config.dart';
 import '../../models/transport_stop.dart';
 import '../../models/vehicle_track.dart';
 import '../stop_image.dart';
+import 'trip_route_layers.dart';
 import 'vehicle_marker.dart';
 
 class LiveMap extends StatelessWidget {
@@ -46,6 +47,7 @@ class LiveMap extends StatelessWidget {
     this.onToggleExpanded,
     this.showControls = true,
     this.topInset = 0,
+    this.trip,
   });
 
   final MapController controller;
@@ -85,6 +87,9 @@ class LiveMap extends StatelessWidget {
   /// full-screen search bar), so the "Hide line" chip sits below it.
   final double topInset;
 
+  /// The route picked with "Select this route": its lines and stops.
+  final TripRouteLayers? trip;
+
   static const Color _walkLine = Color(0xFF2F6FED);
 
   static const Color _selectionLine = AppColors.brandTeal;
@@ -120,6 +125,7 @@ class LiveMap extends StatelessWidget {
             urlTemplate: MapConfig.tileUrl,
             userAgentPackageName: MapConfig.userAgentPackageName,
           ),
+          if (trip case final trip?) PolylineLayer(polylines: trip.lines),
           // How to catch the selected jeep: its route to the boarding spot,
           // and the walk there. Under the markers so every end stays visible.
           if (selectedVehicleId != null && walkPath != null)
@@ -183,6 +189,7 @@ class LiveMap extends StatelessWidget {
             ),
           // Under the vehicles, so a stop never hides a jeep.
           _StopMarkers(stops: stops),
+          if (trip case final trip?) MarkerLayer(markers: trip.markers),
           // Only this layer repaints per animation frame.
           ValueListenableBuilder<int>(
             valueListenable: frame,

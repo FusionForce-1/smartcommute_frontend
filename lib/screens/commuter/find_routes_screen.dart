@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/trip_plan.dart';
 import '../../providers/trip_plan_provider.dart';
@@ -23,13 +24,21 @@ import 'route_map_screen.dart';
 typedef TripStarted = void Function(RouteOption option, String from, String to);
 
 class FindRoutesScreen extends StatefulWidget {
-  const FindRoutesScreen({super.key, required this.routes, this.onTripStarted});
+  const FindRoutesScreen({
+    super.key,
+    required this.routes,
+    this.onTripStarted,
+    this.onRouteSelected,
+  });
 
   /// Routes from /routes, for route codes, stop counts and map lines.
   final List<TransportRoute> routes;
 
   /// Called when the selected route is opened on the map (records a trip).
   final TripStarted? onTripStarted;
+
+  /// "Select this route" on the map page: show it on the Home map.
+  final TripSelected? onRouteSelected;
 
   @override
   State<FindRoutesScreen> createState() => _FindRoutesScreenState();
@@ -59,9 +68,22 @@ class _FindRoutesScreenState extends State<FindRoutesScreen> {
 
   void _viewOnMap(BuildContext context, RouteOption option, Map<String, TransportRoute> routesById) {
     final trip = context.read<TripPlanProvider>();
-    widget.onTripStarted?.call(option, trip.originLabel ?? 'Your location', trip.destinationLabel ?? 'Destination');
+    final from = trip.originLabel ?? 'Your location';
+    final to = trip.destinationLabel ?? 'Destination';
+    widget.onTripStarted?.call(option, from, to);
+    final onRouteSelected = widget.onRouteSelected;
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => RouteMapScreen(option: option, routesById: routesById)),
+      MaterialPageRoute(
+        builder: (_) => RouteMapScreen(
+          option: option,
+          routesById: routesById,
+          onSelect: onRouteSelected == null
+              ? null
+              : () => onRouteSelected(
+                    SelectedTrip(option: option, from: from, to: to, routesById: routesById),
+                  ),
+        ),
+      ),
     );
   }
 
