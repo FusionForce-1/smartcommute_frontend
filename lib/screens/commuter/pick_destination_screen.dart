@@ -92,7 +92,7 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: AppColors.brandTeal,
         foregroundColor: Colors.white,
         title: const Text('Pick destination'),
       ),
@@ -235,7 +235,7 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: AppColors.brandTeal,
                           minimumSize: const Size.fromHeight(48),
                         ),
                         onPressed: () {
