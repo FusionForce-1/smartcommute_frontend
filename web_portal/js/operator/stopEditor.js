@@ -60,6 +60,7 @@ const StopEditor = (() => {
         </p>
         <div class="op-map" id="se-map" style="height:380px;" role="region" aria-label="Route stops map"></div>
         <div class="se-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
+          <button type="button" class="btn-sm btn-sm--teal" id="se-usual">Add usual stops along the route</button>
           <button type="button" class="btn-sm" id="se-terminals">Add stops at both terminals</button>
           <span id="se-count" class="op-card__sub" style="margin:auto 0;"></span>
         </div>
@@ -115,16 +116,18 @@ const StopEditor = (() => {
       return best;
     }
 
-    function addStop(lat, lng, { id, name, landmark } = {}) {
+    function addStop(lat, lng, { id, name, landmark, shared = false } = {}) {
       const near = name ? null : nearestLandmark(lat, lng);
       const stop = {
         key: nextKey++, id, lat, lng,
         name: name || (near ? near.name : `Stop ${stops.length + 1}`),
         landmark: landmark ?? '',
+        shared,
         marker: null,
       };
       if (map) {
-        stop.marker = L.marker([lat, lng], { draggable: true, icon: stopIcon('+') }).addTo(map);
+        // A stop other routes use keeps its place: not draggable here.
+        stop.marker = L.marker([lat, lng], { draggable: !shared, icon: stopIcon('+') }).addTo(map);
         stop.marker.on('dragend', () => {
           const p = stop.marker.getLatLng();
           stop.lat = p.lat;
@@ -178,9 +181,9 @@ const StopEditor = (() => {
                 return `
                   <tr data-key="${r.s.key}">
                     <td>${n + 1}</td>
-                    <td><input class="se-name" data-key="${r.s.key}" maxlength="80" value="${esc(r.s.name)}" aria-label="Stop ${n + 1} name" style="width:100%;"></td>
-                    <td><input class="se-landmark" data-key="${r.s.key}" maxlength="120" value="${esc(r.s.landmark)}" placeholder="e.g. across the church" aria-label="Stop ${n + 1} landmark" style="width:100%;"></td>
-                    <td>${warn ? OperatorUi.chip(`${Math.round(r.off)} m off the route`, 'amber') : ''}</td>
+                    <td><input class="se-name" data-key="${r.s.key}" maxlength="80" value="${esc(r.s.name)}" aria-label="Stop ${n + 1} name" style="width:100%;" ${r.s.shared ? 'readonly' : ''}></td>
+                    <td><input class="se-landmark" data-key="${r.s.key}" maxlength="120" value="${esc(r.s.landmark)}" placeholder="e.g. across the church" aria-label="Stop ${n + 1} landmark" style="width:100%;" ${r.s.shared ? 'readonly' : ''}></td>
+                    <td>${r.s.shared ? OperatorUi.chip('Shared with other routes', 'blue') : ''}${warn ? OperatorUi.chip(`${Math.round(r.off)} m off the route`, 'amber') : ''}</td>
                     <td style="white-space:nowrap;">
                       <button type="button" class="btn-sm" data-se="focus" data-key="${r.s.key}">Show</button>
                       <button type="button" class="btn-sm" data-se="remove" data-key="${r.s.key}" aria-label="Remove stop ${n + 1}">Remove</button>
@@ -231,6 +234,34 @@ const StopEditor = (() => {
       render();
     });
 
+    // The usual stops along the line (terminals, other routes' stops,
+    // OpenStreetMap's jeepney stops), skipping any already placed nearby.
+    modal.querySelector('#se-usual').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Finding stops…';
+      try {
+        const suggested = await OperatorApi.stopSuggestions(route.id);
+        let added = 0;
+        for (const s of suggested) {
+          const [lng, lat] = s.location.coordinates;
+          if (s.id && stops.some((x) => x.id === s.id)) continue;
+          if (stops.some((x) => metresBetween(x, { lat, lng }) < 60)) continue;
+          addStop(lat, lng, { id: s.id, name: s.name, landmark: s.landmark || '', shared: s.source === 'existing' });
+          added++;
+        }
+        render();
+        AdminUi.toast(added
+          ? `Added ${added} usual ${added === 1 ? 'stop' : 'stops'}. Remove any this route doesn't serve, then save.`
+          : suggested.length ? 'The usual stops along this route are already on it.' : 'No known stops along this route yet. Click the map to add them.');
+      } catch (err) {
+        AdminUi.toast(err.message || 'Could not look up stops.', { error: true });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add usual stops along the route';
+      }
+    });
+
     async function save() {
       const rows = ordered();
       const empty = rows.findIndex((r) => !r.s.name.trim());
@@ -270,7 +301,7 @@ const StopEditor = (() => {
       }
       d.stops.forEach((s) => {
         const [lng, lat] = s.location.coordinates;
-        addStop(lat, lng, { id: s.id, name: s.name, landmark: s.landmark || '' });
+        addStop(lat, lng, { id: s.id, name: s.name, landmark: s.landmark || '', shared: s.shared });
         bounds.push([lat, lng]);
       });
       dirty = false;

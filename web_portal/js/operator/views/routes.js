@@ -138,10 +138,13 @@ OperatorRouter.register('routes', {
         submit.disabled = true;
         submit.textContent = 'Creating…';
         try {
-          await OperatorApi.createRoute(v);
+          const created = await OperatorApi.createRoute(v);
           showForm = false;
           renderForm();
-          AdminUi.toast(`${v.code} – ${v.name} was created.`);
+          const n = created?.stops_added || 0;
+          AdminUi.toast(n
+            ? `${v.code} – ${v.name} was created with ${n} usual stops along its path. Use "Edit stops" to add or remove any.`
+            : `${v.code} – ${v.name} was created.`);
           load();
         } catch (err) {
           errorEl.textContent = err.message || 'Unable to create route.';

@@ -74,6 +74,7 @@ const OperatorApi = {
   setRouteActive: (id, isActive) => ApiClient.patch(`/routes/${id}/active`, { is_active: isActive }),
   routeStops: (id) => ApiClient.get(`/routes/${id}/stops`),
   setRouteStops: (id, stops) => ApiClient.put(`/routes/${id}/stops`, { stops }),
+  stopSuggestions: (id) => ApiClient.get(`/routes/${id}/stops/suggestions`),
   deleteRoute: (id) => ApiClient.delete(`/routes/${id}`),
 
   // ---- Announcements (transit alerts) ----
