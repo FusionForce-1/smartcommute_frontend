@@ -38,6 +38,7 @@ import '../../models/vehicle_track.dart';
 import '../../models/vehicles.dart';
 import '../../services/boarding_planner.dart';
 import '../../services/place_search.dart';
+import '../../services/trip_progress.dart';
 import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_action_tile.dart';
@@ -118,11 +119,18 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   WalkingRoute? _walk;
   String? _boardName;            // "near Fuente BRT Station"
 
-  /// How [HomeTab.selectedTrip] is drawn; null when none is selected.
-  late TripRouteLayers? _tripLayers = _layersFor(widget.selectedTrip);
+  /// Follows the commuter along [HomeTab.selectedTrip]: walking to board,
+  /// riding, getting off (services/trip_progress.dart).
+  late TripProgress? _progress = _progressFor(widget.selectedTrip);
 
-  static TripRouteLayers? _layersFor(SelectedTrip? trip) =>
-      trip == null ? null : TripRouteLayers.of(trip.option, trip.routesById);
+  /// How [HomeTab.selectedTrip] is drawn; null when none is selected.
+  late TripRouteLayers? _tripLayers = _layersFor(widget.selectedTrip, _progress);
+
+  static TripProgress? _progressFor(SelectedTrip? trip) =>
+      trip == null ? null : TripProgress(trip.option, trip.routesById);
+
+  static TripRouteLayers? _layersFor(SelectedTrip? trip, TripProgress? progress) =>
+      trip == null ? null : TripRouteLayers.of(trip.option, trip.routesById, progress: progress);
 
   // ---------- Full-screen map ----------
 
@@ -164,7 +172,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.selectedTrip, widget.selectedTrip)) {
-      _tripLayers = _layersFor(widget.selectedTrip);
+      _progress = _progressFor(widget.selectedTrip);
+      if (_currentLocation case final here?) _progress?.update(here, at: DateTime.now());
+      _tripLayers = _layersFor(widget.selectedTrip, _progress);
       _showTrip();
     }
     if (oldWidget.stops.isEmpty && widget.stops.isNotEmpty) _fitToStops();
@@ -398,6 +408,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
               padding: padding,
               child: SelectedTripCard(
                 trip: trip,
+                progress: _progress?.state,
                 onOpen: _openSelectedTrip,
                 onCancel: widget.onCancelTrip ?? () {},
               ),
@@ -494,7 +505,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
         // which made the dot hop around. Once we have a position, skip any
         // fix the phone itself rates worse than _maxFixErrorM.
         if (_currentLocation != null && p.accuracy > _maxFixErrorM) return;
-        _setCurrentLocation(LatLng(p.latitude, p.longitude));
+        _setCurrentLocation(LatLng(p.latitude, p.longitude), speedMps: p.speed);
       },
       onError: (_) {
         _positionSub?.cancel();
@@ -503,9 +514,12 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  void _setCurrentLocation(LatLng here) {
+  void _setCurrentLocation(LatLng here, {double? speedMps}) {
     if (!mounted) return;
-    setState(() => _currentLocation = here);
+    setState(() {
+      _currentLocation = here;
+      _trackTrip(here, speedMps);
+    });
     if (_selectedVehicleId != null) _updateBoarding();
     // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
     final last = _lastSortedAt;
@@ -513,6 +527,27 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       _lastSortedAt = here;
       _fleetVersion.value++;
     }
+  }
+
+  /// Moves the selected route's progress on (greys the travelled part)
+  /// and says when the commuter gets on, should get off, or has arrived.
+  void _trackTrip(LatLng here, double? speedMps) {
+    final progress = _progress;
+    final trip = widget.selectedTrip;
+    if (progress == null || trip == null) return;
+    final before = progress.state;
+    final now = progress.update(here, at: DateTime.now(), reportedSpeedMps: speedMps);
+    _tripLayers = _layersFor(trip, progress);
+    if (before?.phase == now.phase && before?.legIndex == now.legIndex) return;
+    final leg = trip.option.legs[now.legIndex];
+    final message = switch (now.phase) {
+      TripPhase.riding when before?.isRiding != true => "You're on the ${leg.routeCode ?? leg.routeName}. We'll tell you when to get off.",
+      TripPhase.alightSoon => 'Get off soon at ${leg.alightLabel}.',
+      TripPhase.arrived => "You've arrived at ${trip.option.legs.last.alightLabel}.",
+      TripPhase.toBoard when (before?.legIndex ?? 0) < now.legIndex => 'Transfer: walk to ${leg.boardLabel} for the ${leg.routeCode ?? leg.routeName}.',
+      _ => null,
+    };
+    if (message != null) WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(message));
   }
 
   void _showMessage(String text) {

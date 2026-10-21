@@ -2,13 +2,15 @@
 //
 // Home tab card for the route picked with "Select this route": which PUV,
 // where to board and alight, fare and time. Tap it for the full details;
-// the ✕ cancels the selection.
+// the ✕ cancels the selection. While the commuter travels it also says
+// where they are in the trip (services/trip_progress.dart).
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/selected_trip.dart';
 import '../../models/trip_plan.dart';
+import '../../services/trip_progress.dart';
 
 class SelectedTripCard extends StatelessWidget {
   const SelectedTripCard({
@@ -16,7 +18,11 @@ class SelectedTripCard extends StatelessWidget {
     required this.trip,
     required this.onCancel,
     required this.onOpen,
+    this.progress,
   });
+
+  /// Where the commuter is in the trip; null before their first GPS fix.
+  final TripProgressState? progress;
 
   final SelectedTrip trip;
   final VoidCallback onCancel;
@@ -72,6 +78,20 @@ class SelectedTripCard extends StatelessWidget {
                       trip.boardToAlight,
                       style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                     ),
+                    if (_status() case (final icon, final text, final color)) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        key: const Key('tripProgressStatus'),
+                        children: [
+                          Icon(icon, size: 18, color: color),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(text,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color)),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 4),
                     Text(
                       '${formatFare(option.totalFare)} · ${option.totalEtaMin} min · '
@@ -91,5 +111,20 @@ class SelectedTripCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _metres(double m) => m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
+
+  /// "Walk to Central Bloc" / "On the jeep · 2.3 km to Plaza Sugbo" / …
+  (IconData, String, Color)? _status() {
+    final p = progress;
+    if (p == null) return null;
+    final leg = trip.option.legs[p.legIndex];
+    return switch (p.phase) {
+      TripPhase.toBoard => (Icons.directions_walk, 'Walk to ${leg.boardLabel} and board the ${leg.routeCode ?? 'jeep'}', AppColors.textPrimary),
+      TripPhase.riding => (Icons.directions_bus, 'On the jeep · ${_metres(p.remainingM)} to ${leg.alightLabel}', AppColors.brandTeal),
+      TripPhase.alightSoon => (Icons.notifications_active, 'Get off soon at ${leg.alightLabel}', AppColors.error),
+      TripPhase.arrived => (Icons.check_circle, "You've arrived", AppColors.success),
+    };
   }
 }
