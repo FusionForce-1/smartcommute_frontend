@@ -153,6 +153,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
     }
     if (!_legRouteIds.contains(vehicle.routeId)) return; // a jeep on another route
 
+    if (update.shiftEnded) {
+      if (_tracks.remove(update.vehicleId) != null) {
+        if (update.vehicleId == _selectedId) _selectedId = null;
+        _frame.value++;
+        setState(() {});
+      }
+      return;
+    }
+
     final now = _clock.elapsed;
     final track = _tracks[update.vehicleId];
     final isNew = track == null;

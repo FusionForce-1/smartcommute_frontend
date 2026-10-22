@@ -72,14 +72,38 @@ OperatorRouter.register('fleet', {
       return r ? `${r.code} – ${r.name}` : 'Unknown route';
     };
 
+    // The PUV seen from above, with a status dot; it turns to face the way
+    // it moved (see faceTravel), so the vehicle itself shows its direction.
     function markerIcon(status) {
       const color = MARKER_COLORS[status] || MARKER_COLORS.inactive;
       return L.divIcon({
         className: '',
-        html: `<div class="op-vehicle-marker" style="background:${color}"></div>`,
-        iconSize: [18, 18],
-        iconAnchor: [9, 9],
+        html: `<div class="op-puv${status === 'signal_lost' || status === 'inactive' ? ' op-puv--muted' : ''}">
+          <img class="op-puv__img" src="../assets/icons/puv.svg" alt="" draggable="false" />
+          <span class="op-puv__dot" style="background:${color}"></span></div>`,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
       });
+    }
+
+    // Points the PUV along its last real movement (8 m+, to ignore GPS jitter).
+    function faceTravel(marker, latLng) {
+      const from = marker._opAnchor;
+      if (!from) { marker._opAnchor = latLng; return; }
+      if (L.latLng(from).distanceTo(latLng) >= 8) {
+        const toRad = (d) => (d * Math.PI) / 180;
+        const [lat1, lng1] = from.map(toRad), [lat2, lng2] = latLng.map(toRad);
+        const y = Math.sin(lng2 - lng1) * Math.cos(lat2);
+        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1);
+        marker._opHeading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+        marker._opAnchor = latLng;
+      }
+      applyHeading(marker);
+    }
+
+    function applyHeading(marker) {
+      const img = marker.getElement()?.querySelector('.op-puv__img');
+      if (img && marker._opHeading != null) img.style.transform = `rotate(${marker._opHeading}deg)`;
     }
 
     function popupHtml(v) {
@@ -124,14 +148,17 @@ OperatorRouter.register('fleet', {
           marker = L.marker(latLng, { icon: markerIcon(status) }).addTo(vehicleLayer);
           marker.bindPopup(popupHtml(v));
           marker._opStatus = status;
+          marker._opAnchor = latLng;
           markers.set(v.vehicle_id, marker);
         } else {
           marker.setLatLng(latLng);
+          faceTravel(marker, latLng);
           // Rebuilding the icon on every GPS update swapped the element under
           // the pointer, so taps on a moving jeep were lost: only on a change.
           if (marker._opStatus !== status) {
             marker.setIcon(markerIcon(status));
             marker._opStatus = status;
+            applyHeading(marker);
           }
           const html = popupHtml(v);
           if (marker.getPopup()?.getContent() !== html) marker.setPopupContent(html);

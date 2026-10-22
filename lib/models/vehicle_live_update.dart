@@ -7,6 +7,9 @@ import 'package:latlong2/latlong.dart';
 //    "status", "crowd", "eta_next_stop", "next_stop", "traffic",
 //    "duty_status"}
 //
+// When a shift ends (by the driver, or because the GPS stayed off) a frame
+// with "shift_ended": true tells live maps to drop the jeep.
+//
 // signal_lost frames have NO lat/lng/ts — only vehicle_id + status —
 // so [location] and [timestamp] are nullable.
 class VehicleLiveUpdate {
@@ -22,6 +25,7 @@ class VehicleLiveUpdate {
     this.nextStop,
     this.traffic,
     this.dutyStatus,
+    this.shiftEnded = false,
   });
 
   final String vehicleId;
@@ -35,6 +39,9 @@ class VehicleLiveUpdate {
   final String? nextStop; // name of the stop the jeep reaches next
   final String? traffic; // "light" | "moderate" | "heavy" on this route now
   final String? dutyStatus; // driver's Route Status: on_route | delayed | unavailable
+
+  /// The driver's shift is over: the jeep is off the map until the next one.
+  final bool shiftEnded;
 
   bool get isSignalLost => status == 'signal_lost';
 
@@ -59,6 +66,7 @@ class VehicleLiveUpdate {
       nextStop: json['next_stop'] as String?,
       traffic: json['traffic'] as String?,
       dutyStatus: json['duty_status'] as String?,
+      shiftEnded: json['shift_ended'] == true,
     );
   }
 

@@ -3,40 +3,47 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../models/vehicle_live_update.dart';
 
-/// Vehicle pin: points along the heading when moving, greys out when the
-/// backend reports signal_lost (last known position is kept).
+/// The PUV, seen from above (front at the top). Once it moves it turns to
+/// face its heading, so the vehicle itself shows the direction of travel.
+/// Greys out when the backend reports signal_lost (last known position kept).
 class VehicleMarker extends StatelessWidget {
   const VehicleMarker({super.key, required this.vehicle, this.heading});
 
   final VehicleLiveUpdate vehicle;
-  final double? heading; // smoothed, from VehicleTrack
+  final double? heading; // smoothed, from VehicleTrack; null until it has moved
 
-  static const Color _activeColor = Color.fromARGB(255, 233, 4, 4);
+  static const String asset = 'assets/icons/puv.svg';
 
   @override
   Widget build(BuildContext context) {
     final lost = vehicle.isSignalLost;
     final heading = this.heading;
-    final speed = vehicle.speed;
 
-    final Widget icon = heading != null && !lost
-        ? Transform.rotate(
-            angle: heading * math.pi / 180,
-            child: const Icon(Icons.navigation, size: 40, color: _activeColor),
-          )
-        : Icon(
-            lost
-                ? Icons.signal_cellular_connected_no_internet_0_bar
-                : Icons.directions_car,
-            size: 40,
-            color: lost ? Colors.grey : _activeColor,
-          );
+    Widget icon = SvgPicture.asset(asset, key: const ValueKey('puvIcon'), fit: BoxFit.contain);
+    if (heading != null) {
+      icon = Transform.rotate(angle: heading * math.pi / 180, child: icon);
+    }
+    if (lost) {
+      icon = Opacity(
+        opacity: 0.55,
+        child: ColorFiltered(
+          colorFilter: const ColorFilter.matrix(<double>[
+            0.33, 0.33, 0.33, 0, 0, //
+            0.33, 0.33, 0.33, 0, 0, //
+            0.33, 0.33, 0.33, 0, 0, //
+            0, 0, 0, 1, 0,
+          ]),
+          child: icon,
+        ),
+      );
+    }
 
     return Tooltip(
-      message: lost ? 'Signal lost — last known position' : _liveLabel(vehicle, speed),
+      message: lost ? 'Signal lost — last known position' : _liveLabel(vehicle, vehicle.speed),
       child: icon,
     );
   }

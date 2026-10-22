@@ -206,6 +206,15 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
     final now = _clock.elapsed;
     final track = _tracks[update.vehicleId];
+    if (update.shiftEnded) {
+      // Off duty now: take the jeep off the map (it comes back with its next shift's GPS).
+      if (_tracks.remove(update.vehicleId) != null) {
+        if (update.vehicleId == _selectedVehicleId) _clearSelectedVehicle();
+        _frame.value++;
+        _fleetVersion.value++;
+      }
+      return;
+    }
     if (track == null) {
       _tracks[update.vehicleId] = VehicleTrack(update, now);
     } else {
