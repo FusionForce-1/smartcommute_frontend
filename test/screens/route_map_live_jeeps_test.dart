@@ -48,11 +48,11 @@ void main() {
         'duty_status': 'on_route', 'eta_next_stop': -1, 'next_stop': null, 'traffic': null,
       };
 
-  Future<FakeSocket> open(WidgetTester tester) async {
+  Future<FakeSocket> open(WidgetTester tester, {RouteOption? trip}) async {
     final socket = FakeSocket();
     await tester.pumpWidget(MaterialApp(
       home: RouteMapScreen(
-        option: option,
+        option: trip ?? option,
         routesById: {route.id: route},
         loadVehicles: () async => fleet,
         socket: socket,
@@ -84,5 +84,39 @@ void main() {
     socket.send(fix('jeep1', 123.8950));
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('Already passed Stop B'), findsOneWidget);
+  });
+
+  // The trip back: Carbon -> Central Bloc, east -> west on the same street.
+  final back = RouteOption(rank: 1, totalEtaMin: 10, totalFare: 13, transfers: 0, legs: [
+    RouteLeg(
+      routeId: 'r17c', routeName: 'Carbon – Central Bloc', routeCode: '17C', direction: 'return',
+      boardStop: stop('b', 'Stop B', 123.8900), alightStop: stop('a', 'Stop A', 123.8810),
+      etaMin: 10, fare: 13,
+    ),
+  ]);
+
+  testWidgets('on the trip back, a jeep east of the stop is still coming', (tester) async {
+    final socket = await open(tester, trip: back);
+    socket.send(fix('jeep1', 123.8950));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.textContaining('before Stop B'), findsOneWidget);
+  });
+
+  testWidgets('a jeep driving the other way is not listed for the trip back', (tester) async {
+    final socket = await open(tester, trip: back);
+    socket.send({...fix('jeep1', 123.8950), 'heading': 90.0, 'speed': 20.0}); // heading east
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0000'), findsNothing);
+  });
+
+  testWidgets('a jeep whose shift ended leaves the list', (tester) async {
+    final socket = await open(tester);
+    socket.send(fix('jeep1', 123.8850));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0000'), findsOneWidget);
+
+    socket.send({'vehicle_id': 'jeep1', 'status': 'signal_lost', 'duty_status': 'unavailable', 'shift_ended': true});
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('0000'), findsNothing);
   });
 }

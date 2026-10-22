@@ -111,6 +111,7 @@ class RouteLeg {
     this.speedIsLive = false,
     this.trafficDelayMin,
     this.congestionReported = false,
+    this.direction = 'outbound',
   });
 
   final String routeId;
@@ -149,6 +150,11 @@ class RouteLeg {
   /// A driver or operator marked the route congested.
   final bool congestionReported;
 
+  /// "outbound" (Terminal A -> B, the way the route is drawn) or "return" (B -> A).
+  final String direction;
+
+  bool get isReturn => direction == 'return';
+
   String get boardLabel => boardStop.displayName;
 
   /// Ang backend stub mo-return og placeholder para sa alight stop usab
@@ -178,6 +184,7 @@ class RouteLeg {
       speedIsLive: json['speed_source'] == 'live',
       trafficDelayMin: json['traffic_delay_min'] as int?,
       congestionReported: json['congestion_reported'] as bool? ?? false,
+      direction: json['direction'] as String? ?? 'outbound',
     );
   }
 

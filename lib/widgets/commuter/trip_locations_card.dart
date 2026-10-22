@@ -100,13 +100,7 @@ class TripLocationsCard extends StatelessWidget {
                 ],
               ),
             ),
-          Center(
-            child: IconButton(
-              tooltip: 'Swap From and To',
-              onPressed: onSwap,
-              icon: const Icon(Icons.swap_horiz, size: 32),
-            ),
-          ),
+          Center(child: _SwapButton(onSwap: onSwap)),
           const _EndLabel(label: 'To', color: AppColors.error),
           const SizedBox(height: AppSpacing.xs),
           Row(
@@ -204,6 +198,61 @@ class _StateIconButton extends StatelessWidget {
                 transitionBuilder: (child, animation) =>
                     ScaleTransition(scale: animation, child: FadeTransition(opacity: animation, child: child)),
                 child: icon,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Round "swap From and To" button between the two boxes. Turns half a
+/// circle on every swap so the tap visibly did something; greyed out until
+/// both ends are set.
+class _SwapButton extends StatefulWidget {
+  const _SwapButton({required this.onSwap});
+
+  final VoidCallback? onSwap;
+
+  @override
+  State<_SwapButton> createState() => _SwapButtonState();
+}
+
+class _SwapButtonState extends State<_SwapButton> {
+  double _turns = 0;
+
+  void _tap() {
+    setState(() => _turns += 0.5);
+    widget.onSwap!();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onSwap != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Tooltip(
+        message: enabled ? 'Swap From and To' : 'Set From and To to swap them',
+        child: Material(
+          key: const Key('swapFromTo'),
+          color: enabled ? AppColors.brandTeal : const Color(0xFFF0F2F5),
+          shape: const CircleBorder(),
+          elevation: enabled ? 2 : 0,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? _tap : null,
+            child: SizedBox.square(
+              dimension: 44,
+              child: AnimatedRotation(
+                turns: _turns,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+                child: Icon(
+                  Icons.swap_vert,
+                  size: 26,
+                  color: enabled ? Colors.white : AppColors.textSecondary,
+                ),
               ),
             ),
           ),

@@ -187,7 +187,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
       if (legIndex < 0) continue;
       final leg = _option.legs[legIndex];
       final at = entry.value.latest.location;
-      final line = widget.routesById[leg.routeId]?.geometry ?? const <LatLng>[];
+      final drawn = widget.routesById[leg.routeId]?.geometry ?? const <LatLng>[];
+      // A return trip rides the route's line backwards (Terminal B -> A).
+      final line = leg.isReturn ? drawn.reversed.toList() : drawn;
+      // A jeep driving the other way along the same streets isn't this ride.
+      if (at != null && _drivingAgainst(line, at, entry.value.headingAt(_clock.elapsed))) continue;
       final plan = at == null || leg.boardStop.isPlaceholder
           ? null
           : planBoarding(route: line, user: _point(leg.boardStop), jeep: at);
@@ -208,6 +212,17 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
     }
     list.sort((a, b) => a.legIndex != b.legIndex ? a.legIndex - b.legIndex : rank(a).compareTo(rank(b)));
     return list;
+  }
+
+  /// True when [heading] points more than 100° away from [line]'s direction at [at].
+  static bool _drivingAgainst(List<LatLng> line, LatLng at, double? heading) {
+    if (heading == null || line.length < 2) return false;
+    final pos = projectOnLine(line, at);
+    if (pos == null) return false;
+    final i = pos.segment.clamp(0, line.length - 2);
+    final along = const Distance().bearing(line[i], line[i + 1]);
+    final diff = ((heading - along + 540) % 360 - 180).abs();
+    return diff > 100;
   }
 
   void _select(RouteJeep jeep) {

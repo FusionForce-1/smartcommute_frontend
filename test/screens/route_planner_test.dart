@@ -192,18 +192,18 @@ void main() {
 
   testWidgets('swap is enabled once both ends are set', (tester) async {
     final provider = await pumpRouteTab(tester);
-    IconButton swap() => tester.widget<IconButton>(
-          find.ancestor(of: find.byIcon(Icons.swap_horiz), matching: find.byType(IconButton)),
+    InkWell swap() => tester.widget<InkWell>(
+          find.descendant(of: find.byKey(const Key('swapFromTo')), matching: find.byType(InkWell)),
         );
-    expect(swap().onPressed, isNull);
+    expect(swap().onTap, isNull);
 
     await provider.locateOrigin();
     provider.setDestination(itPark, 'IT Park');
     await tester.pump();
-    expect(swap().onPressed, isNotNull);
+    expect(swap().onTap, isNotNull);
 
-    await tester.tap(find.byIcon(Icons.swap_horiz));
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('swapFromTo')));
+    await tester.pumpAndSettle();
     expect(provider.originLabel, 'IT Park');
     expect(provider.destinationLabel, 'Your location');
   });
