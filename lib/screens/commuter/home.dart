@@ -647,6 +647,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           valueListenable: _fleetVersion,
           builder: (context, _, __) => _NearbyList(
             vehicles: _nearbyVehicles(),
+            notInService: _tracks.values
+                .where((t) => !t.latest.isSignalLost && t.latest.isUnavailable && t.latest.location != null)
+                .length,
             etaOf: _etaMinutes,
             selectedId: _selectedVehicleId,
             onSelected: _pickNearbyVehicle,
@@ -915,12 +918,17 @@ typedef NearbyVehicle = ({TransportRoute route, VehicleLiveUpdate update, double
 class _NearbyList extends StatelessWidget {
   const _NearbyList({
     required this.vehicles,
+    this.notInService = 0,
     required this.etaOf,
     required this.selectedId,
     required this.onSelected,
   });
 
   final List<NearbyVehicle> vehicles;
+
+  /// Live jeeps on the map that aren't taking passengers (no shift started,
+  /// or the driver set Unavailable): not listed, but explained.
+  final int notInService;
   final int? Function(VehicleLiveUpdate) etaOf;
   final String? selectedId;
   final ValueChanged<String> onSelected;
@@ -928,9 +936,16 @@ class _NearbyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (vehicles.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Text('No vehicles nearby right now.'),
+      final n = notInService;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text(
+          n == 0
+              ? 'No vehicles nearby right now.'
+              : 'No vehicles in service nearby right now. ${n == 1 ? '1 PUV' : '$n PUVs'} on the map '
+                  "${n == 1 ? "isn't" : "aren't"} taking passengers (shown greyed out).",
+          key: const Key('nearbyEmpty'),
+        ),
       );
     }
     return Column(

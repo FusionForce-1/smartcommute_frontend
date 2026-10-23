@@ -9,7 +9,8 @@ import '../../models/vehicle_live_update.dart';
 
 /// The PUV, seen from above (front at the top). Once it moves it turns to
 /// face its heading, so the vehicle itself shows the direction of travel.
-/// Greys out when the backend reports signal_lost (last known position kept).
+/// Greys out when the backend reports signal_lost (last known position kept)
+/// or the jeep isn't in service (no shift started, or driver set Unavailable).
 class VehicleMarker extends StatelessWidget {
   const VehicleMarker({super.key, required this.vehicle, this.heading});
 
@@ -21,15 +22,16 @@ class VehicleMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final lost = vehicle.isSignalLost;
+    final offDuty = !lost && vehicle.isUnavailable;   // no shift, or the driver set Unavailable
     final heading = this.heading;
 
     Widget icon = SvgPicture.asset(asset, key: const ValueKey('puvIcon'), fit: BoxFit.contain);
     if (heading != null) {
       icon = Transform.rotate(angle: heading * math.pi / 180, child: icon);
     }
-    if (lost) {
+    if (lost || offDuty) {
       icon = Opacity(
-        opacity: 0.55,
+        opacity: lost ? 0.55 : 0.7,
         child: ColorFiltered(
           colorFilter: const ColorFilter.matrix(<double>[
             0.33, 0.33, 0.33, 0, 0, //
@@ -43,7 +45,11 @@ class VehicleMarker extends StatelessWidget {
     }
 
     return Tooltip(
-      message: lost ? 'Signal lost — last known position' : _liveLabel(vehicle, vehicle.speed),
+      message: lost
+          ? 'Signal lost — last known position'
+          : offDuty
+              ? 'Not in service — not taking passengers right now'
+              : _liveLabel(vehicle, vehicle.speed),
       child: icon,
     );
   }

@@ -26,6 +26,12 @@ void main() {
     expect(find.byType(ColorFiltered), findsOneWidget);
   });
 
+  testWidgets('a PUV not in service is greyed out too', (tester) async {
+    await tester.pumpWidget(host(const VehicleMarker(
+        vehicle: VehicleLiveUpdate(vehicleId: 'v', status: 'en_route', dutyStatus: 'unavailable'))));
+    expect(find.byType(ColorFiltered), findsOneWidget);
+  });
+
   test('a shift_ended frame is recognised', () {
     final u = VehicleLiveUpdate.fromJson({'vehicle_id': 'v', 'status': 'signal_lost', 'shift_ended': true});
     expect(u.shiftEnded, isTrue);
