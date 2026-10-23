@@ -61,6 +61,17 @@ void main() {
     expect(find.text('START SHIFT'), findsOneWidget);
   });
 
+  testWidgets('without a GPS tracker the broadcast switch is off and disabled', (tester) async {
+    await pumpDashboard(tester, {
+      'GET /drivers/me': dashboardJson(vehicles: [vehicleJson(hasTracker: false)]),
+    });
+
+    expect(find.text('No GPS tracker is set up for this vehicle. Ask your operator.'), findsOneWidget);
+    final gpsSwitch = tester.widget<Switch>(find.byType(Switch).first);
+    expect(gpsSwitch.value, isFalse);
+    expect(gpsSwitch.onChanged, isNull);
+  });
+
   testWidgets('reporting a status before the shift asks to start it', (tester) async {
     await pumpDashboard(tester, {'GET /drivers/me': dashboardJson()});
 

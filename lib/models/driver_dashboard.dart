@@ -44,6 +44,7 @@ class AssignedVehicle {
     this.routeName,
     this.terminalA,
     this.terminalB,
+    this.hasTracker = false,
   });
 
   final String id;
@@ -53,6 +54,10 @@ class AssignedVehicle {
   final String? routeName;
   final String? terminalA;
   final String? terminalB;
+
+  /// The operator has set up a GPS tracker on this vehicle. Live broadcast
+  /// needs one; the backend refuses it otherwise.
+  final bool hasTracker;
 
   /// "Talamban → Pier 1 Terminal", falling back to the route's name.
   String get routeLine {
@@ -68,6 +73,7 @@ class AssignedVehicle {
         routeName: json['route_name'] as String?,
         terminalA: json['terminal_a'] as String?,
         terminalB: json['terminal_b'] as String?,
+        hasTracker: json['has_tracker'] as bool? ?? false,
       );
 }
 
