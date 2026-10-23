@@ -60,6 +60,52 @@ void main() {
     expect(driver.shift!.passengers, 4);
   });
 
+  test('reopening the dashboard mid-shift turns GPS back on', () async {
+    final gps = FakeGpsSession();
+
+    await onShift({}, gps: gps);
+
+    expect(gps.started, ['v1']);
+  });
+
+  test('refreshing leaves GPS off if the driver switched it off', () async {
+    final gps = FakeGpsSession();
+    final driver = await onShift({}, gps: gps);
+    await driver.setBroadcasting(false);
+
+    await driver.load();
+
+    expect(gps.started, ['v1']);
+    expect(driver.broadcasting, isFalse);
+  });
+
+  test('distance is what the server stored plus what has been sent since', () async {
+    final gps = FakeGpsSession();
+    final driver = buildProvider(
+      fakeBackend({'GET /drivers/me': dashboardJson(shift: shiftJson(distanceKm: 4.2))}),
+      gps: gps,
+    );
+    await driver.load();
+    expect(driver.distanceKm, 4.2);
+
+    gps.drive(1500);
+
+    expect(driver.distanceKm, closeTo(5.7, 1e-9));
+  });
+
+  test('a new shift counts its distance from zero', () async {
+    final gps = FakeGpsSession()..drive(3000); // left over from an earlier shift
+    final driver = buildProvider(
+      fakeBackend({'GET /drivers/me': dashboardJson(), 'POST /drivers/me/shift': shiftJson()}),
+      gps: gps,
+    );
+    await driver.load();
+
+    await driver.startShift();
+
+    expect(driver.distanceKm, 0);
+  });
+
   test('a failed first load is an error', () async {
     final driver = buildProvider(fakeBackend({'GET /drivers/me': 500}));
 

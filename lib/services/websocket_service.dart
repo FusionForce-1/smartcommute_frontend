@@ -26,6 +26,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/env_config.dart';
@@ -156,6 +157,8 @@ class GpsIngestionSession extends ChangeNotifier {
   Position? _lastFix;
   DateTime? _lastSentAt;
   int _framesSent = 0;
+  LatLng? _lastSentPoint;
+  double _distanceMetres = 0;
 
   WebSocketChannel? _channel;
   StreamSubscription<Position>? _positionSub;
@@ -174,6 +177,17 @@ class GpsIngestionSession extends ChangeNotifier {
   DateTime? get lastSentAt => _lastSentAt;
   int get framesSent => _framesSent;
   bool get isActive => _active;
+
+  /// Metres between the frames sent since [resetDistance]: the same hops
+  /// the backend adds up over the fixes it stored. Kept across stop/start,
+  /// so switching the broadcast off and on mid-shift doesn't lose it.
+  double get distanceMetres => _distanceMetres;
+
+  /// Counts from zero again, e.g. for a new shift.
+  void resetDistance() {
+    _distanceMetres = 0;
+    _lastSentPoint = null;
+  }
 
   /// Starts streaming this device's location for [vehicleId].
   /// Throws if location permission is denied or services are off.
@@ -332,7 +346,20 @@ class GpsIngestionSession extends ChangeNotifier {
     channel.sink.add(jsonEncode(encodeFix(fix)));
     _lastSentAt = DateTime.now();
     _framesSent++;
+    countSent(fix);
     notifyListeners();
+  }
+
+  /// Haversine, as the backend's shift summary uses.
+  static const _distance = Distance(roundResult: false, calculator: Haversine());
+
+  /// Adds the hop from the previous frame sent to [fix].
+  @visibleForTesting
+  void countSent(Position fix) {
+    final here = LatLng(fix.latitude, fix.longitude);
+    final previous = _lastSentPoint;
+    if (previous != null) _distanceMetres += _distance.as(LengthUnit.Meter, previous, here);
+    _lastSentPoint = here;
   }
 
   /// JSON frame accepted by the backend's gps_ingestion handler.

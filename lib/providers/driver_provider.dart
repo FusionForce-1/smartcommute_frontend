@@ -68,6 +68,13 @@ class DriverProvider extends ChangeNotifier {
 
   bool get broadcasting => gps.isActive;
 
+  /// Kilometres driven this shift: what the server had stored when the
+  /// dashboard loaded, plus the hops this device has sent since.
+  double get distanceKm {
+    final shift = _shift;
+    return shift == null ? 0 : shift.distanceKm + gps.distanceMetres / 1000;
+  }
+
   /// The vehicle being driven (during a shift) or picked for the next one.
   AssignedVehicle? get vehicle {
     final id = _shift?.vehicleId ?? _selectedVehicleId;
@@ -83,7 +90,8 @@ class DriverProvider extends ChangeNotifier {
   // ── Loading ─────────────────────────────────────────────────
 
   Future<void> load() async {
-    if (_data == null) {
+    final firstLoad = _data == null;
+    if (firstLoad) {
       _loadState = LoadState.loading;
       notifyListeners();
     }
@@ -91,6 +99,8 @@ class DriverProvider extends ChangeNotifier {
       final data = await _service.dashboard();
       _data = data;
       _shift = data.shift;
+      // The server's distance already covers what this device sent.
+      gps.resetDistance();
       _dutyStatus = data.dutyStatus;
       _crowdPercent = data.shift?.crowdPercent ?? 0;
       final ids = data.vehicles.map((v) => v.id);
@@ -105,6 +115,11 @@ class DriverProvider extends ChangeNotifier {
       if (_data == null) _loadState = LoadState.error;
     }
     notifyListeners();
+
+    // A shift still running from before the app was closed or reloaded:
+    // without GPS its distance and trips can't be worked out. Only on
+    // opening, so a refresh doesn't undo the driver switching it off.
+    if (firstLoad && onShift && !gps.isActive) await setBroadcasting(true);
   }
 
   void selectVehicle(String id) {
@@ -123,6 +138,7 @@ class DriverProvider extends ChangeNotifier {
     _setBusy(true);
     try {
       _shift = await _service.startShift(vehicleId);
+      gps.resetDistance();
       _dutyStatus = DutyStatus.onRoute;
       _crowdPercent = 0;
     } catch (e) {

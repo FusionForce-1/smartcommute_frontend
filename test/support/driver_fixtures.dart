@@ -13,12 +13,19 @@ Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123'}) =
       'terminal_b': 'Pier 1 Terminal',
     };
 
-Map<String, dynamic> shiftJson({int crowd = 0, int passengers = 0, String vehicleId = 'v1'}) => {
+Map<String, dynamic> shiftJson({
+  int crowd = 0,
+  int passengers = 0,
+  String vehicleId = 'v1',
+  double distanceKm = 0,
+}) =>
+    {
       'id': 's1',
       'vehicle_id': vehicleId,
       'started_at': DateTime.now().toUtc().subtract(const Duration(minutes: 5)).toIso8601String(),
       'crowd_percent': crowd,
       'passengers': passengers,
+      'distance_km': distanceKm,
     };
 
 Map<String, dynamic> dashboardJson({
@@ -56,9 +63,22 @@ class FakeGpsSession extends GpsIngestionSession {
   final List<String> started = [];
   int stops = 0;
   bool _on = false;
+  double _metres = 0;
 
   @override
   bool get isActive => _on;
+
+  @override
+  double get distanceMetres => _metres;
+
+  @override
+  void resetDistance() => _metres = 0;
+
+  /// As if frames [metres] apart had been sent.
+  void drive(double metres) {
+    _metres += metres;
+    notifyListeners();
+  }
 
   @override
   Future<void> start(String vehicleId) async {

@@ -102,6 +102,16 @@ void main() {
     expect(find.text('START SHIFT'), findsOneWidget);
   });
 
+  testWidgets('a shift in progress shows the distance driven so far', (tester) async {
+    await pumpDashboard(tester, {
+      'GET /drivers/me': dashboardJson(shift: shiftJson(distanceKm: 4.2), dutyStatus: 'on_route'),
+    });
+
+    await reveal(tester, find.text('Distance: 4.2 km'));
+
+    expect(find.text('Distance: 4.2 km'), findsOneWidget);
+  });
+
   testWidgets('a failed first load offers a retry', (tester) async {
     await pumpDashboard(tester, {'GET /drivers/me': 500});
 
