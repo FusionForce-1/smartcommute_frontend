@@ -11,6 +11,11 @@
 // teal). Without a boarding plan it falls back to a straight line from the
 // jeep's animated position to the commuter, redrawn every frame.
 //
+// Stops aren't drawn on their own (too much clutter): only a selected
+// [trip]'s stops show, on its line. [showAllStops] brings every stop back.
+// With a trip selected only the jeeps in [onlyVehicles] (those on its
+// routes) are drawn; every jeep comes back when the trip is cleared.
+//
 // The commuter is a blue circle ("you are here"), not a pin.
 //
 // [expanded] draws it edge to edge (the Home tab's full-screen map) instead
@@ -48,6 +53,8 @@ class LiveMap extends StatelessWidget {
     this.showControls = true,
     this.topInset = 0,
     this.trip,
+    this.onlyVehicles,
+    this.showAllStops = false,
   });
 
   final MapController controller;
@@ -89,6 +96,12 @@ class LiveMap extends StatelessWidget {
 
   /// The route picked with "Select this route": its lines and stops.
   final TripRouteLayers? trip;
+
+  /// When set, only these jeeps are drawn (a selected trip's routes).
+  final Set<String>? onlyVehicles;
+
+  /// Draw every stop (dots zoomed out, photo pins up close). Off on Home.
+  final bool showAllStops;
 
   static const Color _walkLine = Color(0xFF2F6FED);
 
@@ -188,7 +201,7 @@ class LiveMap extends StatelessWidget {
               ],
             ),
           // Under the vehicles, so a stop never hides a jeep.
-          _StopMarkers(stops: stops),
+          if (showAllStops && trip == null) _StopMarkers(stops: stops),
           if (trip case final trip?) MarkerLayer(markers: trip.markers),
           // Only this layer repaints per animation frame.
           ValueListenableBuilder<int>(
@@ -198,7 +211,8 @@ class LiveMap extends StatelessWidget {
               return MarkerLayer(
                 markers: [
                   for (final track in tracks.values)
-                    if (track.positionAt(now) case final point?)
+                    if (onlyVehicles == null || onlyVehicles!.contains(track.latest.vehicleId))
+                      if (track.positionAt(now) case final point?)
                       Marker(
                         point: point,
                         width: 50,

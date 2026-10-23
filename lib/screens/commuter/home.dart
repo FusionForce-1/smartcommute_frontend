@@ -172,6 +172,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.selectedTrip, widget.selectedTrip)) {
+      _arrivedClear?.cancel();
       _progress = _progressFor(widget.selectedTrip);
       if (_currentLocation case final here?) _progress?.update(here, at: DateTime.now());
       _tripLayers = _layersFor(widget.selectedTrip, _progress);
@@ -186,6 +187,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _arrivedClear?.cancel();
     _positionSub?.cancel();
     _socket.disconnect();
     _ticker.dispose();
@@ -538,6 +540,19 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     }
   }
 
+  /// With a trip selected, the map shows only the jeeps on its routes (and
+  /// one picked from Nearby Vehicles); null shows them all.
+  Set<String>? _tripVehicleIds() {
+    final trip = widget.selectedTrip;
+    if (trip == null) return null;
+    final routeIds = {for (final leg in trip.option.legs) leg.routeId};
+    return {
+      for (final v in widget.vehicles)
+        if (routeIds.contains(v.routeId)) v.id,
+      if (_selectedVehicleId case final id?) id,
+    };
+  }
+
   /// Moves the selected route's progress on (greys the travelled part)
   /// and says when the commuter gets on, should get off, or has arrived.
   void _trackTrip(LatLng here, double? speedMps) {
@@ -557,7 +572,18 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       _ => null,
     };
     if (message != null) WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(message));
+    // Trip done: clear it after a moment, so the map goes back to every stop and jeep.
+    if (now.phase == TripPhase.arrived) {
+      _arrivedClear?.cancel();
+      _arrivedClear = Timer(clearAfterArrival, () {
+        if (mounted && identical(widget.selectedTrip, trip)) widget.onCancelTrip?.call();
+      });
+    }
   }
+
+  /// How long the finished trip stays on the map after "You've arrived".
+  static const Duration clearAfterArrival = Duration(seconds: 15);
+  Timer? _arrivedClear;
 
   void _showMessage(String text) {
     if (!mounted) return;
@@ -621,6 +647,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       showControls: !expanded,
       topInset: expanded ? 56 : 0,
       trip: _tripLayers,
+      onlyVehicles: _tripVehicleIds(),
     );
   }
 
