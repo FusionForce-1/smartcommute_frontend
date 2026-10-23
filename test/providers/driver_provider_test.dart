@@ -98,6 +98,26 @@ void main() {
     expect(error, 'Shift started, but GPS is off: Location permission denied.');
   });
 
+  test('without a GPS tracker the shift starts but GPS stays off', () async {
+    final gps = FakeGpsSession();
+    final driver = buildProvider(
+      fakeBackend({
+        'GET /drivers/me': dashboardJson(vehicles: [vehicleJson(hasTracker: false)]),
+        'POST /drivers/me/shift': shiftJson(),
+      }),
+      gps: gps,
+    );
+    await driver.load();
+
+    final error = await driver.startShift();
+
+    expect(driver.onShift, isTrue);
+    expect(driver.canBroadcast, isFalse);
+    expect(error, 'Shift started, but GPS is off: ${DriverProvider.noTrackerMessage}');
+    expect(await driver.setBroadcasting(true), DriverProvider.noTrackerMessage);
+    expect(gps.started, isEmpty);
+  });
+
   test('without a vehicle there is nothing to start', () async {
     final backend = fakeBackend({'GET /drivers/me': dashboardJson(vehicles: [])});
     final driver = buildProvider(backend);

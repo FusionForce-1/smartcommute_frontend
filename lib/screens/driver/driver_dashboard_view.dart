@@ -119,6 +119,7 @@ class _DashboardBody extends StatelessWidget {
         gap,
         GpsBroadcastCard(
           session: driver.gps,
+          hasTracker: driver.canBroadcast,
           onChanged: (on) => _report(context, () => driver.setBroadcasting(on)),
           onViewLive: () => _openMap(context, followMe: true),
         ),

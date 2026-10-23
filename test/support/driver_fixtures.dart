@@ -3,7 +3,7 @@
 
 import 'package:smartcommute_app/services/websocket_service.dart';
 
-Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123'}) => {
+Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123', bool hasTracker = true}) => {
       'id': id,
       'plate_number': plate,
       'route_id': 'r1',
@@ -11,6 +11,7 @@ Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123'}) =
       'route_name': 'Talamban – Pier 1',
       'terminal_a': 'Talamban',
       'terminal_b': 'Pier 1 Terminal',
+      'has_tracker': hasTracker,
     };
 
 Map<String, dynamic> shiftJson({int crowd = 0, int passengers = 0, String vehicleId = 'v1'}) => {

@@ -42,6 +42,8 @@ class DriverProvider extends ChangeNotifier {
   final WebSocketService? _liveFeed;
 
   static const String noShiftMessage = 'Start your shift first.';
+  static const String noTrackerMessage =
+      'No GPS tracker is set up for this vehicle. Ask your operator.';
 
   LoadState _loadState = LoadState.idle;
   String? _loadError;
@@ -67,6 +69,9 @@ class DriverProvider extends ChangeNotifier {
   bool get busy => _busy;
 
   bool get broadcasting => gps.isActive;
+
+  /// Live broadcast needs a GPS tracker set up on the vehicle.
+  bool get canBroadcast => vehicle?.hasTracker ?? false;
 
   /// The vehicle being driven (during a shift) or picked for the next one.
   AssignedVehicle? get vehicle {
@@ -214,10 +219,12 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// Turns the GPS broadcast on or off; only during a shift.
+  /// Turns the GPS broadcast on or off; only during a shift, and only on a
+  /// vehicle with a GPS tracker set up.
   Future<String?> setBroadcasting(bool on) async {
     final vehicleId = _shift?.vehicleId;
     if (on && vehicleId == null) return noShiftMessage;
+    if (on && !canBroadcast) return noTrackerMessage;
     if (!on) {
       await gps.stop();
       return null;

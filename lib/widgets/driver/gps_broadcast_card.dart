@@ -1,7 +1,8 @@
 // lib/widgets/driver/gps_broadcast_card.dart
 //
 // Location-sharing switch. While sharing, it shows how the broadcast is
-// going and a button to see it on the map.
+// going and a button to see it on the map. Disabled when the vehicle has
+// no GPS tracker set up.
 
 import 'package:flutter/material.dart';
 
@@ -13,15 +14,21 @@ class GpsBroadcastCard extends StatelessWidget {
   const GpsBroadcastCard({
     super.key,
     required this.session,
+    required this.hasTracker,
     required this.onChanged,
     required this.onViewLive,
   });
 
   final GpsIngestionSession session;
+
+  /// False: the switch can't be turned on (it can still be turned off).
+  final bool hasTracker;
   final ValueChanged<bool> onChanged;
   final VoidCallback onViewLive;
 
   String get _subtitle => switch (session.state) {
+        GpsSessionState.idle when !hasTracker =>
+          'No GPS tracker is set up for this vehicle. Ask your operator.',
         GpsSessionState.idle => 'Share your location with commuters',
         GpsSessionState.connecting => 'Connecting to the GPS server…',
         GpsSessionState.live => session.framesSent == 0
@@ -36,6 +43,7 @@ class GpsBroadcastCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final on = session.isActive;
     final isError = session.state == GpsSessionState.error;
+    final blocked = !on && !hasTracker;
 
     return DriverCard(
       child: Column(
@@ -54,7 +62,7 @@ class GpsBroadcastCard extends StatelessWidget {
                       _subtitle,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isError ? AppColors.error : AppColors.textSecondary,
+                        color: isError || blocked ? AppColors.error : AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -62,7 +70,7 @@ class GpsBroadcastCard extends StatelessWidget {
               ),
               Switch(
                 value: on,
-                onChanged: onChanged,
+                onChanged: blocked ? null : onChanged,
                 activeThumbColor: AppColors.brandTeal,
                 activeTrackColor: Colors.white,
                 inactiveThumbColor: AppColors.navInactive,
