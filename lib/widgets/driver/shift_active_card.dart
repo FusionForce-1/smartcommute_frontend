@@ -1,7 +1,7 @@
 // lib/widgets/driver/shift_active_card.dart
 //
 // Shown during a shift: a live dot, the running time, when it started,
-// the boarding counter and the END SHIFT button.
+// the distance driven so far, the boarding counter and the END SHIFT button.
 
 import 'package:flutter/material.dart';
 
@@ -14,11 +14,13 @@ class ShiftActiveCard extends StatelessWidget {
   const ShiftActiveCard({
     super.key,
     required this.shift,
+    required this.distanceKm,
     required this.onPassengerChange,
     required this.onEndShift,
   });
 
   final DriverShift shift;
+  final double distanceKm;
   final ValueChanged<int> onPassengerChange;
   final VoidCallback? onEndShift;
 
@@ -54,6 +56,17 @@ class ShiftActiveCard extends StatelessWidget {
               const SizedBox(width: AppSpacing.xs),
               Text(
                 'Started at ${formatTimeOfDay(shift.startedAt)}',
+                style: const TextStyle(fontSize: 15, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.trending_up, size: 22, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'Distance: ${distanceKm.toStringAsFixed(1)} km',
                 style: const TextStyle(fontSize: 15, color: AppColors.textSecondary),
               ),
             ],

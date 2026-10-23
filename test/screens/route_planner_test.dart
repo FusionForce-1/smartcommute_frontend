@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:smartcommute_app/models/selected_trip.dart';
+import 'package:smartcommute_app/models/transport_stop.dart';
 import 'package:smartcommute_app/providers/trip_plan_provider.dart';
 import 'package:smartcommute_app/screens/commuter/find_routes_screen.dart';
 import 'package:smartcommute_app/screens/commuter/route.dart';
@@ -25,6 +27,8 @@ bool isEnabled(WidgetTester tester, String label) =>
 Future<TripPlanProvider> pumpRouteTab(
   WidgetTester tester, {
   FakeLocationSource? location,
+  List<TransportStop> stops = const [],
+  TripSelected? onRouteSelected,
 }) async {
   // Tall window so the whole Plan Your Route form is laid out.
   tester.view.physicalSize = const Size(430, 1600);
@@ -41,7 +45,7 @@ Future<TripPlanProvider> pumpRouteTab(
     home: Scaffold(
       body: ChangeNotifierProvider<TripPlanProvider>.value(
         value: provider,
-        child: const RouteTab(stops: [], routes: []),
+        child: RouteTab(stops: stops, routes: const [], onRouteSelected: onRouteSelected),
       ),
     ),
   ));
@@ -49,6 +53,60 @@ Future<TripPlanProvider> pumpRouteTab(
 }
 
 void main() {
+  group('Use my location', () {
+    const here = LatLng(10.31, 123.89);
+    final fuente = TransportStop(
+      id: 'fuente',
+      name: 'Fuente Osmeña',
+      location: const LatLng(10.3108, 123.8905), // ~100 m away
+      routeIds: const ['r1'],
+      sequence: 0,
+    );
+    Finder button() => find.byKey(const Key('useMyLocation'));
+
+    testWidgets('finds the commuter and names the nearest stop', (tester) async {
+      final provider = await pumpRouteTab(
+        tester,
+        location: FakeLocationSource(result: here),
+        stops: [fuente],
+      );
+      expect(find.byTooltip('Use my location'), findsOneWidget);
+
+      await tester.tap(button());
+      await tester.pumpAndSettle();
+
+      expect(provider.origin, here);
+      expect(find.text('Your location · near Fuente Osmeña'), findsOneWidget);
+      expect(find.byTooltip('Using your location (tap to update)'), findsOneWidget);
+    });
+
+    testWidgets('picking another From place turns it back off', (tester) async {
+      final provider = await pumpRouteTab(tester, location: FakeLocationSource(result: here), stops: [fuente]);
+      await tester.tap(button());
+      await tester.pumpAndSettle();
+
+      provider.setOrigin(const LatLng(10.32, 123.9), 'Ayala Center Cebu');
+      await tester.pumpAndSettle();
+      expect(find.text('Ayala Center Cebu'), findsOneWidget);
+      expect(find.byTooltip('Use my location'), findsOneWidget);
+    });
+
+    testWidgets('far from every stop it just says Your location', (tester) async {
+      await pumpRouteTab(tester, location: FakeLocationSource(result: const LatLng(10.40, 123.95)), stops: [fuente]);
+      await tester.tap(button());
+      await tester.pumpAndSettle();
+      expect(find.text('Your location'), findsOneWidget);
+    });
+
+    testWidgets('location off shows why under From', (tester) async {
+      await pumpRouteTab(tester, location: FakeLocationSource(failure: LocationFailure.denied));
+      await tester.tap(button());
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Use my location'), findsOneWidget);
+      expect(find.textContaining('ermission'), findsWidgets);
+    });
+  });
+
   testWidgets('Find Routes stays disabled until a destination is chosen', (tester) async {
     final provider = await pumpRouteTab(tester);
     expect(isEnabled(tester, 'Find Routes'), isFalse);
@@ -93,6 +151,25 @@ void main() {
     expect(find.byType(FareBreakdownSheet), findsOneWidget);
   });
 
+  testWidgets('Select this route hands the route (and its ends) to the dashboard', (tester) async {
+    final selected = <SelectedTrip>[];
+    final provider = await pumpRouteTab(tester, onRouteSelected: selected.add);
+    provider.setDestination(itPark, 'IT Park');
+    await tester.pump();
+    await tester.tap(find.text('Find Routes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View Selected Route on Map'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Select this route'));
+    await tester.pump();
+
+    final trip = selected.single;
+    expect(trip.option.routeSummary, '01K → 13C');
+    expect(trip.from, 'Your location');
+    expect(trip.to, 'IT Park');
+  });
+
   testWidgets('a planned destination shows up in Recent Searches', (tester) async {
     final provider = await pumpRouteTab(tester);
     expect(find.text('Recent Searches'), findsNothing);
@@ -115,18 +192,18 @@ void main() {
 
   testWidgets('swap is enabled once both ends are set', (tester) async {
     final provider = await pumpRouteTab(tester);
-    IconButton swap() => tester.widget<IconButton>(
-          find.ancestor(of: find.byIcon(Icons.swap_horiz), matching: find.byType(IconButton)),
+    InkWell swap() => tester.widget<InkWell>(
+          find.descendant(of: find.byKey(const Key('swapFromTo')), matching: find.byType(InkWell)),
         );
-    expect(swap().onPressed, isNull);
+    expect(swap().onTap, isNull);
 
     await provider.locateOrigin();
     provider.setDestination(itPark, 'IT Park');
     await tester.pump();
-    expect(swap().onPressed, isNotNull);
+    expect(swap().onTap, isNotNull);
 
-    await tester.tap(find.byIcon(Icons.swap_horiz));
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('swapFromTo')));
+    await tester.pumpAndSettle();
     expect(provider.originLabel, 'IT Park');
     expect(provider.destinationLabel, 'Your location');
   });

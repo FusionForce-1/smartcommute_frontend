@@ -284,7 +284,7 @@ class _RateYourRide extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               const Expanded(
                 child: Text(
-                  'How was your jeepney ride? Rate the driver and the jeep — it helps operators improve.',
+                  'How was your PUV ride? Rate the driver and the vehicle — it helps operators improve.',
                   style: TextStyle(fontSize: 14),
                 ),
               ),

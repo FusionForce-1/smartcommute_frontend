@@ -3,7 +3,8 @@
 // Commuter dashboard shell: logo header, the four tabs (Home, Route,
 // Alerts, Profile) and the bottom navigation. Loads stops, routes and
 // vehicles once and hands them to the tabs that need them, and owns the
-// trip, alert and profile state so it survives switching tabs.
+// trip, alert and profile state so it survives switching tabs — including
+// the route picked with "Select this route", shown on Home until cancelled.
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../models/commuter_profile.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../models/trip_plan.dart';
@@ -56,6 +58,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     CommuterNavItem(icon: AppIcons.navAlerts, label: 'Alerts'),
     CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
   ];
+  static const _homeTab = 0;
   static const _routeTab = 1;
   static const _profileTab = 3;
 
@@ -76,6 +79,9 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
   List<TransportStop> _stops = const [];
   List<TransportRoute> _routes = const [];
   List<Vehicle> _vehicles = const [];
+
+  /// The route chosen with "Select this route", drawn on the Home map.
+  SelectedTrip? _selectedTrip;
 
   @override
   void initState() {
@@ -158,6 +164,34 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     _profile.recordTrip(option, from: from, to: to);
   }
 
+  /// "Select this route": close the route pages and show it on Home.
+  void _selectTrip(SelectedTrip trip) {
+    final dashboard = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == dashboard);
+    setState(() {
+      _selectedTrip = trip;
+      _currentIndex = _homeTab;
+    });
+  }
+
+  /// Clears the selected route, with a moment to undo it.
+  void _cancelTrip() {
+    final cancelled = _selectedTrip;
+    if (cancelled == null) return;
+    setState(() => _selectedTrip = null);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text('Selected route cleared.'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (mounted && _selectedTrip == null) setState(() => _selectedTrip = cancelled);
+          },
+        ),
+      ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -186,8 +220,18 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       vehicles: _vehicles,
                       onUnknownVehicle: () => _reloadFleet(),
                       onRefresh: () => _reloadFleet(force: true),
+                      selectedTrip: _selectedTrip,
+                      onCancelTrip: _cancelTrip,
                     ),
-                    RouteTab(stops: _stops, routes: _routes, onTripStarted: _onTripStarted),
+                    RouteTab(
+                      stops: _stops,
+                      routes: _routes,
+                      onTripStarted: _onTripStarted,
+                      onRouteSelected: _selectTrip,
+                      // Fresh each time a route is opened on the map, so a jeep
+                      // added since the app started shows up there too.
+                      loadVehicles: VehiclesService(_dio).getVehicles,
+                    ),
                     const AlertsTab(),
                     ProfileTab(
                       isGuest: widget.isGuest,

@@ -93,7 +93,18 @@ void main() {
 
       expect(provider.isLocating, isFalse);
       expect(provider.origin, isNull);
-      expect(provider.locationError, 'Unable to get your current location.');
+      expect(provider.locationError, startsWith('Finding your location took too long.'));
+    });
+
+    test('a device that cannot find itself says what to check', () async {
+      final provider = buildProvider(
+        okAdapter(),
+        location: FakeLocationSource(failure: LocationFailure.unavailable),
+      );
+      await provider.locateOrigin();
+      expect(provider.origin, isNull);
+      expect(provider.locationError, contains("Couldn't get a location fix"));
+      expect(provider.locationError, contains('choose a starting point'));
     });
 
     test('openLocationSettings delegates to the location source', () async {
@@ -334,6 +345,24 @@ void main() {
       expect(provider.destination, origin);
       expect(provider.destinationLabel, 'Your location');
     });
+
+    test('a pinned destination swapped to From is no longer "on the map"', () async {
+      final provider = await readyProvider(okAdapter());
+      provider.setDestination(destination, 'Pinned spot', fromMap: true);
+      expect(provider.destinationFromMap, isTrue);
+
+      provider.swapOriginAndDestination();
+      expect(provider.destinationFromMap, isFalse);
+    });
+  });
+
+  test('only a map pin marks the destination as from the map', () {
+    final provider = buildProvider(okAdapter());
+    provider.setDestination(destination, 'Pinned spot', fromMap: true);
+    expect(provider.destinationFromMap, isTrue);
+
+    provider.setDestination(destination, 'IT Park');
+    expect(provider.destinationFromMap, isFalse);
   });
 
   group('recentSearches', () {

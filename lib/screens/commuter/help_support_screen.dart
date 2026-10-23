@@ -19,12 +19,13 @@ class HelpSupportScreen extends StatelessWidget {
     (
       'How do I plan a trip?',
       'Open the Route tab, choose From and To (and a departure time if you like), then tap '
-          'Find Routes. Each suggested jeepney route shows the fare estimate and travel time.',
+          'Find Routes. Each suggested public utility vehicle (PUV) route shows the fare '
+          'estimate and travel time.',
     ),
     (
-      'How do I see where the jeeps are right now?',
-      'The Home tab shows the live map. Jeeps with a GPS tracker appear on it and move as '
-          'they drive. A jeep that is off duty or out of signal will not show.',
+      'How do I see where the PUVs are right now?',
+      'The Home tab shows the live map. PUVs with a GPS tracker appear on it and move as '
+          'they drive. A PUV that is off duty or out of signal will not show.',
     ),
     (
       'Are the fares exact?',
@@ -38,7 +39,7 @@ class HelpSupportScreen extends StatelessWidget {
     ),
     (
       'How do I rate a ride or a driver?',
-      'Go to Profile → Rate Your Ride and tap "Write a review". Choose the route and jeep, '
+      'Go to Profile → Rate Your Ride and tap "Write a review". Choose the route and PUV, '
           'give a star rating, and add tags or a comment. Operators see your review '
           'without your name.',
     ),

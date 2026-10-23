@@ -39,6 +39,7 @@ void main() {
           clock: Stopwatch(),
           frame: frame,
           onMapReady: () {},
+          showAllStops: true,
         ),
       ),
     ));
@@ -71,6 +72,7 @@ void main() {
           clock: Stopwatch(),
           frame: frame,
           onMapReady: () {},
+          showAllStops: true,
         ),
       ),
     ));

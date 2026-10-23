@@ -9,9 +9,11 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../config/theme_config.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/trip_plan_provider.dart';
+import '../../services/nearest_stop.dart';
 import '../../widgets/commuter/commuter_field_box.dart';
 import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/preference_selector.dart';
@@ -21,15 +23,29 @@ import '../../config/map_config.dart';
 import '../../widgets/place_search_sheet.dart';
 import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
+import 'route_map_screen.dart' show VehiclesLoader;
 
 class RouteTab extends StatelessWidget {
-  const RouteTab({super.key, required this.stops, required this.routes, this.onTripStarted});
+  const RouteTab({
+    super.key,
+    required this.stops,
+    required this.routes,
+    this.onTripStarted,
+    this.onRouteSelected,
+    this.loadVehicles,
+  });
 
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
   /// Called when the commuter opens a chosen route on the map.
   final TripStarted? onTripStarted;
+
+  /// "Select this route": the dashboard shows it on the Home map.
+  final TripSelected? onRouteSelected;
+
+  /// Fleet list for the live PUVs on a chosen route's map.
+  final VehiclesLoader? loadVehicles;
 
   // From / To search every saved stop and Metro Cebu landmark as you type,
   // nearest the trip's other end (or the city centre) first.
@@ -59,15 +75,18 @@ class RouteTab extends StatelessWidget {
 
   Future<void> _pickOnMap(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
-    final picked = await Navigator.of(context).push<LatLng>(
-      MaterialPageRoute(builder: (_) => PickDestinationScreen(origin: trip.origin)),
+    final picked = await Navigator.of(context).push<PickedPlace>(
+      MaterialPageRoute(
+        builder: (_) => PickDestinationScreen(
+          origin: trip.origin,
+          stops: stops,
+          // Reopening goes back to the pin dropped last time.
+          start: trip.destinationFromMap ? trip.destination : null,
+        ),
+      ),
     );
     if (picked == null) return;
-    trip.setDestination(
-      picked,
-      'Dropped pin (${picked.latitude.toStringAsFixed(4)}, '
-      '${picked.longitude.toStringAsFixed(4)})',
-    );
+    trip.setDestination(picked.point, picked.label, fromMap: true);
   }
 
   Future<void> _findRoutes(BuildContext context) async {
@@ -82,10 +101,22 @@ class RouteTab extends StatelessWidget {
         // A pushed page sits outside the dashboard's provider scope.
         builder: (_) => ChangeNotifierProvider.value(
           value: trip,
-          child: FindRoutesScreen(routes: routes, onTripStarted: onTripStarted),
+          child: FindRoutesScreen(
+            routes: routes,
+            onTripStarted: onTripStarted,
+            onRouteSelected: onRouteSelected,
+            loadVehicles: loadVehicles,
+          ),
         ),
       ),
     );
+  }
+
+  /// What the From box says for the commuter's GPS location, e.g.
+  /// "Your location · near Fuente Osmeña", so it's clear where we found them.
+  String _myLocationLabel(LatLng here) {
+    final near = nearestStop(stops, here);
+    return near == null ? 'Your location' : 'Your location · near ${near.stop.name}';
   }
 
   void _changeDepartureTime(BuildContext context) {
@@ -115,9 +146,11 @@ class RouteTab extends StatelessWidget {
         TripLocationsCard(
           fromValue: trip.isLocating
               ? 'Finding your location…'
-              : trip.originLabel ?? (trip.origin != null ? 'Your location' : null),
+              : trip.originLabel ?? (trip.origin != null ? _myLocationLabel(trip.origin!) : null),
           toValue: trip.destinationLabel,
           isLocating: trip.isLocating,
+          usingMyLocation: trip.origin != null && trip.originLabel == null,
+          destinationOnMap: trip.destinationFromMap,
           fromError: trip.locationError,
           onOpenSettings: trip.canOpenLocationSettings ? trip.openLocationSettings : null,
           onChooseFrom: () => _chooseFrom(context),

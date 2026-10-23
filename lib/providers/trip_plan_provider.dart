@@ -25,7 +25,9 @@ class TripPlanProvider extends ChangeNotifier {
   TripPlanProvider({
     required TripPlanService service,
     required LocationSource locationSource,
-    Duration locateTimeout = const Duration(seconds: 15),
+    // Covers a precise GPS attempt plus the quicker fallback
+    // (see GeolocatorLocationSource).
+    Duration locateTimeout = const Duration(seconds: 25),
     Duration refreshInterval = const Duration(seconds: 45),
   })  : _service = service,
         _locationSource = locationSource,
@@ -64,6 +66,7 @@ class TripPlanProvider extends ChangeNotifier {
 
   LatLng? _destination;
   String? _destinationLabel;
+  bool _destinationFromMap = false;
   TripPreference _preference = TripPreference.time;
 
   TripPlanStatus _status = TripPlanStatus.idle;
@@ -84,6 +87,9 @@ class TripPlanProvider extends ChangeNotifier {
   String? get locationError => _locationError;
   LatLng? get destination => _destination;
   String? get destinationLabel => _destinationLabel;
+
+  /// The destination is a pin dropped on the map (not a searched place).
+  bool get destinationFromMap => _destinationFromMap;
   TripPreference get preference => _preference;
   TripPlanStatus get status => _status;
   List<RouteOption> get options => _options;
@@ -130,6 +136,9 @@ class TripPlanProvider extends ChangeNotifier {
     } on LocationException catch (e) {
       _origin = null;
       _locationError = e.message;
+    } on TimeoutException {
+      _origin = null;
+      _locationError = const LocationException(LocationFailure.timeout).message;
     } catch (_) {
       _origin = null;
       _locationError = 'Unable to get your current location.';
@@ -162,13 +171,15 @@ class TripPlanProvider extends ChangeNotifier {
     _originLabel = _destinationLabel;
     _destination = origin;
     _destinationLabel = originLabel;
+    _destinationFromMap = false;
     _clearResults();
     _notify();
   }
 
-  void setDestination(LatLng destination, String label) {
+  void setDestination(LatLng destination, String label, {bool fromMap = false}) {
     _destination = destination;
     _destinationLabel = label;
+    _destinationFromMap = fromMap;
     _clearResults();
     _notify();
   }

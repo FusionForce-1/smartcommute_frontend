@@ -37,7 +37,7 @@ const TrackerSetup = (() => {
   function wifiSection() {
     return `
       <div class="form-field">
-        <label>WiFi the tracker will use <span style="color:var(--op-muted)">(2.4 GHz, e.g. the jeep's hotspot)</span></label>
+        <label>WiFi the tracker will use <span style="color:var(--op-muted)">(2.4 GHz, e.g. the PUV's hotspot)</span></label>
         <div id="ts-wifi-list">${wifiRows(1)}</div>
         <datalist id="ts-ssids"></datalist>
         <p class="op-card__sub" style="margin:0 0 8px;">The name must match exactly — capitals, spaces and symbols like "?" count.</p>
@@ -94,6 +94,9 @@ const TrackerSetup = (() => {
     let msg;
     try { msg = JSON.parse(line.slice(2)); } catch { return; }
     link.waiters = link.waiters.filter((w) => {
+      // "?" = a line the tracker couldn't read. A command that is being
+      // re-sent waits for a clean copy instead of failing on a garbled one.
+      if (msg.cmd === '?' && w.retrying) return true;
       if (w.cmd !== msg.cmd && msg.cmd !== '?') return true;
       w.resolve(msg);
       return false;
@@ -166,6 +169,7 @@ const TrackerSetup = (() => {
       let retry;
       const waiter = {
         cmd,
+        retrying: retryMs > 0,
         resolve: (msg) => {
           clearTimeout(timer);
           clearInterval(retry);
@@ -290,9 +294,19 @@ const TrackerSetup = (() => {
             checkAgainstNearby(networks, nearby);
             const { device_key: key } = await OperatorApi.issueDeviceKey(vehicle.vehicle_id);
             const server = serverForTracker();
-            await command('configure', {
-              networks, vehicle_id: vehicle.vehicle_id, device_key: key, ...(server ? { server } : {}),
-            }, { timeoutMs: 10000 });
+            // The settings line is longer than the tracker's USB input buffer
+            // (256 bytes on firmware 2.1.0 and older). While it's busy
+            // reconnecting it can't drain it and the line is cut off, so it's
+            // re-sent until the tracker confirms. A new key was just issued,
+            // so the old one no longer works: say so if this still fails.
+            try {
+              await command('configure', {
+                networks, vehicle_id: vehicle.vehicle_id, device_key: key, ...(server ? { server } : {}),
+              }, { timeoutMs: 45000, retryMs: 3000 });
+            } catch (err) {
+              throw new Error(`${err.message} Until a save goes through, this tracker can't send GPS `
+                + '(its old key was replaced) — keep it plugged in and click Save to tracker again.');
+            }
             await disconnect();   // it restarts with the new settings
             done(vehicle, networks, onDone, 'saved over USB');
           },
@@ -476,7 +490,7 @@ const TrackerSetup = (() => {
     const fleet = await OperatorApi.fleet().catch(() => []);
     if (!fleet.length) {
       AdminModal.open({
-        title: 'Add the jeep first',
+        title: 'Add the PUV first',
         size: 'sm',
         body: `<p class="modal-text">You scanned tracker code <strong>${esc(shown)}</strong>, but you have no vehicles yet.
                Click <strong>+ Add Vehicle</strong>, then use <strong>Set up GPS → Claim code</strong> and type the code.</p>`,
@@ -489,7 +503,7 @@ const TrackerSetup = (() => {
       return;
     }
     const m = AdminModal.open({
-      title: 'Which jeep is this tracker for?',
+      title: 'Which PUV is this tracker for?',
       size: 'sm',
       body: `
         <p class="modal-text">Tracker code <strong>${esc(shown)}</strong></p>

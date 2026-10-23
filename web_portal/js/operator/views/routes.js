@@ -1,7 +1,8 @@
 // js/operator/views/routes.js
 //
 // Routes & Stops: the operator's routes with stop / fare / vehicle counts,
-// a "Create New Route" card, and Pause / Activate / Delete per route.
+// a "Create New Route" card, Pause / Activate / Delete per route, and the
+// stop editor (js/operator/stopEditor.js) behind "Add / Edit stops".
 
 OperatorRouter.register('routes', {
   title: 'Routes & Stops',
@@ -137,10 +138,13 @@ OperatorRouter.register('routes', {
         submit.disabled = true;
         submit.textContent = 'Creating…';
         try {
-          await OperatorApi.createRoute(v);
+          const created = await OperatorApi.createRoute(v);
           showForm = false;
           renderForm();
-          AdminUi.toast(`${v.code} – ${v.name} was created.`);
+          const n = created?.stops_added || 0;
+          AdminUi.toast(n
+            ? `${v.code} – ${v.name} was created with ${n} usual stops along its path. Use "Edit stops" to add or remove any.`
+            : `${v.code} – ${v.name} was created.`);
           load();
         } catch (err) {
           errorEl.textContent = err.message || 'Unable to create route.';
@@ -184,7 +188,9 @@ OperatorRouter.register('routes', {
               <div class="op-terminals__row"><span class="op-terminals__to"></span>${esc(r.terminal_b || '—')}</div>
             </div>
             <div class="op-route-stats">
-              <div><span>Stops</span><strong>${r.stop_count}</strong></div>
+              <div><span>Stops</span><strong>${r.stop_count}</strong>
+                ${r.owned ? `<button type="button" class="op-link" data-action="stops" data-id="${r.id}"
+                  style="display:block;margin:4px auto 0;background:none;border:0;cursor:pointer;">${r.stop_count ? 'Edit stops' : 'Add stops'}</button>` : ''}</div>
               <div><span>Fare</span><strong>${OperatorUi.fare(r.base_fare)}</strong></div>
               <div><span>Vehicles</span><strong>${r.vehicle_count}</strong></div>
             </div>
@@ -265,6 +271,14 @@ OperatorRouter.register('routes', {
       if (!route) return;
       if (btn.dataset.action === 'toggle') toggle(route);
       else if (btn.dataset.action === 'delete') remove(route);
+      else if (btn.dataset.action === 'stops') {
+        StopEditor.open(route, {
+          onSaved: (saved) => {
+            route.stop_count = saved.stops.length;
+            renderList();
+          },
+        });
+      }
     });
 
     const toggleForm = () => {

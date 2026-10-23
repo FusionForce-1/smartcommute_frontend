@@ -52,7 +52,7 @@ void main() {
     expect(submit().onPressed, isNull, reason: 'needs a jeep and stars first');
 
     // Only jeeps on the chosen route are offered.
-    await tester.tap(find.text('Jeep (plate number)'));
+    await tester.tap(find.text('PUV (plate number)'));
     await tester.pumpAndSettle();
     expect(find.text('XYZ-999'), findsNothing);
     await tester.tap(find.text('ABC-123').last);
@@ -77,7 +77,7 @@ void main() {
 
   testWidgets('"Not sure of the plate" sends no vehicle', (tester) async {
     final (adapter, _) = await open(tester);
-    await tester.tap(find.text('Jeep (plate number)'));
+    await tester.tap(find.text('PUV (plate number)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Not sure of the plate').last);
     await tester.pumpAndSettle();

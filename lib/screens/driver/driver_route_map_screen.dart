@@ -5,8 +5,11 @@
 // "View Live Broadcast" (which starts centred on the driver).
 // Watches DriverProvider, so the position and next stop stay live.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -18,6 +21,7 @@ import '../../services/driver_service.dart';
 import '../../services/websocket_service.dart';
 import '../../utils/shift_time.dart';
 import '../../widgets/commuter/commuter_page_header.dart';
+import '../../widgets/commuter/vehicle_marker.dart';
 
 class DriverRouteMapScreen extends StatefulWidget {
   const DriverRouteMapScreen({super.key, required this.service, this.followMe = false});
@@ -63,6 +67,13 @@ class _DriverRouteMapScreenState extends State<DriverRouteMapScreen> {
     final fix = driver.gps.lastFix;
     if (fix != null) return LatLng(fix.latitude, fix.longitude);
     return driver.live?.location;
+  }
+
+  /// The phone's course once the jeep is moving; null while stopped (it swings at random).
+  double? _myHeading(DriverProvider driver) {
+    final fix = driver.gps.lastFix;
+    if (fix == null || fix.speed < 1.5 || fix.heading < 0) return null;
+    return fix.heading;
   }
 
   MapOptions _options(LatLng? me) {
@@ -120,7 +131,7 @@ class _DriverRouteMapScreenState extends State<DriverRouteMapScreen> {
                             ]),
                           if (me != null)
                             MarkerLayer(markers: [
-                              Marker(point: me, width: 44, height: 44, child: const _MeMarker()),
+                              Marker(point: me, width: 44, height: 44, child: _MeMarker(heading: _myHeading(driver))),
                             ]),
                         ],
                       ),
@@ -162,18 +173,23 @@ class _StopDot extends StatelessWidget {
   }
 }
 
+/// The driver's own PUV, facing the way it is driving.
 class _MeMarker extends StatelessWidget {
-  const _MeMarker();
+  const _MeMarker({this.heading});
+
+  final double? heading;
 
   @override
   Widget build(BuildContext context) {
+    Widget puv = SvgPicture.asset(VehicleMarker.asset, width: 36, height: 36);
+    if (heading != null) puv = Transform.rotate(angle: heading! * math.pi / 180, child: puv);
     return Container(
       decoration: BoxDecoration(
         color: AppColors.infoBlue.withValues(alpha: 0.2),
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
-      child: const Icon(Icons.navigation, color: AppColors.infoBlue, size: 26),
+      child: puv,
     );
   }
 }

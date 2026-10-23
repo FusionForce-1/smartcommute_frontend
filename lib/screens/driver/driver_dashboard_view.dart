@@ -151,6 +151,7 @@ class _DashboardBody extends StatelessWidget {
         else
           ShiftActiveCard(
             shift: shift,
+            distanceKm: driver.distanceKm,
             onPassengerChange: (change) => _report(context, () => driver.changePassengers(change)),
             onEndShift: driver.busy ? null : () => _endShift(context),
           ),

@@ -84,6 +84,7 @@ class DriverShift {
     required this.startedAt,
     this.crowdPercent = 0,
     this.passengers = 0,
+    this.distanceKm = 0,
   });
 
   final String id;
@@ -92,12 +93,16 @@ class DriverShift {
   final int crowdPercent;
   final int passengers;
 
+  /// Driven so far, from the GPS fixes the server had when this was loaded.
+  final double distanceKm;
+
   DriverShift copyWith({int? crowdPercent, int? passengers}) => DriverShift(
         id: id,
         vehicleId: vehicleId,
         startedAt: startedAt,
         crowdPercent: crowdPercent ?? this.crowdPercent,
         passengers: passengers ?? this.passengers,
+        distanceKm: distanceKm,
       );
 
   factory DriverShift.fromJson(Map<String, dynamic> json) => DriverShift(
@@ -106,6 +111,7 @@ class DriverShift {
         startedAt: parseServerTime(json['started_at'])!,
         crowdPercent: (json['crowd_percent'] as num?)?.toInt() ?? 0,
         passengers: (json['passengers'] as num?)?.toInt() ?? 0,
+        distanceKm: (json['distance_km'] as num?)?.toDouble() ?? 0,
       );
 }
 

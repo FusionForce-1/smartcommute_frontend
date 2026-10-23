@@ -49,7 +49,7 @@ void main() {
     expect(leg.waitMin, 4);
     expect(leg.waitIsLive, isTrue);
     expect(leg.path, hasLength(3));
-    expect(boardingSummary(leg), 'Walk 120 m to Capitol  •  Next jeep 4 min (live)');
+    expect(boardingSummary(leg), 'Walk 120 m to Capitol  •  Next PUV 4 min (live)');
     expect(provider.options.single.walkFromAlightM, 60);
   });
 

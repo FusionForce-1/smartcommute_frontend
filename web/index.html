@@ -35,17 +35,26 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
-  <!-- New file name, not favicon.png: browsers cache tab icons by URL for
-       a long time, so a renamed icon shows up straight away. -->
-  <link rel="icon" type="image/png" href="icons/smartcommute-favicon.png"/>
+  <!-- Tab icon embedded in the page (a 32px copy of
+       icons/smartcommute-favicon.png). index.html is never cached (see
+       vercel.json), so browsers can't keep showing an old icon file. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,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"/>
+  <link rel="icon" type="image/png" sizes="64x64" href="icons/smartcommute-favicon.png"/>
 
   <title>Smart Commute</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- Loading screen while the app downloads. Matches the app's own
-       LoadingScreen (lib/screens/loading_screen.dart), which takes over on
-       the first frame - keep the two alike. -->
+  <!-- Loading screen, shown from the first moment until the app has
+       started and connected (the app calls smartCommuteRemoveSplash, see
+       lib/screens/web_splash.dart). It stays on top of the app's own
+       loading screen, so web visitors only ever see this one. -->
   <style>
+    @font-face {
+      font-family: "Poppins";
+      src: url("assets/assets/fonts/Poppins-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-display: swap;
+    }
     html, body { margin: 0; height: 100%; background: #EBF4FA; }
     #splash {
       position: fixed; inset: 0; z-index: 10;
@@ -87,13 +96,13 @@
     </div>
   </div>
   <script>
-    // Flutter's first frame is its own identical loading screen: fade out.
-    window.addEventListener('flutter-first-frame', function () {
+    // Called by the app once it is ready (lib/screens/web_splash_web.dart).
+    window.smartCommuteRemoveSplash = function () {
       var splash = document.getElementById('splash');
       if (!splash) return;
       splash.classList.add('splash--done');
       setTimeout(function () { splash.remove(); }, 300);
-    });
+    };
   </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.

@@ -4,6 +4,15 @@
 // "Nearby Vehicles" list. Opens the live vehicle socket and animates
 // one smoothed track per jeep.
 //
+// The map can go full screen (expand button on the map): it then fills the
+// tab with the search bar floating on top, its buttons on the right, and
+// "Nearby Vehicles" in a sheet that drags up, or down to just its handle.
+// The same map (camera, live jeeps, selection) moves between the two layouts.
+//
+// A route picked with "Select this route" on the Route tab ([selectedTrip])
+// is drawn on the map, framed to fit, with a card above it to open its
+// details or cancel it ([onCancelTrip]).
+//
 // Picking a jeep in the "Nearby Vehicles" list shows how to catch it: the closest
 // point on its route to the commuter (the shortest walk), the walking path
 // there with distance, steps and minutes, and how far the jeep still is
@@ -21,6 +30,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../models/vehicle_live_update.dart';
@@ -28,13 +38,18 @@ import '../../models/vehicle_track.dart';
 import '../../models/vehicles.dart';
 import '../../services/boarding_planner.dart';
 import '../../services/place_search.dart';
+import '../../services/ride_matcher.dart';
+import '../../services/trip_progress.dart';
 import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_action_tile.dart';
 import '../../widgets/commuter/live_map.dart';
 import '../../widgets/commuter/nearby_vehicle_card.dart';
+import '../../widgets/commuter/selected_trip_card.dart';
+import '../../widgets/commuter/trip_route_layers.dart';
 import '../../widgets/stop_image.dart';
 import '../../widgets/stop_search_sheet.dart';
+import 'route_map_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({
@@ -44,6 +59,8 @@ class HomeTab extends StatefulWidget {
     required this.vehicles,
     this.onUnknownVehicle,
     this.onRefresh,
+    this.selectedTrip,
+    this.onCancelTrip,
   });
 
   final List<TransportStop> stops;
@@ -58,6 +75,10 @@ class HomeTab extends StatefulWidget {
 
   /// "Refresh vehicle markers": reload stops, routes and vehicles now.
   final VoidCallback? onRefresh;
+
+  /// The route picked with "Select this route", shown until cancelled.
+  final SelectedTrip? selectedTrip;
+  final VoidCallback? onCancelTrip;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -98,6 +119,39 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   BoardingPlan? _plan;
   WalkingRoute? _walk;
   String? _boardName;            // "near Fuente BRT Station"
+
+  /// Follows the commuter along [HomeTab.selectedTrip]: walking to board,
+  /// riding, getting off (services/trip_progress.dart).
+  late TripProgress? _progress = _progressFor(widget.selectedTrip);
+
+  /// How [HomeTab.selectedTrip] is drawn; null when none is selected.
+  late TripRouteLayers? _tripLayers = _layersFor(widget.selectedTrip, _progress);
+
+  static TripProgress? _progressFor(SelectedTrip? trip) =>
+      trip == null ? null : TripProgress(trip.option, trip.routesById);
+
+  static TripRouteLayers? _layersFor(SelectedTrip? trip, TripProgress? progress) =>
+      trip == null ? null : TripRouteLayers.of(trip.option, trip.routesById, progress: progress);
+
+  // ---------- Full-screen map ----------
+
+  bool _mapExpanded = false;
+
+  /// Keeps the one map (and its controller) alive as it moves between the
+  /// card layout and the full-screen layout.
+  final GlobalKey _mapKey = GlobalKey();
+
+  final DraggableScrollableController _sheet = DraggableScrollableController();
+
+  /// How much of the full-screen height the sheet covers; the map buttons
+  /// ride just above it.
+  final ValueNotifier<double> _sheetExtent = ValueNotifier(0);
+
+  static const double _sheetOpen = 0.34;
+  static const double _sheetMax = 0.75;
+
+  /// Height of the sheet's drag handle: all that shows when minimized.
+  static const double _sheetHandle = 30;
   LatLng? _walkPlannedTo;        // boarding spot the current _walk leads to
   LatLng? _walkPlannedFrom;
   DateTime _lastPlanAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -118,6 +172,13 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   @override
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.selectedTrip, widget.selectedTrip)) {
+      _arrivedClear?.cancel();
+      _progress = _progressFor(widget.selectedTrip);
+      if (_currentLocation case final here?) _progress?.update(here, at: DateTime.now());
+      _tripLayers = _layersFor(widget.selectedTrip, _progress);
+      _showTrip();
+    }
     if (oldWidget.stops.isEmpty && widget.stops.isNotEmpty) _fitToStops();
     // New vehicle / route lists: jeeps that were hidden may now be listed.
     if (!identical(oldWidget.vehicles, widget.vehicles) || !identical(oldWidget.routes, widget.routes)) {
@@ -127,11 +188,14 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   @override
   void dispose() {
+    _arrivedClear?.cancel();
     _positionSub?.cancel();
     _socket.disconnect();
     _ticker.dispose();
     _frame.dispose();
     _fleetVersion.dispose();
+    _sheet.dispose();
+    _sheetExtent.dispose();
     super.dispose();
   }
 
@@ -145,6 +209,15 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
     final now = _clock.elapsed;
     final track = _tracks[update.vehicleId];
+    if (update.shiftEnded) {
+      // Off duty now: take the jeep off the map (it comes back with its next shift's GPS).
+      if (_tracks.remove(update.vehicleId) != null) {
+        if (update.vehicleId == _selectedVehicleId) _clearSelectedVehicle();
+        _frame.value++;
+        _fleetVersion.value++;
+      }
+      return;
+    }
     if (track == null) {
       _tracks[update.vehicleId] = VehicleTrack(update, now);
     } else {
@@ -313,12 +386,52 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   void _onMapReady() {
     _mapReady = true;
-    _fitToStops();
+    if (_tripLayers != null) {
+      _showTrip();
+    } else {
+      _fitToStops();
+    }
+  }
+
+  /// Frames the selected route on the map.
+  void _showTrip() {
+    final fit = _tripLayers?.cameraFit;
+    if (_mapReady && fit != null) _mapController.fitCamera(fit);
+  }
+
+  void _openSelectedTrip() {
+    final trip = widget.selectedTrip;
+    if (trip == null) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => RouteMapScreen(option: trip.option, routesById: trip.routesById),
+    ));
+  }
+
+  /// The selected route's card, sliding in and out as it's chosen / cancelled.
+  Widget _selectedTripSlot({required EdgeInsets padding}) {
+    final trip = widget.selectedTrip;
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      alignment: Alignment.topCenter,
+      child: trip == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: padding,
+              child: SelectedTripCard(
+                trip: trip,
+                progress: _progress?.state,
+                onOpen: _openSelectedTrip,
+                onCancel: widget.onCancelTrip ?? () {},
+              ),
+            ),
+    );
   }
 
   void _fitToStops() {
     final stops = widget.stops;
-    if (!_mapReady || stops.isEmpty) return;
+    // A selected route keeps the map framed on it.
+    if (!_mapReady || stops.isEmpty || _tripLayers != null) return;
     if (stops.length == 1) {
       _mapController.move(stops.first.location, 16);
       return;
@@ -404,7 +517,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
         // which made the dot hop around. Once we have a position, skip any
         // fix the phone itself rates worse than _maxFixErrorM.
         if (_currentLocation != null && p.accuracy > _maxFixErrorM) return;
-        _setCurrentLocation(LatLng(p.latitude, p.longitude));
+        _setCurrentLocation(LatLng(p.latitude, p.longitude), speedMps: p.speed);
       },
       onError: (_) {
         _positionSub?.cancel();
@@ -413,9 +526,19 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  void _setCurrentLocation(LatLng here) {
+  void _setCurrentLocation(LatLng here, {double? speedMps}) {
     if (!mounted) return;
-    setState(() => _currentLocation = here);
+    final now = _clock.elapsed;
+    final jeeps = {
+      for (final e in _tracks.entries)
+        if (!e.value.latest.isSignalLost)
+          if (e.value.positionAt(now) case final p?) e.key: p,
+    };
+    setState(() {
+      _currentLocation = here;
+      _trackTrip(here, speedMps);
+      _ridingVehicleId = _ride.update(here, DateTime.now(), jeeps, reportedSpeedMps: speedMps);
+    });
     if (_selectedVehicleId != null) _updateBoarding();
     // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
     final last = _lastSortedAt;
@@ -425,6 +548,55 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     }
   }
 
+  /// With a trip selected, the map shows only the jeeps on its routes (and
+  /// one picked from Nearby Vehicles); null shows them all.
+  Set<String>? _tripVehicleIds() {
+    final trip = widget.selectedTrip;
+    if (trip == null) return null;
+    final routeIds = {for (final leg in trip.option.legs) leg.routeId};
+    return {
+      for (final v in widget.vehicles)
+        if (routeIds.contains(v.routeId)) v.id,
+      if (_selectedVehicleId case final id?) id,
+    };
+  }
+
+  /// Moves the selected route's progress on (greys the travelled part)
+  /// and says when the commuter gets on, should get off, or has arrived.
+  void _trackTrip(LatLng here, double? speedMps) {
+    final progress = _progress;
+    final trip = widget.selectedTrip;
+    if (progress == null || trip == null) return;
+    final before = progress.state;
+    final now = progress.update(here, at: DateTime.now(), reportedSpeedMps: speedMps);
+    _tripLayers = _layersFor(trip, progress);
+    if (before?.phase == now.phase && before?.legIndex == now.legIndex) return;
+    final leg = trip.option.legs[now.legIndex];
+    final message = switch (now.phase) {
+      TripPhase.riding when before?.isRiding != true => "You're on the ${leg.routeCode ?? leg.routeName}. We'll tell you when to get off.",
+      TripPhase.alightSoon => 'Get off soon at ${leg.alightLabel}.',
+      TripPhase.arrived => "You've arrived at ${trip.option.legs.last.alightLabel}.",
+      TripPhase.toBoard when (before?.legIndex ?? 0) < now.legIndex => 'Transfer: walk to ${leg.boardLabel} for the ${leg.routeCode ?? leg.routeName}.',
+      _ => null,
+    };
+    if (message != null) WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(message));
+    // Trip done: clear it after a moment, so the map goes back to every stop and jeep.
+    if (now.phase == TripPhase.arrived) {
+      _arrivedClear?.cancel();
+      _arrivedClear = Timer(clearAfterArrival, () {
+        if (mounted && identical(widget.selectedTrip, trip)) widget.onCancelTrip?.call();
+      });
+    }
+  }
+
+  /// The jeep the commuter is riding: the map draws them as that jeep.
+  final RideMatcher _ride = RideMatcher();
+  String? _ridingVehicleId;
+
+  /// How long the finished trip stays on the map after "You've arrived".
+  static const Duration clearAfterArrival = Duration(seconds: 15);
+  Timer? _arrivedClear;
+
   void _showMessage(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -432,42 +604,111 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   // ---------- UI ----------
 
+  void _setMapExpanded(bool expanded) {
+    if (expanded == _mapExpanded) return;
+    setState(() => _mapExpanded = expanded);
+    if (!expanded) return;
+    // The sheet starts at its handle and slides up into view.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_mapExpanded && _sheet.isAttached) {
+        _sheet.animateTo(_sheetOpen, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
+      }
+    });
+  }
+
+  void _toggleSheet(double minSize) {
+    if (!_sheet.isAttached) return;
+    final open = _sheet.size > minSize + 0.02;
+    _sheet.animateTo(
+      open ? minSize : _sheetOpen,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => _buildContent(context);
+  Widget build(BuildContext context) {
+    return PopScope(
+      // Back leaves full screen instead of leaving the app.
+      canPop: !_mapExpanded,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _setMapExpanded(false);
+      },
+      child: _mapExpanded ? _buildFullScreen() : _buildContent(context),
+    );
+  }
+
+  Widget _liveMap({required bool expanded}) {
+    return LiveMap(
+      key: _mapKey,
+      controller: _mapController,
+      stops: widget.stops,
+      tracks: _tracks,
+      clock: _clock,
+      frame: _frame,
+      currentLocation: _currentLocation,
+      onMapReady: _onMapReady,
+      selectedVehicleId: _selectedVehicleId,
+      onClearSelection: _clearSelectedVehicle,
+      walkPath: _walk?.points,
+      boardAt: _plan?.boardAt,
+      jeepPath: _plan?.jeepPath,
+      expanded: expanded,
+      onToggleExpanded: () => _setMapExpanded(!_mapExpanded),
+      // Full screen: the buttons sit above the sheet, placed below.
+      showControls: !expanded,
+      topInset: expanded ? 56 : 0,
+      trip: _tripLayers,
+      onlyVehicles: _tripVehicleIds(),
+      ridingVehicleId: _ridingVehicleId,
+    );
+  }
+
+  /// "Catch the jeep" card, when a jeep is picked and the walk is known.
+  Widget? _boardingCard() {
+    if (_selectedVehicleId == null || _plan == null || _walk == null) return null;
+    return _BoardingCard(
+      routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'PUV',
+      plan: _plan!,
+      walk: _walk!,
+      boardName: _boardName,
+      jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
+      onHide: _clearSelectedVehicle,
+    );
+  }
+
+  List<Widget> _nearbySection(BuildContext context) => [
+        Text(
+          'Nearby Vehicles',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ValueListenableBuilder<int>(
+          valueListenable: _fleetVersion,
+          builder: (context, _, __) => _NearbyList(
+            vehicles: _nearbyVehicles(),
+            notInService: _tracks.values
+                .where((t) => !t.latest.isSignalLost && t.latest.isUnavailable && t.latest.location != null)
+                .length,
+            etaOf: _etaMinutes,
+            selectedId: _selectedVehicleId,
+            onSelected: _pickNearbyVehicle,
+          ),
+        ),
+      ];
 
   Widget _buildContent(BuildContext context) {
+    final boarding = _boardingCard();
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
         _SearchField(onTap: _searchDestination),
+        _selectedTripSlot(padding: const EdgeInsets.only(top: AppSpacing.sm)),
         const SizedBox(height: AppSpacing.md),
-        SizedBox(
-          height: 320,
-          child: LiveMap(
-            controller: _mapController,
-            stops: widget.stops,
-            tracks: _tracks,
-            clock: _clock,
-            frame: _frame,
-            currentLocation: _currentLocation,
-            onMapReady: _onMapReady,
-            selectedVehicleId: _selectedVehicleId,
-            onClearSelection: _clearSelectedVehicle,
-            walkPath: _walk?.points,
-            boardAt: _plan?.boardAt,
-            jeepPath: _plan?.jeepPath,
-          ),
-        ),
-        if (_selectedVehicleId != null && _plan != null && _walk != null) ...[
+        SizedBox(height: 320, child: _liveMap(expanded: false)),
+        if (boarding != null) ...[
           const SizedBox(height: AppSpacing.sm),
-          _BoardingCard(
-            routeCode: _routeOf(_selectedVehicleId!)?.code ?? 'Jeep',
-            plan: _plan!,
-            walk: _walk!,
-            boardName: _boardName,
-            jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
-            onHide: _clearSelectedVehicle,
-          ),
+          boarding,
         ],
         const SizedBox(height: AppSpacing.md),
         CommuterActionTile(
@@ -481,21 +722,110 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           onTap: _refreshVehicles,
         ),
         const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Nearby Vehicles',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        ValueListenableBuilder<int>(
-          valueListenable: _fleetVersion,
-          builder: (context, _, __) => _NearbyList(
-            vehicles: _nearbyVehicles(),
-            etaOf: _etaMinutes,
-            selectedId: _selectedVehicleId,
-            onSelected: _pickNearbyVehicle,
-          ),
-        ),
+        ..._nearbySection(context),
       ],
+    );
+  }
+
+  /// Map edge to edge, search on top, buttons on the right riding above a
+  /// draggable "Nearby Vehicles" sheet.
+  Widget _buildFullScreen() {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final height = box.maxHeight;
+        final minSize = (_sheetHandle / height).clamp(0.02, 0.2);
+        final boarding = _boardingCard();
+        return Stack(
+          children: [
+            Positioned.fill(child: _liveMap(expanded: true)),
+            Positioned(
+              left: AppSpacing.sm,
+              right: AppSpacing.sm,
+              top: AppSpacing.sm,
+              child: Material(
+                elevation: 3,
+                borderRadius: BorderRadius.circular(6),
+                child: _SearchField(onTap: _searchDestination),
+              ),
+            ),
+            ValueListenableBuilder<double>(
+              valueListenable: _sheetExtent,
+              builder: (context, extent, controls) {
+                final bottom = extent.clamp(minSize, 1.0) * height + AppSpacing.xs;
+                // Fade the buttons out once the sheet climbs into their way.
+                final hidden = bottom > height * 0.55;
+                return Positioned(
+                  right: AppSpacing.sm,
+                  bottom: bottom,
+                  child: IgnorePointer(
+                    ignoring: hidden,
+                    child: AnimatedOpacity(
+                      opacity: hidden ? 0 : 1,
+                      duration: const Duration(milliseconds: 150),
+                      child: controls,
+                    ),
+                  ),
+                );
+              },
+              child: MapControls(
+                controller: _mapController,
+                expanded: true,
+                onToggleExpanded: () => _setMapExpanded(false),
+                onLocate: _centerOnMyLocation,
+              ),
+            ),
+            NotificationListener<DraggableScrollableNotification>(
+              onNotification: (n) {
+                _sheetExtent.value = n.extent;
+                return false;
+              },
+              child: DraggableScrollableSheet(
+                controller: _sheet,
+                initialChildSize: minSize,
+                minChildSize: minSize,
+                maxChildSize: _sheetMax,
+                snap: true,
+                snapSizes: const [_sheetOpen],
+                builder: (context, scroll) => Material(
+                  key: const Key('nearbySheet'),
+                  color: Colors.white,
+                  elevation: 8,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(AppSpacing.sm)),
+                  clipBehavior: Clip.antiAlias,
+                  child: ListView(
+                    controller: scroll,
+                    padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
+                    children: [
+                      // Drag here, or tap to open / minimize.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _toggleSheet(minSize),
+                        child: SizedBox(
+                          height: _sheetHandle,
+                          child: Center(
+                            child: Container(
+                              key: const Key('nearbySheetHandle'),
+                              width: 64,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: AppColors.divider,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      _selectedTripSlot(padding: const EdgeInsets.only(bottom: AppSpacing.sm)),
+                      if (boarding != null) ...[boarding, const SizedBox(height: AppSpacing.sm)],
+                      ..._nearbySection(context),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -523,9 +853,13 @@ class _SearchField extends StatelessWidget {
             children: [
               Icon(AppIcons.search, color: AppColors.navInactive),
               SizedBox(width: 12),
-              Text(
-                'Search destination...',
-                style: TextStyle(fontSize: 16, color: AppColors.navInactive),
+              Expanded(
+                child: Text(
+                  'Search destination...',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 16, color: AppColors.navInactive),
+                ),
               ),
             ],
           ),
@@ -561,7 +895,7 @@ class _BoardingCard extends StatelessWidget {
     final jeep = plan.jeepToBoardM;
     final String jeepLine;
     if (!plan.onRoute) {
-      jeepLine = 'This route has no map line yet, so the walk goes to where the jeep is now.';
+      jeepLine = 'This route has no map line yet, so the walk goes to where the PUV is now.';
     } else if (jeep == null) {
       jeepLine = 'This $routeCode has already passed that spot. Wait there for the next one, or pick another vehicle.';
     } else if (jeep < 30) {
@@ -624,12 +958,17 @@ typedef NearbyVehicle = ({TransportRoute route, VehicleLiveUpdate update, double
 class _NearbyList extends StatelessWidget {
   const _NearbyList({
     required this.vehicles,
+    this.notInService = 0,
     required this.etaOf,
     required this.selectedId,
     required this.onSelected,
   });
 
   final List<NearbyVehicle> vehicles;
+
+  /// Live jeeps on the map that aren't taking passengers (no shift started,
+  /// or the driver set Unavailable): not listed, but explained.
+  final int notInService;
   final int? Function(VehicleLiveUpdate) etaOf;
   final String? selectedId;
   final ValueChanged<String> onSelected;
@@ -637,9 +976,16 @@ class _NearbyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (vehicles.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Text('No vehicles nearby right now.'),
+      final n = notInService;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text(
+          n == 0
+              ? 'No vehicles nearby right now.'
+              : 'No vehicles in service nearby right now. ${n == 1 ? '1 PUV' : '$n PUVs'} on the map '
+                  "${n == 1 ? "isn't" : "aren't"} taking passengers (shown greyed out).",
+          key: const Key('nearbyEmpty'),
+        ),
       );
     }
     return Column(
