@@ -38,6 +38,7 @@ import '../../models/vehicle_track.dart';
 import '../../models/vehicles.dart';
 import '../../services/boarding_planner.dart';
 import '../../services/place_search.dart';
+import '../../services/ride_matcher.dart';
 import '../../services/trip_progress.dart';
 import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
@@ -527,9 +528,16 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
 
   void _setCurrentLocation(LatLng here, {double? speedMps}) {
     if (!mounted) return;
+    final now = _clock.elapsed;
+    final jeeps = {
+      for (final e in _tracks.entries)
+        if (!e.value.latest.isSignalLost)
+          if (e.value.positionAt(now) case final p?) e.key: p,
+    };
     setState(() {
       _currentLocation = here;
       _trackTrip(here, speedMps);
+      _ridingVehicleId = _ride.update(here, DateTime.now(), jeeps, reportedSpeedMps: speedMps);
     });
     if (_selectedVehicleId != null) _updateBoarding();
     // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
@@ -580,6 +588,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       });
     }
   }
+
+  /// The jeep the commuter is riding: the map draws them as that jeep.
+  final RideMatcher _ride = RideMatcher();
+  String? _ridingVehicleId;
 
   /// How long the finished trip stays on the map after "You've arrived".
   static const Duration clearAfterArrival = Duration(seconds: 15);
@@ -648,6 +660,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       topInset: expanded ? 56 : 0,
       trip: _tripLayers,
       onlyVehicles: _tripVehicleIds(),
+      ridingVehicleId: _ridingVehicleId,
     );
   }
 

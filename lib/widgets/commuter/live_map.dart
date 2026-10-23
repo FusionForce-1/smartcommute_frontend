@@ -16,7 +16,9 @@
 // With a trip selected only the jeeps in [onlyVehicles] (those on its
 // routes) are drawn; every jeep comes back when the trip is cleared.
 //
-// The commuter is a blue circle ("you are here"), not a pin.
+// The commuter is a blue circle ("you are here"), not a pin. While they
+// ride a jeep ([ridingVehicleId], see services/ride_matcher.dart) the two
+// merge: no circle, just that jeep, larger and ringed in the same blue.
 //
 // [expanded] draws it edge to edge (the Home tab's full-screen map) instead
 // of as a rounded card; [onToggleExpanded] adds the expand / collapse button.
@@ -55,6 +57,7 @@ class LiveMap extends StatelessWidget {
     this.trip,
     this.onlyVehicles,
     this.showAllStops = false,
+    this.ridingVehicleId,
   });
 
   final MapController controller;
@@ -102,6 +105,9 @@ class LiveMap extends StatelessWidget {
 
   /// Draw every stop (dots zoomed out, photo pins up close). Off on Home.
   final bool showAllStops;
+
+  /// The jeep the commuter is on: drawn as "you", in place of the circle.
+  final String? ridingVehicleId;
 
   static const Color _walkLine = Color(0xFF2F6FED);
 
@@ -194,7 +200,7 @@ class LiveMap extends StatelessWidget {
                 ),
               ],
             ),
-          if (currentLocation case final here?)
+          if (currentLocation case final here? when !_ridingShown)
             MarkerLayer(
               markers: [
                 Marker(point: here, width: 44, height: 44, child: const _YouAreHere()),
@@ -213,15 +219,24 @@ class LiveMap extends StatelessWidget {
                   for (final track in tracks.values)
                     if (onlyVehicles == null || onlyVehicles!.contains(track.latest.vehicleId))
                       if (track.positionAt(now) case final point?)
-                      Marker(
-                        point: point,
-                        width: 50,
-                        height: 50,
-                        child: VehicleMarker(
-                          vehicle: track.latest,
-                          heading: track.headingAt(now),
-                        ),
-                      ),
+                        track.latest.vehicleId == ridingVehicleId
+                            ? Marker(
+                                point: point,
+                                width: 64,
+                                height: 64,
+                                child: _RidingMarker(
+                                  child: VehicleMarker(vehicle: track.latest, heading: track.headingAt(now)),
+                                ),
+                              )
+                            : Marker(
+                                point: point,
+                                width: 50,
+                                height: 50,
+                                child: VehicleMarker(
+                                  vehicle: track.latest,
+                                  heading: track.headingAt(now),
+                                ),
+                              ),
                 ],
               );
             },
@@ -326,6 +341,39 @@ class _StopDot extends StatelessWidget {
 }
 
 /// The commuter on the map: a blue dot with a white ring and a soft halo.
+/// The ridden jeep stands in for the commuter: drawn only if it's on the map.
+extension on LiveMap {
+  bool get _ridingShown {
+    final id = ridingVehicleId;
+    if (id == null || !tracks.containsKey(id)) return false;
+    return onlyVehicles == null || onlyVehicles!.contains(id);
+  }
+}
+
+/// "You are on this jeep": the jeep inside the you-are-here blue ring.
+class _RidingMarker extends StatelessWidget {
+  const _RidingMarker({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: "You're on this PUV",
+      child: Container(
+        key: const Key('ridingMarker'),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: LiveMap._walkLine.withValues(alpha: 0.18),
+          border: Border.all(color: LiveMap._walkLine, width: 3),
+        ),
+        padding: const EdgeInsets.all(6),
+        child: child,
+      ),
+    );
+  }
+}
+
 class _YouAreHere extends StatelessWidget {
   const _YouAreHere();
 

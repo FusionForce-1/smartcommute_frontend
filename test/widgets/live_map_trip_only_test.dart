@@ -46,7 +46,8 @@ void main() {
     const {},
   );
 
-  Future<void> pump(WidgetTester tester, {TripRouteLayers? trip, Set<String>? only}) async {
+  Future<void> pump(WidgetTester tester,
+      {TripRouteLayers? trip, Set<String>? only, LatLng? here, String? riding}) async {
     final frame = ValueNotifier(0);
     addTearDown(frame.dispose);
     await tester.pumpWidget(MaterialApp(
@@ -60,6 +61,8 @@ void main() {
           onMapReady: () {},
           trip: trip,
           onlyVehicles: only,
+          currentLocation: here,
+          ridingVehicleId: riding,
         ),
       ),
     ));
@@ -77,5 +80,17 @@ void main() {
     expect(find.byKey(const Key('stopDot')), findsNothing);
     expect(find.byType(VehicleMarker), findsOneWidget);
     expect(find.byType(PolylineLayer), findsWidgets);
+  });
+
+  testWidgets('riding a jeep merges you into it: one icon', (tester) async {
+    final here = LatLng(center.latitude + 0.0005, center.longitude);
+    await pump(tester, here: here);
+    expect(find.byTooltip('You are here'), findsOneWidget);
+    expect(find.byKey(const Key('ridingMarker')), findsNothing);
+
+    await pump(tester, here: here, riding: 'mine');
+    expect(find.byTooltip('You are here'), findsNothing);
+    expect(find.byKey(const Key('ridingMarker')), findsOneWidget);
+    expect(find.byType(VehicleMarker), findsNWidgets(2), reason: 'the other jeep still shows');
   });
 }
