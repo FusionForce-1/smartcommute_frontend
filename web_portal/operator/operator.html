@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Commute — Operator Portal</title>
+  <link rel="icon" type="image/png" href="../assets/icons/smartcommute-favicon.png" />
+  <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="../css/theme.css" />
   <link rel="stylesheet" href="../css/admin.css" />
@@ -26,8 +28,7 @@
     <div class="admin-main">
       <header class="admin-header">
         <h1 class="admin-header__title" id="op-title">Fleet Overview</h1>
-        <!-- Placeholder: subscription page not built yet, so the button has no action. -->
-        <button type="button" class="op-btn">Subscription</button>
+        <button type="button" class="op-btn" id="op-subscription">Subscription</button>
       </header>
 
       <div class="op-notice" id="op-notice" hidden></div>
@@ -54,6 +55,10 @@
   <script src="../js/operator/operatorApi.js"></script>
   <script src="../js/operator/operatorUi.js"></script>
   <script src="../js/operator/operatorRouter.js"></script>
+  <script src="../js/operator/trackerSetup.js"></script>
+  <script src="../js/operator/routePicker.js"></script>
+  <script src="../js/operator/stopEditor.js"></script>
+  <script src="../js/operator/driverActivity.js"></script>
 
   <!-- Each view self-registers with OperatorRouter.register(...) -->
   <script src="../js/operator/views/fleetMap.js"></script>

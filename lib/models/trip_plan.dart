@@ -111,6 +111,7 @@ class RouteLeg {
     this.speedIsLive = false,
     this.trafficDelayMin,
     this.congestionReported = false,
+    this.direction = 'outbound',
   });
 
   final String routeId;
@@ -149,6 +150,11 @@ class RouteLeg {
   /// A driver or operator marked the route congested.
   final bool congestionReported;
 
+  /// "outbound" (Terminal A -> B, the way the route is drawn) or "return" (B -> A).
+  final String direction;
+
+  bool get isReturn => direction == 'return';
+
   String get boardLabel => boardStop.displayName;
 
   /// Ang backend stub mo-return og placeholder para sa alight stop usab
@@ -178,6 +184,7 @@ class RouteLeg {
       speedIsLive: json['speed_source'] == 'live',
       trafficDelayMin: json['traffic_delay_min'] as int?,
       congestionReported: json['congestion_reported'] as bool? ?? false,
+      direction: json['direction'] as String? ?? 'outbound',
     );
   }
 
@@ -233,7 +240,7 @@ String formatFare(double fare) => '₱${fare.toStringAsFixed(2)}';
 String formatFareCompact(double fare) =>
     fare == fare.roundToDouble() ? '₱${fare.toStringAsFixed(0)}' : formatFare(fare);
 
-/// "Walk 104 m to Capitol · Next jeep 4 min (live)" — null if the backend
+/// "Walk 104 m to Capitol · Next PUV 4 min (live)" — null if the backend
 /// didn't send walking/wait details.
 String? boardingSummary(RouteLeg leg) {
   final walk = leg.walkToBoardM;
@@ -243,7 +250,7 @@ String? boardingSummary(RouteLeg leg) {
     if (walk != null) walk < 15 ? 'At ${leg.boardLabel}' : 'Walk ${formatDistance(walk)} to ${leg.boardLabel}',
     if (wait != null)
       leg.waitIsLive
-          ? (wait == 0 ? 'Jeep arriving now (live)' : 'Next jeep $wait min (live)')
+          ? (wait == 0 ? 'PUV arriving now (live)' : 'Next PUV $wait min (live)')
           : '~$wait min wait',
   ];
   return parts.join('  •  ');

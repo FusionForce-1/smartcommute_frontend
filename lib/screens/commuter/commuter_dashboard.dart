@@ -3,7 +3,8 @@
 // Commuter dashboard shell: logo header, the four tabs (Home, Route,
 // Alerts, Profile) and the bottom navigation. Loads stops, routes and
 // vehicles once and hands them to the tabs that need them, and owns the
-// trip, alert and profile state so it survives switching tabs.
+// trip, alert and profile state so it survives switching tabs — including
+// the route picked with "Select this route", shown on Home until cancelled.
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 import '../../models/commuter_profile.dart';
+import '../../models/selected_trip.dart';
 import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../models/trip_plan.dart';
@@ -33,6 +35,7 @@ import '../../services/vehicles_service.dart';
 import '../../widgets/commuter/commuter_header.dart';
 import '../../widgets/commuter/commuter_nav_bar.dart';
 import 'alert.dart';
+import '../../services/place_search.dart';
 import 'home.dart';
 import 'profile.dart';
 import 'route.dart';
@@ -55,6 +58,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     CommuterNavItem(icon: AppIcons.navAlerts, label: 'Alerts'),
     CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
   ];
+  static const _homeTab = 0;
   static const _routeTab = 1;
   static const _profileTab = 3;
 
@@ -76,16 +80,15 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
   List<TransportRoute> _routes = const [];
   List<Vehicle> _vehicles = const [];
 
+  /// The route chosen with "Select this route", drawn on the Home map.
+  SelectedTrip? _selectedTrip;
+
   @override
   void initState() {
     super.initState();
-    // Each list loads on its own, so one failing doesn't hide the others.
-    // Only stops a route serves: a stop no jeepney uses can't be boarded,
-    // so it would just clutter the map and the stop search.
-    _load('stops', StopsService(_dio).getStops,
-        (items) => _stops = [for (final s in items) if (s.routeIds.isNotEmpty) s]);
-    _load('routes', RoutesService(_dio).getRoutes, (items) => _routes = items);
-    _load('vehicles', VehiclesService(_dio).getVehicles, (items) => _vehicles = items);
+    // Metro Cebu landmarks for From / To search: load now so it's instant later.
+    PlaceIndex.landmarks();
+    _loadFleet();
     _alerts.load();
     _profile.load();
   }
@@ -96,6 +99,28 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     _alerts.dispose();
     _profile.dispose();
     super.dispose();
+  }
+
+  /// Stops, routes and vehicles. Each list loads on its own, so one failing
+  /// doesn't hide the others. Only stops a route serves: a stop no jeepney
+  /// uses can't be boarded, so it would just clutter the map and search.
+  void _loadFleet() {
+    _lastFleetLoad = DateTime.now();
+    _load('stops', StopsService(_dio).getStops,
+        (items) => _stops = [for (final s in items) if (s.routeIds.isNotEmpty) s]);
+    _load('routes', RoutesService(_dio).getRoutes, (items) => _routes = items);
+    _load('vehicles', VehiclesService(_dio).getVehicles, (items) => _vehicles = items);
+  }
+
+  DateTime _lastFleetLoad = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// The lists are loaded once at start, so a jeep or route an operator adds
+  /// (or activates) while the app is open was unknown and left out of Nearby
+  /// Vehicles. Home calls this when a live jeep doesn't match the lists; at
+  /// most every 30 s unless [force] (the Refresh button).
+  void _reloadFleet({bool force = false}) {
+    if (!force && DateTime.now().difference(_lastFleetLoad) < const Duration(seconds: 30)) return;
+    _loadFleet();
   }
 
   Future<void> _load<T>(
@@ -139,6 +164,34 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     _profile.recordTrip(option, from: from, to: to);
   }
 
+  /// "Select this route": close the route pages and show it on Home.
+  void _selectTrip(SelectedTrip trip) {
+    final dashboard = ModalRoute.of(context);
+    Navigator.of(context).popUntil((route) => route == dashboard);
+    setState(() {
+      _selectedTrip = trip;
+      _currentIndex = _homeTab;
+    });
+  }
+
+  /// Clears the selected route, with a moment to undo it.
+  void _cancelTrip() {
+    final cancelled = _selectedTrip;
+    if (cancelled == null) return;
+    setState(() => _selectedTrip = null);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text('Selected route cleared.'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () {
+            if (mounted && _selectedTrip == null) setState(() => _selectedTrip = cancelled);
+          },
+        ),
+      ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -161,13 +214,30 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                 child: IndexedStack(
                   index: _currentIndex,
                   children: [
-                    HomeTab(stops: _stops, routes: _routes, vehicles: _vehicles),
-                    RouteTab(stops: _stops, routes: _routes, onTripStarted: _onTripStarted),
+                    HomeTab(
+                      stops: _stops,
+                      routes: _routes,
+                      vehicles: _vehicles,
+                      onUnknownVehicle: () => _reloadFleet(),
+                      onRefresh: () => _reloadFleet(force: true),
+                      selectedTrip: _selectedTrip,
+                      onCancelTrip: _cancelTrip,
+                    ),
+                    RouteTab(
+                      stops: _stops,
+                      routes: _routes,
+                      onTripStarted: _onTripStarted,
+                      onRouteSelected: _selectTrip,
+                      // Fresh each time a route is opened on the map, so a jeep
+                      // added since the app started shows up there too.
+                      loadVehicles: VehiclesService(_dio).getVehicles,
+                    ),
                     const AlertsTab(),
                     ProfileTab(
                       isGuest: widget.isGuest,
                       stops: _stops,
                       routes: _routes,
+                      vehicles: _vehicles,
                       onOpenSavedRoute: _openSavedRoute,
                       onSignOut: _signOut,
                       onCreateAccount: () => _signOut(createAccount: true),

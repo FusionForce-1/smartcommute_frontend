@@ -4,6 +4,8 @@
 // both sides of their LTO license (POST /drivers/scan-license), reviewing
 // what was read, and saving (POST /drivers) — which also generates their
 // app login, shown once. Profiles can be viewed, edited, and removed.
+// Tapping a driver's row opens their activity log and live location
+// (DriverActivity, js/operator/driverActivity.js).
 
 OperatorRouter.register('drivers', {
   title: 'Drivers',
@@ -94,8 +96,9 @@ OperatorRouter.register('drivers', {
     function row(d) {
       const lic = licenseState(d);
       const vehicle = vehicleFor(d.id);
+      // Tapping the row (outside the action buttons) opens driver monitoring.
       return `
-        <tr>
+        <tr class="op-row--clickable" data-driver-id="${d.id}" tabindex="0" title="View activity and location">
           <td>
             <div class="data-table__name">${esc(OperatorUi.driverName(d))}</div>
             <div style="color:var(--op-muted);font-size:0.8rem;">${esc(d.driver_code)}</div>
@@ -469,12 +472,29 @@ OperatorRouter.register('drivers', {
 
     // ---------- Events ----------
 
+    /** Driver monitoring: fetches their activity log and focuses the map on them. */
+    function openActivity(d) {
+      DriverActivity.open(d.id, { title: `${OperatorUi.driverName(d)} — Activity` });
+    }
+
     tableEl.addEventListener('click', (e) => {
+      if (!Array.isArray(drivers)) return;
       const btn = e.target.closest('[data-action]');
-      if (!btn || btn.disabled || !Array.isArray(drivers)) return;
-      const driver = drivers.find((d) => d.id === btn.dataset.id);
-      if (!driver) return;
-      ({ view: openView, edit: openEdit, login: openLogin, remove: confirmRemove })[btn.dataset.action]?.(driver);
+      if (btn) {
+        if (btn.disabled) return;
+        const driver = drivers.find((d) => d.id === btn.dataset.id);
+        if (!driver) return;
+        ({ view: openView, edit: openEdit, login: openLogin, remove: confirmRemove })[btn.dataset.action]?.(driver);
+        return;
+      }
+      const row = e.target.closest('tr[data-driver-id]');
+      const driver = row && drivers.find((d) => d.id === row.dataset.driverId);
+      if (driver) openActivity(driver);
+    });
+    tableEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !e.target.matches('tr[data-driver-id]') || !Array.isArray(drivers)) return;
+      const driver = drivers.find((d) => d.id === e.target.dataset.driverId);
+      if (driver) openActivity(driver);
     });
     el.querySelector('#drv-add').addEventListener('click', () => OperatorUi.whenVerified(openScan));
 

@@ -1,33 +1,29 @@
 // js/operator/views/subscription.js
 //
-// Subscription: the operator's plan (3-month free trial on first sign-in,
-// then PHP 1,000 / year), with checkout through PayPal.
+// Subscription popup, opened from the header's Subscription button: the
+// operator's plan (3-month free trial on first sign-in, then PHP 1,000 /
+// year), with checkout through PayPal.
 //
 // PayPal round trip: "Pay with PayPal" -> POST /subscriptions/checkout with
 // this page as return_url -> PayPal's approval page -> back here with
 // ?paypal=return&token=<order id> -> POST /subscriptions/paypal/capture,
 // which takes the payment and adds a year. ?paypal=cancel means they backed out.
+// operatorApp.js reopens this popup on the way back from PayPal.
 
-OperatorRouter.register('subscription', {
-  title: 'Subscription',
-  heading: 'Subscription',
-
-  mount(el) {
+const OperatorSubscription = {
+  open() {
     const esc = AdminUi.escapeHtml;
     let status = null;
     let busy = false;
 
-    el.innerHTML = `
-      <div class="op-narrow">
-        <div class="op-page-head">
-          <div>
-            <h2>Subscription</h2>
-            <p>Unlimited vehicles while your trial or yearly plan is active.</p>
-          </div>
-        </div>
+    const el = AdminModal.open({
+      title: 'Subscription',
+      size: 'wide',
+      body: `
+        <p class="modal-text">Unlimited vehicles while your trial or yearly plan is active.</p>
         <div id="sub-notice"></div>
-        <section class="op-card" id="sub-card"></section>
-      </div>`;
+        <section id="sub-card"></section>`,
+    });
 
     const cardEl = el.querySelector('#sub-card');
     const noticeEl = el.querySelector('#sub-notice');
@@ -187,7 +183,7 @@ OperatorRouter.register('subscription', {
       const params = new URLSearchParams(location.search);
       const result = params.get('paypal');
       if (!result) return false;
-      history.replaceState(null, '', `${location.pathname}#/subscription`);
+      history.replaceState(null, '', `${location.pathname}${location.hash}`);
 
       if (result === 'cancel') {
         notice('Payment cancelled — you have not been charged.', 'amber');
@@ -212,4 +208,4 @@ OperatorRouter.register('subscription', {
       if (!done) load();
     });
   },
-});
+};

@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/commuter_profile.dart';
+import '../models/ride_review.dart';
 import '../models/trip_plan.dart';
 import '../services/api_error.dart';
 import '../services/profile_service.dart';
@@ -22,13 +23,20 @@ class ProfileProvider extends ChangeNotifier {
   LoadState _state = LoadState.idle;
   CommuterProfile? _profile;
   List<SavedRoute> _savedRoutes = const [];
+  List<RideReview> _reviews = const [];
   Map<NotificationPref, bool> _prefs = NotificationPref.fromSettings(const {});
   String? _errorMessage;
   bool _disposed = false;
 
+  /// For screens that call the account endpoints directly (Privacy & Security).
+  ProfileService get service => _service;
+
   LoadState get state => _state;
   CommuterProfile? get profile => _profile;
   List<SavedRoute> get savedRoutes => _savedRoutes;
+
+  /// The commuter's latest ride reviews, newest first.
+  List<RideReview> get reviews => _reviews;
   String? get errorMessage => _errorMessage;
   bool isEnabled(NotificationPref pref) => _prefs[pref] ?? false;
 
@@ -53,6 +61,34 @@ class ProfileProvider extends ChangeNotifier {
       _state = LoadState.error;
     }
     _notify();
+    // Separately: an older backend without /reviews must not break the profile.
+    try {
+      _reviews = await _service.myReviews();
+      _notify();
+    } catch (e) {
+      debugPrint('Could not load reviews: $e');
+    }
+  }
+
+  /// Returns an error message, or null on success.
+  Future<String?> submitReview({
+    required String routeId,
+    String? vehicleId,
+    required int rating,
+    required List<String> tags,
+    String? comment,
+  }) async {
+    try {
+      final review = await _service.submitReview(
+        routeId: routeId, vehicleId: vehicleId, rating: rating, tags: tags, comment: comment,
+      );
+      _reviews = [review, ..._reviews];
+      _adjustStats(reviews: 1);
+      _notify();
+      return null;
+    } catch (e) {
+      return apiErrorMessage(e);
+    }
   }
 
   /// Returns an error message, or null on success.
@@ -143,13 +179,14 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  void _adjustStats({int trips = 0, int savedRoutes = 0}) {
+  void _adjustStats({int trips = 0, int savedRoutes = 0, int reviews = 0}) {
     final profile = _profile;
     if (profile == null) return;
     _profile = profile.copyWith(
       stats: profile.stats.copyWith(
         trips: profile.stats.trips + trips,
         savedRoutes: profile.stats.savedRoutes + savedRoutes,
+        reviews: profile.stats.reviews + reviews,
       ),
     );
   }

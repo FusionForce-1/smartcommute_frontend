@@ -18,10 +18,10 @@ class ProfileStats {
         reviews: json['reviews'] as int? ?? 0,
       );
 
-  ProfileStats copyWith({int? trips, int? savedRoutes}) => ProfileStats(
+  ProfileStats copyWith({int? trips, int? savedRoutes, int? reviews}) => ProfileStats(
         trips: trips ?? this.trips,
         savedRoutes: savedRoutes ?? this.savedRoutes,
-        reviews: reviews,
+        reviews: reviews ?? this.reviews,
       );
 }
 

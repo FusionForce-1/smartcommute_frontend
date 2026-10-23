@@ -1,8 +1,8 @@
 // js/operator/views/reports.js
 //
-// Reports: fleet performance (GET /reports/fleet), a per-route summary
-// and every commuter feedback report on the operator's routes, with a
-// category filter and CSV export.
+// Reports: revenue, fleet performance (GET /reports/fleet), a per-route
+// summary, and Driver Reviews — what commuters said about the drivers of
+// this operator's jeeps (GET /reviews/operator; commuters stay anonymous).
 
 OperatorRouter.register('reports', {
   title: 'Reports',
@@ -10,49 +10,38 @@ OperatorRouter.register('reports', {
 
   mount(el) {
     const esc = AdminUi.escapeHtml;
-    const FEEDBACK_LIMIT = 100;
-    const CATEGORY_FILTERS = [
-      { value: '', label: 'All' },
-      ...Object.entries(OperatorUi.FEEDBACK_CATEGORY).map(([value, label]) => ({ value, label })),
-    ];
-
     let routes = [];
-    let feedback = [];
-    let filter = '';
 
     el.innerHTML = `
       <div id="rep-revenue"></div>
       <div class="op-page-head"><div><h2>Fleet &amp; Service</h2></div></div>
       <div id="rep-stats"></div>
-      <section class="op-card op-card--flush" style="margin-bottom:var(--space-sm);">
+      <section class="op-card op-card--flush">
         <div class="op-card__head">
           <h3>Route Summary</h3>
           <p class="op-card__sub" style="margin:0;">Service status, fares and assigned vehicles per route.</p>
         </div>
         <div id="rep-routes"></div>
       </section>
-      <section class="op-card op-card--flush">
-        <div class="op-card__head">
-          <div class="op-page-head" style="margin:0;">
-            <div>
-              <h3>Commuter Feedback</h3>
-              <p class="op-card__sub" style="margin:0;">Reports commuters filed about your routes, newest first.</p>
-            </div>
-            <button type="button" class="btn-sm btn-sm--teal" id="rep-export" disabled>Export CSV</button>
+      <section class="op-card op-card--flush" style="margin-top:var(--space-sm);">
+        <div class="op-card__head" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+          <div>
+            <h3>Driver Reviews</h3>
+            <p class="op-card__sub" style="margin:0;">Ratings commuters gave the drivers of your PUVs. Commuters stay anonymous.</p>
           </div>
-          <div class="op-breakdown" id="rep-filters"></div>
+          <select id="rep-review-driver" aria-label="Filter reviews by driver" style="min-width:200px;">
+            <option value="">All drivers</option>
+          </select>
         </div>
-        <div id="rep-feedback"></div>
+        <div id="rep-review-summary" style="padding:0 var(--space-sm);"></div>
+        <div id="rep-reviews"></div>
       </section>`;
 
     const statsEl = el.querySelector('#rep-stats');
     const routesEl = el.querySelector('#rep-routes');
-    const feedbackEl = el.querySelector('#rep-feedback');
-    const filtersEl = el.querySelector('#rep-filters');
-    const exportBtn = el.querySelector('#rep-export');
-
-    const routeLabel = (id) => OperatorUi.routeLabels(routes)[id] || 'Unknown route';
-    const visibleFeedback = () => (filter ? feedback.filter((f) => f.category === filter) : feedback);
+    const reviewSummaryEl = el.querySelector('#rep-review-summary');
+    const reviewsEl = el.querySelector('#rep-reviews');
+    const driverSelect = el.querySelector('#rep-review-driver');
 
     // ---------- Fleet performance ----------
 
@@ -88,104 +77,98 @@ OperatorRouter.register('reports', {
               <td>${r.stop_count}</td>
               <td>${OperatorUi.fare(r.base_fare)}</td>
               <td>${r.vehicle_count}</td>
-              <td>${feedback.filter((f) => f.route_id === r.id).length}</td>
             </tr>`).join('')
-        : '<tr><td colspan="8" class="data-table__empty">No routes yet.</td></tr>';
+        : '<tr><td colspan="7" class="data-table__empty">No routes yet.</td></tr>';
       routesEl.innerHTML = `
         <div class="table-wrap">
           <table class="data-table">
             <thead>
-              <tr><th>Code</th><th>Name</th><th>Terminals</th><th>Status</th><th>Stops</th><th>Fare</th><th>Vehicles</th><th>Feedback</th></tr>
+              <tr><th>Code</th><th>Name</th><th>Terminals</th><th>Status</th><th>Stops</th><th>Fare</th><th>Vehicles</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
     }
 
-    // ---------- Feedback ----------
-
-    function renderFilters() {
-      filtersEl.innerHTML = AdminUi.filterChips(CATEGORY_FILTERS, filter);
+    function loadRoutes() {
+      AdminUi.loadInto(routesEl, OperatorApi.myRoutes, (r) => {
+        routes = r;
+        renderRoutes();
+      });
     }
 
-    function renderFeedback() {
-      const list = visibleFeedback();
-      exportBtn.disabled = !list.length;
-      const rows = list.length
-        ? list.map((f) => `
+    // ---------- Driver reviews ----------
+
+    const TAGS = {
+      safe_driving: ['Safe driving', true], friendly: ['Friendly', true], clean: ['Clean PUV', true],
+      on_time: ['On time', true], honest_fare: ['Honest fare', true],
+      reckless_driving: ['Reckless driving', false], rude: ['Rude', false], overcharging: ['Overcharging', false],
+      overloading: ['Overloading', false], late: ['Long wait / late', false], dirty: ['Dirty PUV', false],
+    };
+    const tagChip = (key, count) => {
+      const [label, good] = TAGS[key] || [key.replace(/_/g, ' '), true];
+      return OperatorUi.chip(count ? `${label} ×${count}` : label, good ? 'green' : 'red');
+    };
+    const stars = (n) => `<span style="color:#F5A623;letter-spacing:1px;" aria-label="${n} of 5 stars">${'★'.repeat(Math.round(n))}${'☆'.repeat(5 - Math.round(n))}</span>`;
+    let driversListed = false;
+
+    function renderReviewSummary(data) {
+      if (!data.total) {
+        reviewSummaryEl.innerHTML = '';
+        return;
+      }
+      const cards = data.summary.map((s) => `
+        <div class="op-card" style="margin:0;padding:12px;">
+          <strong>${esc(s.driver_name)}</strong>
+          <div style="margin:4px 0;">${stars(s.average)} <strong>${s.average.toFixed(1)}</strong>
+            <span class="op-card__sub">· ${s.count} review${s.count === 1 ? '' : 's'}</span></div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            ${Object.entries(s.tag_counts).slice(0, 4).map(([k, n]) => tagChip(k, n)).join('')}
+          </div>
+        </div>`).join('');
+      reviewSummaryEl.innerHTML = `
+        <p class="modal-text" style="margin:8px 0;">Overall ${stars(data.average)} <strong>${data.average.toFixed(1)}</strong>
+          from ${data.total} review${data.total === 1 ? '' : 's'}</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px;">${cards}</div>`;
+    }
+
+    function renderReviews(data) {
+      if (!driversListed) {
+        driverSelect.insertAdjacentHTML('beforeend', data.summary.map((s) =>
+          `<option value="${esc(s.driver_id || 'none')}">${esc(s.driver_name)} (${s.count})</option>`).join(''));
+        driversListed = true;
+      }
+      renderReviewSummary(data);
+      const rows = data.reviews.length
+        ? data.reviews.map((r) => `
             <tr>
-              <td style="white-space:nowrap;">${esc(AdminUi.formatDateTime(f.created_at))}</td>
-              <td>${esc(routeLabel(f.route_id))}</td>
-              <td>${OperatorUi.chip(OperatorUi.FEEDBACK_CATEGORY[f.category] || f.category, 'blue')}</td>
-              <td>${esc(f.message)}</td>
-              <td>${AdminUi.statusChip(f.status)}</td>
+              <td>${esc(AdminUi.formatDate(r.created_at))}</td>
+              <td class="data-table__name">${esc(r.driver_name || '—')}</td>
+              <td>${esc(r.plate_number || '—')}</td>
+              <td>${esc(r.route_code || '—')}</td>
+              <td style="white-space:nowrap;">${stars(r.rating)}</td>
+              <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${r.tags.map((t) => tagChip(t)).join('') || '—'}</div></td>
+              <td>${esc(r.comment || '—')}</td>
             </tr>`).join('')
-        : `<tr><td colspan="5" class="data-table__empty">${feedback.length ? 'No feedback in this category.' : 'No commuter feedback on your routes yet.'}</td></tr>`;
-      feedbackEl.innerHTML = `
+        : '<tr><td colspan="7" class="data-table__empty">No reviews of your drivers yet. Commuters can rate a ride from their Profile → Rate Your Ride.</td></tr>';
+      reviewsEl.innerHTML = `
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Route</th><th>Category</th><th>Message</th><th>Status</th></tr></thead>
+            <thead><tr><th>Date</th><th>Driver</th><th>Vehicle</th><th>Route</th><th>Rating</th><th>Tags</th><th>Comment</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
     }
 
-    function exportCsv() {
-      const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const lines = [
-        ['Date', 'Route', 'Category', 'Message', 'Status'].map(cell).join(','),
-        ...visibleFeedback().map((f) => [
-          AdminUi.formatDateTime(f.created_at),
-          routeLabel(f.route_id),
-          OperatorUi.FEEDBACK_CATEGORY[f.category] || f.category,
-          f.message,
-          f.status,
-        ].map(cell).join(',')),
-      ];
-      const blob = new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = Object.assign(document.createElement('a'), {
-        href: url,
-        download: `smartcommute-feedback-${new Date().toISOString().slice(0, 10)}.csv`,
-      });
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+    function loadReviews() {
+      const driver = driverSelect.value || undefined;
+      AdminUi.loadInto(reviewsEl, () => OperatorApi.driverReviews(driver), renderReviews);
     }
-
-    function loadTables() {
-      let loaded = false;
-      AdminUi.loadInto(feedbackEl, async () => {
-        const [r, f] = await Promise.all([
-          OperatorApi.myRoutes(),
-          OperatorApi.myFeedback({ limit: FEEDBACK_LIMIT }),
-        ]);
-        return { r, f };
-      }, ({ r, f }) => {
-        loaded = true;
-        routes = r;
-        feedback = f;
-        renderRoutes();
-        renderFeedback();
-      }).then(() => {
-        if (!loaded) routesEl.innerHTML = ''; // the error + retry shows under feedback
-      });
-      routesEl.innerHTML = AdminUi.stateMessage('Loading…');
-    }
-
-    filtersEl.addEventListener('click', (e) => {
-      const chip = e.target.closest('[data-filter]');
-      if (!chip) return;
-      filter = chip.dataset.filter;
-      renderFilters();
-      renderFeedback();
-    });
-    exportBtn.addEventListener('click', exportCsv);
+    driverSelect.addEventListener('change', loadReviews);
 
     RevenueReport.mount(el.querySelector('#rep-revenue'));
-    renderFilters();
     loadStats();
-    loadTables();
+    loadRoutes();
+    loadReviews();
   },
 });

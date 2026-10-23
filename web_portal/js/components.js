@@ -98,7 +98,7 @@ const Components = {
     return `
       <header class="brand-header">
         <div class="brand-header__lockup">
-          <img class="brand-header__logo" src="assets/images/smart-commute-logo-landscape.png" alt="Smart Commute" />
+          <img class="brand-header__logo" src="assets/images/smart_commute_logo_landscape.png" alt="Smart Commute" />
         </div>
         <span class="brand-header__tagline">${tagline}</span>
       </header>`;

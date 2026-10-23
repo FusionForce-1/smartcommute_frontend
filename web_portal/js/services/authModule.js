@@ -139,10 +139,13 @@ const AuthModule = (() => {
     /**
      * Email/password operator sign-up: creates the account, signs in once to
      * save the company profile (that endpoint needs a token), then signs out
-     * so the operator logs in normally afterwards.
+     * so the operator logs in normally afterwards. `acceptedTerms` is the
+     * User Agreement / Privacy Policy box — the backend requires and records it.
      */
-    registerOperator: async ({ name, email, password, profile }) => {
-      await request('POST', '/auth/register', { name, email, password, role: 'operator' });
+    registerOperator: async ({ name, email, password, profile, acceptedTerms }) => {
+      await request('POST', '/auth/register', {
+        name, email, password, role: 'operator', accepted_terms: acceptedTerms === true,
+      });
       try {
         const tokens = await request('POST', '/auth/login', { email, password });
         Session.save({ ...tokens, email });
@@ -173,6 +176,9 @@ const AuthModule = (() => {
     },
 
     createOperatorProfile,
+
+    /** Records the signed-in user's agreement to the User Agreement / Privacy Policy. */
+    acceptTerms: () => ApiClient.post('/users/me/accept-terms'),
 
     forgotPassword: (email) =>
       request('POST', '/auth/forgot-password', { email }),

@@ -169,12 +169,68 @@
   vertical-align: middle;
 }
 
+/* ---------- Driver monitoring (driverActivity.js) ---------- */
+
+.op-activity__heading {
+  margin: 16px 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--admin-ink);
+}
+
+.op-activity__map {
+  height: 260px;
+  margin-bottom: 0;
+}
+
+.op-activity__log {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.data-table tr.op-row--clickable {
+  cursor: pointer;
+}
+
+.data-table tr.op-row--clickable:hover td {
+  background: var(--op-soft);
+}
+
 .op-vehicle-marker {
   width: 18px;
   height: 18px;
   border: 3px solid #fff;
   border-radius: 50%;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.op-puv {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.op-puv__img {
+  width: 100%;
+  height: 100%;
+  transition: transform 0.4s ease;
+  user-select: none;
+}
+
+.op-puv__dot {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+}
+
+.op-puv--muted .op-puv__img {
+  filter: grayscale(1);
+  opacity: 0.6;
 }
 
 .op-big-number {
@@ -265,6 +321,17 @@
 .op-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Secondary action next to a primary .op-btn (e.g. "Install tracker firmware"). */
+.op-btn--ghost {
+  background: #fff;
+  color: var(--op-accent);
+}
+
+.op-btn--ghost:hover {
+  background: #fff;
+  color: var(--admin-teal-dark);
 }
 
 .op-btn--outline-red,
@@ -947,4 +1014,30 @@
   .op-grid--2,
   .op-form__grid,
   .op-upload-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- Create Route: Origin → Destination map picker (routePicker.js) ---------- */
+.rp { display: grid; gap: 10px; }
+.rp-field { position: relative; }
+.rp-field label { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px; }
+.rp-dot { width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 700;
+          display: inline-flex; align-items: center; justify-content: center; }
+.rp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; }
+.rp-row input { width: 100%; min-width: 0; }
+.rp-suggest { position: absolute; z-index: 1000; left: 0; right: 0; top: 100%; margin: 2px 0 0; padding: 4px 0;
+              list-style: none; background: #fff; border: 1px solid var(--op-border, #d8dee4); border-radius: 0.375rem;
+              box-shadow: 0 6px 18px rgba(0, 0, 0, .12); max-height: 260px; overflow-y: auto; }
+.rp-suggest button { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; background: none; cursor: pointer; }
+.rp-suggest button:hover, .rp-suggest button:focus { background: #eef6f8; outline: none; }
+.rp-suggest button span { display: block; font-size: 12px; color: var(--op-muted, #6b7280); }
+.rp-suggest .rp-note { padding: 8px 12px; font-size: 12px; color: var(--op-muted, #6b7280); }
+.rp-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rp-hint { font-size: 14px; }
+.rp-map { height: 340px; border-radius: 0.5rem; border: 1px solid var(--op-border, #d8dee4); cursor: crosshair; }
+.rp-path { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.rp-path input { margin-top: 3px; }
+@media (max-width: 640px) {
+  .rp-row { grid-template-columns: 1fr 1fr; }
+  .rp-row input { grid-column: 1 / -1; }
+  .rp-map { height: 280px; }
 }

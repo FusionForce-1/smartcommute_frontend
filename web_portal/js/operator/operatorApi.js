@@ -36,25 +36,45 @@ const OperatorApi = {
   updateDriver: (id, changes) => ApiClient.patch(`/drivers/${id}`, changes),
   updateDriverAccount: (id, changes) => ApiClient.patch(`/drivers/${id}/account`, changes),
   deleteDriver: (id) => ApiClient.delete(`/drivers/${id}`),
+  /** Driver monitoring: { name, on_shift, duty_status, current_location, events[] }. */
+  driverActivity: (id) => ApiClient.get(`/drivers/${id}/activity`),
+  /** Commuters' ride reviews of this operator's drivers (+ per-driver summary). */
+  driverReviews: (driverId) => ApiClient.get('/reviews/operator', driverId ? { driver_id: driverId } : undefined),
   addVehicle: ({ plate_number, route_id, driver_id }) =>
     ApiClient.post('/vehicles', { plate_number, route_id, driver_id: driver_id || null }),
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),
   deleteVehicle: (id) => ApiClient.delete(`/vehicles/${id}`),
   issueDeviceKey: (id) => ApiClient.post(`/vehicles/${id}/device-key`),
+  // GPS tracker setup by claim code (js/operator/trackerSetup.js)
+  claimTracker: ({ claim_code, vehicle_id, networks }) =>
+    ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks }),
+  trackerSetupStatus: (deviceId) => ApiClient.get(`/devices/${encodeURIComponent(deviceId)}`),
+  // Remote WiFi for an online tracker (js/operator/trackerSetup.js -> openWifi)
+  trackerWifi: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-wifi`),
+  setTrackerWifi: (vehicleId, networks) => ApiClient.put(`/vehicles/${vehicleId}/tracker-wifi`, { networks }),
+  trackerFirmware: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-firmware`),
+  updateTrackerFirmware: (vehicleId) => ApiClient.post(`/vehicles/${vehicleId}/tracker-firmware/update`),
 
   // ---- Routes ----
   myRoutes: () => ApiClient.get('/routes/mine'),
   /** Active routes with their map geometry (public list). */
   mapRoutes: () => ApiClient.get('/routes'),
-  createRoute: ({ code, name, origin, destination, baseFare }) =>
+  createRoute: ({ code, name, origin, destination, baseFare, originAt, destinationAt, path }) =>
     ApiClient.post('/routes', {
       code,
       name,
       terminal_a: origin,
       terminal_b: destination,
       fare_matrix: { base: baseFare },
+      // Pinned on the Create Route map ([lng, lat]); optional.
+      ...(originAt ? { terminal_a_location: { type: 'Point', coordinates: originAt } } : {}),
+      ...(destinationAt ? { terminal_b_location: { type: 'Point', coordinates: destinationAt } } : {}),
+      ...(path ? { geometry: { type: 'LineString', coordinates: path } } : {}),
     }),
   setRouteActive: (id, isActive) => ApiClient.patch(`/routes/${id}/active`, { is_active: isActive }),
+  routeStops: (id) => ApiClient.get(`/routes/${id}/stops`),
+  setRouteStops: (id, stops) => ApiClient.put(`/routes/${id}/stops`, { stops }),
+  stopSuggestions: (id) => ApiClient.get(`/routes/${id}/stops/suggestions`),
   deleteRoute: (id) => ApiClient.delete(`/routes/${id}`),
 
   // ---- Announcements (transit alerts) ----

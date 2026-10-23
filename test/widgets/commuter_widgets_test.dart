@@ -72,6 +72,22 @@ void main() {
 
       expect(find.textContaining('min'), findsNothing);
     });
+
+    testWidgets('shows distance and Delayed, and reports taps', (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(host(NearbyVehicleCard(
+        routeCode: '07B',
+        routeName: 'Banawa → Carbon',
+        distanceM: 1250,
+        delayed: true,
+        onTap: () => taps++,
+      )));
+
+      expect(find.text('1.3 km away'), findsOneWidget);
+      expect(find.text('Delayed'), findsOneWidget);
+      await tester.tap(find.text('PUV 07B'));
+      expect(taps, 1);
+    });
   });
 
   testWidgets('CommuterActionTile ignores taps when disabled', (tester) async {

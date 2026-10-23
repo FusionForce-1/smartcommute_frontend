@@ -59,6 +59,10 @@
     padding: var(--space-sm);
   }
 
+  .brand-header__logo {
+    --logo-width: 11rem;
+  }
+
   .brand-header__tagline {
     font-size: 15px;
   }
@@ -81,10 +85,6 @@
   .brand-header {
     padding-top: var(--space-sm);
     padding-bottom: 0;
-  }
-
-  .brand-header__logo {
-    height: 60px;
   }
 
   .split-bg__center {
