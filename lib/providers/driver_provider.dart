@@ -70,6 +70,9 @@ class DriverProvider extends ChangeNotifier {
 
   bool get broadcasting => gps.isActive;
 
+  /// Live broadcast needs a GPS tracker set up on the vehicle.
+  bool get canBroadcast => vehicle?.hasTracker ?? false;
+
   /// Kilometres driven this shift: what the server had stored when the
   /// dashboard loaded, plus the hops this device has sent since.
   double get distanceKm {
