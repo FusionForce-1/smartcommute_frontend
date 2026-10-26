@@ -117,7 +117,18 @@ OperatorRouter.register('reports', {
         reviewSummaryEl.innerHTML = '';
         return;
       }
-      const cards = data.summary.map((s) => `
+      // The API always sends every driver's summary (it also fills the
+      // dropdown), so narrow the cards and the headline to the pick here.
+      const picked = driverSelect.value;
+      const shown = picked ? data.summary.filter((s) => (s.driver_id || 'none') === picked) : data.summary;
+      const headline = picked
+        ? (shown[0] ? { label: shown[0].driver_name, average: shown[0].average, total: shown[0].count } : null)
+        : { label: 'Overall', average: data.average, total: data.total };
+      if (!headline) {
+        reviewSummaryEl.innerHTML = '';
+        return;
+      }
+      const cards = shown.map((s) => `
         <div class="op-card" style="margin:0;padding:12px;">
           <strong>${esc(s.driver_name)}</strong>
           <div style="margin:4px 0;">${stars(s.average)} <strong>${s.average.toFixed(1)}</strong>
@@ -127,8 +138,8 @@ OperatorRouter.register('reports', {
           </div>
         </div>`).join('');
       reviewSummaryEl.innerHTML = `
-        <p class="modal-text" style="margin:8px 0;">Overall ${stars(data.average)} <strong>${data.average.toFixed(1)}</strong>
-          from ${data.total} review${data.total === 1 ? '' : 's'}</p>
+        <p class="modal-text" style="margin:8px 0;">${esc(headline.label)} ${stars(headline.average)} <strong>${headline.average.toFixed(1)}</strong>
+          from ${headline.total} review${headline.total === 1 ? '' : 's'}</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px;">${cards}</div>`;
     }
 
