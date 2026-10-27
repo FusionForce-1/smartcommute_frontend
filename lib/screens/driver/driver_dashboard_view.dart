@@ -1,8 +1,8 @@
 // lib/screens/driver/driver_dashboard_view.dart
 //
-// The Driver Dashboard screen: profile, GPS broadcast, assigned route,
-// route status, crowd estimate, and the shift (START SHIFT, or the Shift
-// Active card with END SHIFT). Reads DriverProvider from above.
+// The Driver Dashboard: the map with the jeep and its route, the shift
+// (started and ended by the operator; crowd and passengers while it runs),
+// the driver's routes, and their updates. Reads DriverProvider from above.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -11,16 +11,13 @@ import '../../config/theme_config.dart';
 import '../../providers/driver_provider.dart';
 import '../../providers/load_state.dart';
 import '../../widgets/commuter/commuter_header.dart';
-import '../../widgets/driver/assigned_route_card.dart';
 import '../../widgets/driver/crowd_estimate_card.dart';
-import '../../widgets/driver/driver_buttons.dart';
+import '../../widgets/driver/driver_map.dart';
 import '../../widgets/driver/driver_profile_card.dart';
-import '../../widgets/driver/end_shift_sheet.dart';
-import '../../widgets/driver/gps_broadcast_card.dart';
-import '../../widgets/driver/route_status_card.dart';
-import '../../widgets/driver/shift_active_card.dart';
+import '../../widgets/driver/my_routes_card.dart';
+import '../../widgets/driver/shift_card.dart';
+import '../../widgets/driver/updates_card.dart';
 import 'driver_route_map_screen.dart';
-import 'shift_complete_screen.dart';
 
 class DriverDashboardView extends StatelessWidget {
   const DriverDashboardView({super.key, required this.onSignOut});
@@ -41,7 +38,7 @@ class DriverDashboardView extends StatelessWidget {
               LoadState.idle || LoadState.loading => const Center(child: CircularProgressIndicator()),
               LoadState.error => _LoadError(message: driver.loadError, onRetry: driver.load),
               LoadState.ready => RefreshIndicator(
-                  onRefresh: driver.load,
+                  onRefresh: driver.refresh,
                   child: _DashboardBody(driver: driver, onSignOut: onSignOut),
                 ),
             },
@@ -68,26 +65,9 @@ class _DashboardBody extends StatelessWidget {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _endShift(BuildContext context) async {
-    final shift = driver.shift;
-    if (shift == null) return;
-    if (!await showEndShiftSheet(context, startedAt: shift.startedAt)) return;
-
-    final result = await driver.endShift();
-    if (!context.mounted) return;
-    final summary = result.summary;
-    if (summary == null) return _report(context, () async => result.error);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ShiftCompleteScreen(summary: summary)),
-    );
-  }
-
-  void _openMap(BuildContext context, {required bool followMe}) {
+  void _openMap(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ChangeNotifierProvider.value(
-        value: driver,
-        child: DriverRouteMapScreen(service: driver.service, followMe: followMe),
-      ),
+      builder: (_) => ChangeNotifierProvider.value(value: driver, child: const DriverRouteMapScreen()),
     ));
   }
 
@@ -117,46 +97,34 @@ class _DashboardBody extends StatelessWidget {
         gap,
         DriverProfileCard(name: driver.name, vehicle: driver.vehicle),
         gap,
-        GpsBroadcastCard(
-          session: driver.gps,
-          hasTracker: driver.canBroadcast,
-          onChanged: (on) => _report(context, () => driver.setBroadcasting(on)),
-          onViewLive: () => _openMap(context, followMe: true),
-        ),
-        gap,
-        AssignedRouteCard(
-          vehicles: driver.vehicles,
-          vehicle: driver.vehicle,
-          live: driver.live,
-          locked: driver.onShift,
-          onVehicleSelected: driver.selectVehicle,
-        ),
-        gap,
-        RouteStatusCard(
-          selected: driver.dutyStatus,
-          onSelected: (status) => _report(context, () => driver.setDutyStatus(status)),
-        ),
-        gap,
-        CrowdEstimateCard(
-          percent: driver.crowdPercent,
-          onChanged: driver.previewCrowd,
-          onChangeEnd: (percent) => _report(context, () => driver.commitCrowd(percent)),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (shift == null)
-          StartShiftButton(
-            busy: driver.busy,
-            onPressed: driver.vehicle == null ? null : () => _report(context, driver.startShift),
-          )
-        else
-          ShiftActiveCard(
-            shift: shift,
-            distanceKm: driver.distanceKm,
-            onPassengerChange: (change) => _report(context, () => driver.changePassengers(change)),
-            onEndShift: driver.busy ? null : () => _endShift(context),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            height: 260,
+            child: DriverMap(driver: driver, onExpand: () => _openMap(context)),
           ),
-        const SizedBox(height: AppSpacing.md),
-        ViewRouteButton(onPressed: () => _openMap(context, followMe: false)),
+        ),
+        gap,
+        ShiftCard(
+          shift: shift,
+          vehicle: driver.vehicle,
+          jeepGps: driver.jeepGps,
+          gpsError: driver.gpsError,
+          onRetryGps: driver.retryPhoneGps,
+          onPassengerChange: (change) => _report(context, () => driver.changePassengers(change)),
+        ),
+        if (shift != null) ...[
+          gap,
+          CrowdEstimateCard(
+            percent: driver.crowdPercent,
+            onChanged: driver.previewCrowd,
+            onChangeEnd: (percent) => _report(context, () => driver.commitCrowd(percent)),
+          ),
+        ],
+        gap,
+        MyRoutesCard(vehicles: driver.vehicles, shiftVehicleId: shift?.vehicleId, live: driver.live),
+        gap,
+        UpdatesCard(updates: driver.updates, onMarkAllRead: driver.markUpdatesRead),
       ],
     );
   }

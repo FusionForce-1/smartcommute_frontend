@@ -2,7 +2,8 @@
 //
 // Reports: revenue, fleet performance (GET /reports/fleet), a per-route
 // summary, and Driver Reviews — what commuters said about the drivers of
-// this operator's jeeps (GET /reviews/operator; commuters stay anonymous).
+// this operator's jeeps (GET /reviews/operator; commuters stay anonymous),
+// by driver, for a period (last 3 months by default) and in an order.
 
 OperatorRouter.register('reports', {
   title: 'Reports',
@@ -29,9 +30,25 @@ OperatorRouter.register('reports', {
             <h3>Driver Reviews</h3>
             <p class="op-card__sub" style="margin:0;">Ratings commuters gave the drivers of your PUVs. Commuters stay anonymous.</p>
           </div>
-          <select id="rep-review-driver" aria-label="Filter reviews by driver" style="min-width:200px;">
-            <option value="">All drivers</option>
-          </select>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <select id="rep-review-driver" aria-label="Filter reviews by driver" style="min-width:200px;">
+              <option value="">All drivers</option>
+            </select>
+            <select id="rep-review-days" aria-label="Reviews from">
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90" selected>Last 3 months</option>
+              <option value="180">Last 6 months</option>
+              <option value="365">Last 12 months</option>
+              <option value="">All time</option>
+            </select>
+            <select id="rep-review-sort" aria-label="Sort reviews">
+              <option value="recent" selected>Most recent</option>
+              <option value="oldest">Oldest first</option>
+              <option value="highest">Highest rating</option>
+              <option value="lowest">Lowest rating</option>
+            </select>
+          </div>
         </div>
         <div id="rep-review-summary" style="padding:0 var(--space-sm);"></div>
         <div id="rep-reviews"></div>
@@ -42,6 +59,8 @@ OperatorRouter.register('reports', {
     const reviewSummaryEl = el.querySelector('#rep-review-summary');
     const reviewsEl = el.querySelector('#rep-reviews');
     const driverSelect = el.querySelector('#rep-review-driver');
+    const daysSelect = el.querySelector('#rep-review-days');
+    const sortSelect = el.querySelector('#rep-review-sort');
 
     // ---------- Fleet performance ----------
 
@@ -110,7 +129,7 @@ OperatorRouter.register('reports', {
       return OperatorUi.chip(count ? `${label} ×${count}` : label, good ? 'green' : 'red');
     };
     const stars = (n) => `<span style="color:#F5A623;letter-spacing:1px;" aria-label="${n} of 5 stars">${'★'.repeat(Math.round(n))}${'☆'.repeat(5 - Math.round(n))}</span>`;
-    let driversListed = false;
+    const PERIOD = { 7: 'in the last 7 days', 30: 'in the last 30 days', 90: 'in the last 3 months', 180: 'in the last 6 months', 365: 'in the last 12 months' };
 
     function renderReviewSummary(data) {
       if (!data.total) {
@@ -139,16 +158,23 @@ OperatorRouter.register('reports', {
         </div>`).join('');
       reviewSummaryEl.innerHTML = `
         <p class="modal-text" style="margin:8px 0;">${esc(headline.label)} ${stars(headline.average)} <strong>${headline.average.toFixed(1)}</strong>
-          from ${headline.total} review${headline.total === 1 ? '' : 's'}</p>
+          from ${headline.total} review${headline.total === 1 ? '' : 's'} ${esc(PERIOD[daysSelect.value] || 'in total')}</p>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px;">${cards}</div>`;
     }
 
+    /** The drivers reviewed in the period, keeping the current pick even if it has none now. */
+    function renderDriverOptions(summary) {
+      const picked = driverSelect.value;
+      const options = summary.map((s) =>
+        `<option value="${esc(s.driver_id || 'none')}">${esc(s.driver_name)} (${s.count})</option>`);
+      const pickedListed = !picked || summary.some((s) => (s.driver_id || 'none') === picked);
+      const keep = pickedListed ? '' : `<option value="${esc(picked)}">${esc(driverSelect.selectedOptions[0]?.textContent.replace(/ \(\d+\)$/, '') || 'Driver')} (0)</option>`;
+      driverSelect.innerHTML = `<option value="">All drivers</option>${options.join('')}${keep}`;
+      driverSelect.value = picked;
+    }
+
     function renderReviews(data) {
-      if (!driversListed) {
-        driverSelect.insertAdjacentHTML('beforeend', data.summary.map((s) =>
-          `<option value="${esc(s.driver_id || 'none')}">${esc(s.driver_name)} (${s.count})</option>`).join(''));
-        driversListed = true;
-      }
+      renderDriverOptions(data.summary);
       renderReviewSummary(data);
       const rows = data.reviews.length
         ? data.reviews.map((r) => `
@@ -161,7 +187,9 @@ OperatorRouter.register('reports', {
               <td><div style="display:flex;gap:4px;flex-wrap:wrap;">${r.tags.map((t) => tagChip(t)).join('') || '—'}</div></td>
               <td>${esc(r.comment || '—')}</td>
             </tr>`).join('')
-        : '<tr><td colspan="7" class="data-table__empty">No reviews of your drivers yet. Commuters can rate a ride from their Profile → Rate Your Ride.</td></tr>';
+        : `<tr><td colspan="7" class="data-table__empty">${daysSelect.value
+          ? `No reviews ${esc(PERIOD[daysSelect.value])}. Pick a longer period to see older ones.`
+          : 'No reviews of your drivers yet. Commuters can rate a ride from their Profile → Rate Your Ride.'}</td></tr>`;
       reviewsEl.innerHTML = `
         <div class="table-wrap">
           <table class="data-table">
@@ -172,10 +200,10 @@ OperatorRouter.register('reports', {
     }
 
     function loadReviews() {
-      const driver = driverSelect.value || undefined;
-      AdminUi.loadInto(reviewsEl, () => OperatorApi.driverReviews(driver), renderReviews);
+      const query = { driverId: driverSelect.value, days: daysSelect.value, sort: sortSelect.value };
+      AdminUi.loadInto(reviewsEl, () => OperatorApi.driverReviews(query), renderReviews);
     }
-    driverSelect.addEventListener('change', loadReviews);
+    [driverSelect, daysSelect, sortSelect].forEach((select) => select.addEventListener('change', loadReviews));
 
     RevenueReport.mount(el.querySelector('#rep-revenue'));
     loadStats();

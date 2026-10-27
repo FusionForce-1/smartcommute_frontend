@@ -18,8 +18,7 @@ class ForgotPasswordScreen extends StatefulWidget {
     this.onBack,
   });
 
-  /// TODO: Velez — AuthProvider.sendPasswordResetOtp(email)
-  /// → ApiService.sendPasswordResetOtp() → POST /auth/forgot-password (HTTP 202)
+  /// Emails a reset code (POST /auth/forgot-password).
   final Future<void> Function(String email)? onSendOtp;
   final VoidCallback? onBack;
 
@@ -47,7 +46,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     });
 
     try {
-      // TODO: Velez — on success, push VerifyOtpScreen(email) and keep provider loading false
       await widget.onSendOtp?.call(_email.text.trim());
     } catch (e) {
       if (mounted) {

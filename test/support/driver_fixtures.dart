@@ -3,7 +3,7 @@
 
 import 'package:smartcommute_app/services/websocket_service.dart';
 
-Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123', bool hasTracker = true}) => {
+Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123'}) => {
       'id': id,
       'plate_number': plate,
       'route_id': 'r1',
@@ -11,75 +11,63 @@ Map<String, dynamic> vehicleJson({String id = 'v1', String plate = 'ABC 123', bo
       'route_name': 'Talamban – Pier 1',
       'terminal_a': 'Talamban',
       'terminal_b': 'Pier 1 Terminal',
-      'has_tracker': hasTracker,
     };
 
 Map<String, dynamic> shiftJson({
+  String id = 's1',
   int crowd = 0,
   int passengers = 0,
   String vehicleId = 'v1',
-  double distanceKm = 0,
 }) =>
     {
-      'id': 's1',
+      'id': id,
       'vehicle_id': vehicleId,
       'started_at': DateTime.now().toUtc().subtract(const Duration(minutes: 5)).toIso8601String(),
       'crowd_percent': crowd,
       'passengers': passengers,
-      'distance_km': distanceKm,
     };
 
 Map<String, dynamic> dashboardJson({
   List<Map<String, dynamic>>? vehicles,
   Map<String, dynamic>? shift,
-  String dutyStatus = 'unavailable',
 }) =>
     {
       'name': 'Juan Dela Cruz',
       'driver_code': 'DRV-001',
-      'duty_status': dutyStatus,
+      'duty_status': shift == null ? 'unavailable' : 'on_route',
       'vehicles': vehicles ?? [vehicleJson()],
       'shift': shift,
     };
 
-Map<String, dynamic> summaryJson() => {
-      'id': 's1',
-      'started_at': '2026-10-12T00:30:00Z',
-      'ended_at': '2026-10-12T01:50:04Z',
-      'duration_seconds': 4804,
-      'distance_km': 1.1,
-      'trips': 1,
-      'passengers': 15,
-      'avg_crowd_percent': 60,
-      'gps_coverage': 'full',
-      'vehicle': vehicleJson(),
+Map<String, dynamic> updateJson({
+  String id = 'n1',
+  String kind = 'shift_started',
+  String title = 'Your shift started',
+  String body = 'Your operator started your shift on ABC 123. Drive safe!',
+  bool read = false,
+}) =>
+    {
+      'id': id,
+      'kind': kind,
+      'title': title,
+      'body': body,
+      'data': <String, dynamic>{},
+      'is_read': read,
+      'created_at': DateTime.now().toUtc().subtract(const Duration(minutes: 2)).toIso8601String(),
     };
 
 class FakeGpsSession extends GpsIngestionSession {
   FakeGpsSession({this.startError}) : super(accessToken: () async => 'token');
 
   /// Thrown by start(), e.g. location permission denied.
-  final Exception? startError;
+  Exception? startError;
 
   final List<String> started = [];
   int stops = 0;
   bool _on = false;
-  double _metres = 0;
 
   @override
   bool get isActive => _on;
-
-  @override
-  double get distanceMetres => _metres;
-
-  @override
-  void resetDistance() => _metres = 0;
-
-  /// As if frames [metres] apart had been sent.
-  void drive(double metres) {
-    _metres += metres;
-    notifyListeners();
-  }
 
   @override
   Future<void> start(String vehicleId) async {

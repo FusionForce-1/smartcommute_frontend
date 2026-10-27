@@ -1,7 +1,8 @@
 // lib/services/driver_service.dart
 //
-// The signed-in driver's dashboard and shift (/drivers/me), plus the
-// route line for their map (GET /routes/{id}).
+// The signed-in driver's dashboard and shift reports (/drivers/me), their
+// updates (/notifications), and the route line for their map (GET /routes/{id}).
+// Shifts themselves are started and ended by the operator in the portal.
 
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -21,14 +22,6 @@ class DriverService {
     return DriverDashboardData.fromJson(response.data as Map<String, dynamic>);
   }
 
-  Future<DriverShift> startShift(String vehicleId) async {
-    final response = await _dio.post('/drivers/me/shift', data: {'vehicle_id': vehicleId});
-    return DriverShift.fromJson(response.data as Map<String, dynamic>);
-  }
-
-  Future<void> setDutyStatus(DutyStatus status) =>
-      _dio.put('/drivers/me/status', data: {'status': status.apiValue});
-
   Future<void> reportCrowd(int percent) =>
       _dio.put('/drivers/me/shift/crowd', data: {'percent': percent});
 
@@ -38,10 +31,13 @@ class DriverService {
     return (response.data['passengers'] as num).toInt();
   }
 
-  Future<ShiftSummary> endShift() async {
-    final response = await _dio.post('/drivers/me/shift/end');
-    return ShiftSummary.fromJson(response.data as Map<String, dynamic>);
+  /// The newest notifications first.
+  Future<List<DriverUpdate>> updates({int limit = 20}) async {
+    final response = await _dio.get('/notifications', queryParameters: {'limit': limit});
+    return [for (final n in response.data as List) DriverUpdate.fromJson(n as Map<String, dynamic>)];
   }
+
+  Future<void> markUpdatesRead() => _dio.post('/notifications/read-all');
 
   /// The route's line and stops; throws (404) if it has no map yet.
   Future<TransportRoute> route(String routeId) async {

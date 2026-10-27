@@ -11,6 +11,11 @@ OperatorRouter.register('fleet', {
     const CEBU = [10.3157, 123.8854];
     const POLL_MS = 30000;
     const RECENT_PING_MS = 10 * 60 * 1000;
+    // Green only while GPS is actually arriving: the stored status stays
+    // "active" when a tracker is switched off or never connected (the
+    // backend only notices a stop while it is running), so the map goes by
+    // how fresh the last fix is. Trackers send one a second.
+    const GPS_LIVE_MS = 60 * 1000;
     const MARKER_COLORS = { active: '#27AE60', maintenance: '#F5A623', inactive: '#7D868E', signal_lost: '#D72F33' };
     const esc = AdminUi.escapeHtml;
 
@@ -28,7 +33,7 @@ OperatorRouter.register('fleet', {
         <span><span class="op-dot" style="background:${MARKER_COLORS.active}"></span>Active</span>
         <span><span class="op-dot" style="background:${MARKER_COLORS.maintenance}"></span>Maintenance</span>
         <span><span class="op-dot" style="background:${MARKER_COLORS.inactive}"></span>Inactive / suspended</span>
-        <span><span class="op-dot" style="background:${MARKER_COLORS.signal_lost}"></span>Signal lost</span>
+        <span><span class="op-dot" style="background:${MARKER_COLORS.signal_lost}"></span>GPS off / signal lost</span>
         <span id="fleet-live">Connecting to live updates…</span>
       </div>
       <div class="op-grid">
@@ -91,11 +96,7 @@ OperatorRouter.register('fleet', {
       const from = marker._opAnchor;
       if (!from) { marker._opAnchor = latLng; return; }
       if (L.latLng(from).distanceTo(latLng) >= 8) {
-        const toRad = (d) => (d * Math.PI) / 180;
-        const [lat1, lng1] = from.map(toRad), [lat2, lng2] = latLng.map(toRad);
-        const y = Math.sin(lng2 - lng1) * Math.cos(lat2);
-        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1);
-        marker._opHeading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+        marker._opHeading = OperatorUi.bearing(from, latLng);
         marker._opAnchor = latLng;
       }
       applyHeading(marker);
@@ -108,31 +109,53 @@ OperatorRouter.register('fleet', {
 
     function popupHtml(v) {
       const ping = v.last_position?.timestamp ? OperatorUi.timeAgo(v.last_position.timestamp) : 'No GPS yet';
-      // Driver monitoring entry point from the map (see the popupopen hook below).
+      const from = v.last_position?.source === 'phone' ? " (driver's phone: tracker offline)" : '';
+      // Driver monitoring and playback from the map (see the click hook below).
       const activity = v.driver_id
-        ? `<br><button type="button" class="btn-sm btn-sm--teal" style="margin-top:6px;"
+        ? `<button type="button" class="btn-sm btn-sm--teal"
              data-driver-activity="${esc(v.driver_id)}" data-plate="${esc(v.plate_number)}">Driver activity</button>`
         : '';
+      const route = routes.find((r) => r.id === v.route_id);
+      const hidden = route && !route.is_active
+        ? '<br><span style="color:var(--op-amber);">Route inactive: commuters can\'t see this PUV.</span>' : '';
       return `<strong>${esc(v.plate_number)}</strong><br>${esc(routeLabel(v.route_id))}<br>
-        Status: ${esc(v.suspended ? 'suspended' : v.status)}<br>Last GPS: ${esc(ping)}${activity}`;
+        Status: ${esc(v.suspended ? 'suspended' : STATUS_LABEL[markerStatus(v)])}<br>Last GPS: ${esc(ping)}${esc(from)}${hidden}
+        <div style="display:flex;gap:6px;margin-top:6px;">${activity}
+          <button type="button" class="btn-sm" data-playback="${esc(v.vehicle_id)}">Playback</button></div>`;
     }
 
-    // "Driver activity" inside a vehicle popup. Listened for on the map in the
-    // capture phase: Leaflet stops clicks in popups from bubbling, and the
-    // popup's content is refreshed with live GPS, which would drop a listener
+    // Buttons inside a vehicle popup. Listened for on the map in the capture
+    // phase: Leaflet stops clicks in popups from bubbling, and the popup's
+    // content is refreshed with live GPS, which would drop a listener
     // attached to the button itself.
     if (map) {
       map.getContainer().addEventListener('click', (e) => {
-        const btn = e.target.closest?.('[data-driver-activity]');
-        if (!btn) return;
-        e.preventDefault();
-        DriverActivity.open(btn.dataset.driverActivity, { title: `Driver of ${btn.dataset.plate} — Activity` });
+        const activity = e.target.closest?.('[data-driver-activity]');
+        const playback = e.target.closest?.('[data-playback]');
+        if (activity) {
+          e.preventDefault();
+          DriverActivity.open(activity.dataset.driverActivity, { title: `Driver of ${activity.dataset.plate} — Activity` });
+        } else if (playback) {
+          e.preventDefault();
+          try { sessionStorage.setItem(PLAYBACK_VEHICLE_KEY, playback.dataset.playback); } catch { /* private mode */ }
+          location.hash = '#/playback';
+        }
       }, true);
     }
 
-    function markerStatus(v) {
-      return v.suspended ? 'inactive' : v.status;
+    function gpsLive(v, now = Date.now()) {
+      const t = OperatorUi.parseDate(v.last_position?.timestamp);
+      return Boolean(t) && now - t <= GPS_LIVE_MS;
     }
+
+    /** What the map shows: the operator's maintenance / inactive first, then whether GPS is live. */
+    function markerStatus(v, now = Date.now()) {
+      if (v.suspended) return 'inactive';
+      if (v.status === 'maintenance' || v.status === 'inactive') return v.status;
+      return gpsLive(v, now) ? 'active' : 'signal_lost';
+    }
+
+    const STATUS_LABEL = { active: 'GPS live', signal_lost: 'GPS off / signal lost', maintenance: 'maintenance', inactive: 'inactive' };
 
     function drawVehicles({ fit = false } = {}) {
       if (!map) return;
@@ -184,17 +207,17 @@ OperatorRouter.register('fleet', {
         return;
       }
       const count = (fn) => fleet.filter(fn).length;
-      const inService = count((v) => v.status === 'active' && !v.suspended && v.route_status !== 'suspended');
+      const inService = count((v) => markerStatus(v) === 'active' && v.route_status !== 'suspended');
       const now = Date.now();
       const reporting = count((v) => {
         const t = OperatorUi.parseDate(v.last_position?.timestamp);
         return t && now - t <= RECENT_PING_MS;
       });
       const chips = [
-        ['Active', count((v) => v.status === 'active' && !v.suspended), 'green'],
+        ['Active', count((v) => markerStatus(v) === 'active'), 'green'],
         ['Maintenance', count((v) => v.status === 'maintenance'), 'amber'],
         ['Inactive', count((v) => v.status === 'inactive'), ''],
-        ['Signal lost', count((v) => v.status === 'signal_lost'), 'red'],
+        ['GPS off', count((v) => !v.suspended && markerStatus(v) === 'signal_lost'), 'red'],
         ['Suspended', count((v) => v.suspended), 'red'],
       ].filter(([, n]) => n > 0);
 
@@ -374,10 +397,13 @@ OperatorRouter.register('fleet', {
     // New feedback shows up without reloading the page.
     const refreshFeedback = () => loadFeedback().then((list) => { if (!stopped) renderFeedback(list); }).catch(() => {});
     const poll = setInterval(() => { loadFleet(); refreshFeedback(); }, POLL_MS);
+    // A tracker that stops sending turns red within ~15 s, between polls.
+    const staleCheck = setInterval(() => { drawVehicles(); renderVehicles(); }, 15000);
 
     return () => {
       stopped = true;
       clearInterval(poll);
+      clearInterval(staleCheck);
       clearTimeout(reconnectTimer);
       if (socket) socket.close();
       if (map) map.remove();

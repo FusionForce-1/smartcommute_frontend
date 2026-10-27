@@ -7,9 +7,10 @@
 //     connection drops, so the map doesn't silently stop updating.
 //
 //   GpsIngestionSession  — driver side, WSS /ws/gps/{vehicle_id}
-//     Streams device fixes as JSON frames {"lat","lng","spd","hdg","ts"}.
-//     spd is km/h, hdg is degrees from north, ts is the device fix time
-//     (ISO 8601 UTC); the backend stores and re-broadcasts ts as-is.
+//     The driver's phone as a backup for the jeep's tracker: it streams
+//     during a shift, and the backend uses its fixes only while the tracker
+//     is offline. Frames are JSON {"lat","lng","spd","hdg","ts"}: spd in
+//     km/h, hdg in degrees from north, ts the device fix time (ISO 8601 UTC).
 //
 // The driver's access token goes in the subprotocols ("bearer", <token>):
 // browsers can't set headers on a WebSocket. Tokens last 15 minutes, so
@@ -26,7 +27,6 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/env_config.dart';
@@ -132,7 +132,7 @@ class WebSocketService {
 // DRIVER — GPS ingestion
 // =================================================================
 
-enum GpsSessionState { idle, connecting, live, reconnecting, paused, error }
+enum GpsSessionState { idle, connecting, live, reconnecting, error }
 
 /// Returns a current (refreshed if needed) access token, or null.
 typedef AccessTokenProvider = Future<String?> Function();
@@ -156,38 +156,20 @@ class GpsIngestionSession extends ChangeNotifier {
   String? _error;
   Position? _lastFix;
   DateTime? _lastSentAt;
-  int _framesSent = 0;
-  LatLng? _lastSentPoint;
-  double _distanceMetres = 0;
 
   WebSocketChannel? _channel;
   StreamSubscription<Position>? _positionSub;
   StreamSubscription? _socketSub;
   Timer? _keepaliveTimer;
   Timer? _reconnectTimer;
-  Timer? _pauseTimer;
   int _reconnectAttempt = 0;
   bool _active = false;
-  bool _paused = false;
 
   GpsSessionState get state => _state;
   String? get vehicleId => _vehicleId;
   String? get error => _error;
   Position? get lastFix => _lastFix;
-  DateTime? get lastSentAt => _lastSentAt;
-  int get framesSent => _framesSent;
   bool get isActive => _active;
-
-  /// Metres between the frames sent since [resetDistance]: the same hops
-  /// the backend adds up over the fixes it stored. Kept across stop/start,
-  /// so switching the broadcast off and on mid-shift doesn't lose it.
-  double get distanceMetres => _distanceMetres;
-
-  /// Counts from zero again, e.g. for a new shift.
-  void resetDistance() {
-    _distanceMetres = 0;
-    _lastSentPoint = null;
-  }
 
   /// Starts streaming this device's location for [vehicleId].
   /// Throws if location permission is denied or services are off.
@@ -198,7 +180,6 @@ class GpsIngestionSession extends ChangeNotifier {
     _active = true;
     _vehicleId = vehicleId;
     _error = null;
-    _framesSent = 0;
     _reconnectAttempt = 0;
 
     _positionSub = Geolocator.getPositionStream(
@@ -217,10 +198,8 @@ class GpsIngestionSession extends ChangeNotifier {
 
   Future<void> stop() async {
     _active = false;
-    _paused = false;
     _keepaliveTimer?.cancel();
     _reconnectTimer?.cancel();
-    _pauseTimer?.cancel();
     await _positionSub?.cancel();
     await _socketSub?.cancel();
     await _channel?.sink.close();
@@ -228,22 +207,6 @@ class GpsIngestionSession extends ChangeNotifier {
     _socketSub = null;
     _channel = null;
     _setState(GpsSessionState.idle);
-  }
-
-  /// Stops sending frames (socket stays open) so the backend watchdog
-  /// fires signal_lost. Sending resumes automatically afterwards, which
-  /// should re-arm the watchdog and flip the vehicle back to active.
-  void simulateSignalLoss({Duration duration = const Duration(seconds: 40)}) {
-    if (!_active) return;
-    _pauseTimer?.cancel();
-    _paused = true;
-    _setState(GpsSessionState.paused);
-    _pauseTimer = Timer(duration, () {
-      _paused = false;
-      if (!_active) return;
-      _setState(_channel != null ? GpsSessionState.live : GpsSessionState.reconnecting);
-      _sendLastFix();
-    });
   }
 
   Future<void> _ensureLocationPermission() async {
@@ -287,7 +250,7 @@ class GpsIngestionSession extends ChangeNotifier {
     _channel = channel;
     _reconnectAttempt = 0;
     _error = null;
-    _setState(_paused ? GpsSessionState.paused : GpsSessionState.live);
+    _setState(GpsSessionState.live);
 
     _socketSub = channel.stream.listen(
       (_) {}, // server doesn't send anything on this socket
@@ -340,26 +303,10 @@ class GpsIngestionSession extends ChangeNotifier {
   void _sendLastFix() {
     final fix = _lastFix;
     final channel = _channel;
-    if (fix == null || channel == null || _paused) {
-      return;
-    }
+    if (fix == null || channel == null) return;
     channel.sink.add(jsonEncode(encodeFix(fix)));
     _lastSentAt = DateTime.now();
-    _framesSent++;
-    countSent(fix);
     notifyListeners();
-  }
-
-  /// Haversine, as the backend's shift summary uses.
-  static const _distance = Distance(roundResult: false, calculator: Haversine());
-
-  /// Adds the hop from the previous frame sent to [fix].
-  @visibleForTesting
-  void countSent(Position fix) {
-    final here = LatLng(fix.latitude, fix.longitude);
-    final previous = _lastSentPoint;
-    if (previous != null) _distanceMetres += _distance.as(LengthUnit.Meter, previous, here);
-    _lastSentPoint = here;
   }
 
   /// JSON frame accepted by the backend's gps_ingestion handler.

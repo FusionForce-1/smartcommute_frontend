@@ -1,8 +1,9 @@
 // lib/screens/driver/driver_dashboard.dart
 //
-// Driver dashboard shell: owns the driver's state (shift, GPS broadcast,
-// live feed) for as long as the dashboard is open, and handles sign-out.
-// The screen itself is DriverDashboardView.
+// Driver dashboard shell: owns the driver's state (shift, backup phone GPS,
+// live feed) for as long as the dashboard is open, checks for shift
+// changes from the operator, and handles sign-out. The screen itself is
+// DriverDashboardView.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -32,11 +33,12 @@ class _DriverDashboardState extends State<DriverDashboard> {
   void initState() {
     super.initState();
     _driver.load();
+    _driver.startAutoRefresh();
   }
 
   @override
   void dispose() {
-    _driver.dispose(); // also stops the GPS broadcast
+    _driver.dispose(); // also stops the phone's GPS
     super.dispose();
   }
 

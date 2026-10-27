@@ -8,6 +8,7 @@ const OperatorApp = (() => {
 
   const NAV_ITEMS = [
     { route: 'fleet', label: 'Fleet Map', icon: 'navFleetMap' },
+    { route: 'playback', label: 'Playback', icon: 'navPlayback' },
     { route: 'routes', label: 'Routes & Stops', icon: 'navRoutes' },
     { route: 'vehicles', label: 'Vehicles', icon: 'navVehicles' },
     { route: 'drivers', label: 'Drivers', icon: 'navDrivers' },
@@ -19,9 +20,10 @@ const OperatorApp = (() => {
 
   const HELP_TOPICS = [
     ['Fleet Map', 'Live vehicle positions on the map, plus your active vehicles, route alerts and recent commuter feedback.'],
+    ['Playback', 'Replay where a vehicle went in the last 24 hours, at up to 60× speed.'],
     ['Routes & Stops', 'Add and edit routes, fares and stops. New routes start inactive until you are ready to begin service.'],
     ['Vehicles', 'Register vehicles, assign them to routes and drivers, and manage their GPS trackers.'],
-    ['Drivers', 'Add a driver by scanning both sides of their license, then hand them the app login shown once after saving.'],
+    ['Drivers', 'Add a driver by scanning both sides of their license, then hand them the app login shown once after saving. You also start and end each shift here; the driver app follows.'],
     ['Announcements', 'Publish transit alerts to notify commuters and drivers about service changes.'],
     ['Reports', 'Fleet and service figures, and revenue from the daily remittances you record for each vehicle.'],
     ['Subscription (top-right button)', 'Your first 3 months are free. After that the plan is ₱1,000 a year, paid with PayPal, for unlimited vehicles.'],

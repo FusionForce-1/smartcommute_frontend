@@ -1,11 +1,19 @@
 // lib/providers/driver_provider.dart
 //
-// State behind the Driver Dashboard: who the driver is, the vehicle they
-// drive, their shift, duty status, crowd and passenger reports, the GPS
-// broadcast, and the next stop / ETA the backend works out from it.
+// State behind the Driver Dashboard: who the driver is, their assigned
+// vehicles and routes, the shift their operator started, crowd and
+// passenger reports during it, and their updates (notifications).
 //
-// Taps update the screen straight away and are rolled back if the server
-// refuses them. Actions return null on success or a message to show.
+// The operator starts and ends shifts in the portal; [refresh] (every
+// [refreshInterval] once [startAutoRefresh] is called, and right away when
+// the live feed says the shift ended) follows them. While a shift is open
+// the phone shares its location as a backup: the backend only uses it while
+// the jeep's tracker is offline. Which of the two the jeep's position is
+// coming from is read from the live feed ([jeepGps]).
+//
+// Crowd and passenger taps update the screen straight away and are rolled
+// back if the server refuses them. Actions return null on success or a
+// message to show.
 
 import 'dart:async';
 import 'dart:convert';
@@ -14,47 +22,58 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../models/driver_dashboard.dart';
+import '../models/transport_model.dart';
 import '../models/vehicle_live_update.dart';
 import '../services/api_error.dart';
 import '../services/driver_service.dart';
 import '../services/websocket_service.dart';
 import 'load_state.dart';
 
+/// Where the jeep's live position is coming from.
+enum JeepGps { tracker, phone, none }
+
 class DriverProvider extends ChangeNotifier {
   DriverProvider(
     this._service, {
     GpsIngestionSession? gps,
     WebSocketService? liveFeed,
+    this.refreshInterval = const Duration(seconds: 20),
+    DateTime Function()? clock,
   })  : gps = gps ?? GpsIngestionSession(accessToken: _service.freshAccessToken),
-        _liveFeed = liveFeed {
+        _liveFeed = liveFeed,
+        _now = clock ?? DateTime.now {
     this.gps.addListener(notifyListeners);
   }
 
   final DriverService _service;
 
-  /// For screens that load extra data, e.g. the route line on the map.
-  DriverService get service => _service;
-
-  /// Streams this device's location for the shift's vehicle.
+  /// The phone's GPS, shared while a shift is open (the tracker's backup).
   final GpsIngestionSession gps;
 
-  /// Commuter-side broadcast, used here for our own vehicle's next stop.
+  /// Commuter-side broadcast, used here for our own jeep.
   final WebSocketService? _liveFeed;
 
-  static const String noShiftMessage = 'Start your shift first.';
-  static const String noTrackerMessage =
-      'No GPS tracker is set up for this vehicle. Ask your operator.';
+  final Duration refreshInterval;
+  final DateTime Function() _now;
+
+  static const String noShiftMessage = "Your operator hasn't started your shift yet.";
+
+  /// No live fix for this long and the jeep counts as having no GPS.
+  static const Duration liveFresh = Duration(seconds: 30);
 
   LoadState _loadState = LoadState.idle;
   String? _loadError;
   DriverDashboardData? _data;
-  String? _selectedVehicleId;
   DriverShift? _shift;
-  DutyStatus _dutyStatus = DutyStatus.unavailable;
   int _crowdPercent = 0;
-  bool _busy = false;
+  List<DriverUpdate> _updates = const [];
   VehicleLiveUpdate? _live;
+  DateTime? _liveAt;
+  String? _gpsError;
   bool _liveStarted = false;
+  bool _refreshing = false;
+  Timer? _timer;
+  final Map<String, Future<TransportRoute?>> _routeLines = {};
 
   LoadState get loadState => _loadState;
   String? get loadError => _loadError;
@@ -62,136 +81,141 @@ class DriverProvider extends ChangeNotifier {
   List<AssignedVehicle> get vehicles => _data?.vehicles ?? const [];
   DriverShift? get shift => _shift;
   bool get onShift => _shift != null;
-  DutyStatus get dutyStatus => _dutyStatus;
   int get crowdPercent => _crowdPercent;
+  List<DriverUpdate> get updates => _updates;
+  int get unreadUpdates => _updates.where((u) => !u.isRead).length;
 
-  /// True while a shift is starting or ending.
-  bool get busy => _busy;
+  /// Why the phone isn't sharing its location (e.g. permission denied), if so.
+  String? get gpsError => _gpsError;
 
-  bool get broadcasting => gps.isActive;
-
-  /// Live broadcast needs a GPS tracker set up on the vehicle.
-  bool get canBroadcast => vehicle?.hasTracker ?? false;
-
-  /// Kilometres driven this shift: what the server had stored when the
-  /// dashboard loaded, plus the hops this device has sent since.
-  double get distanceKm {
-    final shift = _shift;
-    return shift == null ? 0 : shift.distanceKm + gps.distanceMetres / 1000;
-  }
-
-  /// The vehicle being driven (during a shift) or picked for the next one.
+  /// The shift's vehicle, else the first one assigned.
   AssignedVehicle? get vehicle {
-    final id = _shift?.vehicleId ?? _selectedVehicleId;
-    for (final v in vehicles) {
+    final list = vehicles;
+    final id = _shift?.vehicleId;
+    for (final v in list) {
       if (v.id == id) return v;
     }
-    return null;
+    return list.isEmpty ? null : list.first;
   }
 
-  /// Next stop and ETA for our vehicle, once it is broadcasting.
+  /// Our jeep's latest live frame (position, next stop, ETA).
   VehicleLiveUpdate? get live => _live?.vehicleId == vehicle?.id ? _live : null;
+
+  JeepGps get jeepGps {
+    final live = this.live;
+    final at = _liveAt;
+    if (live == null || at == null || live.isSignalLost || _now().difference(at) > liveFresh) {
+      return JeepGps.none;
+    }
+    return live.source == 'phone' ? JeepGps.phone : JeepGps.tracker;
+  }
 
   // ── Loading ─────────────────────────────────────────────────
 
+  /// Loads the dashboard (a spinner the first time only) and follows the shift.
   Future<void> load() async {
-    final firstLoad = _data == null;
-    if (firstLoad) {
+    if (_refreshing) return;
+    _refreshing = true;
+    if (_data == null) {
       _loadState = LoadState.loading;
       notifyListeners();
     }
     try {
       final data = await _service.dashboard();
+      final shiftChanged = data.shift?.id != _shift?.id;
       _data = data;
       _shift = data.shift;
-      // The server's distance already covers what this device sent.
-      gps.resetDistance();
-      _dutyStatus = data.dutyStatus;
-      _crowdPercent = data.shift?.crowdPercent ?? 0;
-      final ids = data.vehicles.map((v) => v.id);
-      if (!ids.contains(_selectedVehicleId)) {
-        _selectedVehicleId = data.vehicles.isEmpty ? null : data.vehicles.first.id;
+      if (shiftChanged) {
+        _crowdPercent = data.shift?.crowdPercent ?? 0;
+        if (data.shift == null) _live = null;
       }
       _loadState = LoadState.ready;
       _loadError = null;
       _listenForLiveUpdates();
+      notifyListeners();
+      await _syncPhoneGps();
+      await loadUpdates();
     } catch (e) {
       _loadError = apiErrorMessage(e);
       if (_data == null) _loadState = LoadState.error;
-    }
-    notifyListeners();
-
-    // A shift still running from before the app was closed or reloaded:
-    // without GPS its distance and trips can't be worked out. Only on
-    // opening, so a refresh doesn't undo the driver switching it off.
-    if (firstLoad && onShift && !gps.isActive) await setBroadcasting(true);
-  }
-
-  void selectVehicle(String id) {
-    if (onShift || id == _selectedVehicleId) return;
-    _selectedVehicleId = id;
-    notifyListeners();
-  }
-
-  // ── Shift ───────────────────────────────────────────────────
-
-  /// Starts a shift on the picked vehicle and turns on the GPS broadcast.
-  Future<String?> startShift() async {
-    final vehicleId = vehicle?.id;
-    if (vehicleId == null) return 'No vehicle is assigned to you yet. Ask your operator.';
-    if (_busy) return null;
-    _setBusy(true);
-    try {
-      _shift = await _service.startShift(vehicleId);
-      gps.resetDistance();
-      _dutyStatus = DutyStatus.onRoute;
-      _crowdPercent = 0;
-    } catch (e) {
-      _setBusy(false);
-      return apiErrorMessage(e);
-    }
-    _setBusy(false);
-
-    final gpsError = await setBroadcasting(true);
-    return gpsError == null ? null : 'Shift started, but GPS is off: $gpsError';
-  }
-
-  /// Stops the broadcast and ends the shift. Returns its summary, or an error.
-  Future<({ShiftSummary? summary, String? error})> endShift() async {
-    if (!onShift) return (summary: null, error: noShiftMessage);
-    _setBusy(true);
-    await gps.stop();
-    try {
-      final summary = await _service.endShift();
-      _shift = null;
-      _dutyStatus = DutyStatus.unavailable;
-      _crowdPercent = 0;
-      _live = null;
-      return (summary: summary, error: null);
-    } catch (e) {
-      return (summary: null, error: apiErrorMessage(e));
+      notifyListeners();
     } finally {
-      _setBusy(false);
+      _refreshing = false;
     }
+  }
+
+  /// Same as [load]: the operator may have started or ended the shift.
+  Future<void> refresh() => load();
+
+  /// Checks for shift changes every [refreshInterval] while the dashboard is open.
+  void startAutoRefresh() {
+    _timer?.cancel();
+    _timer = Timer.periodic(refreshInterval, (_) => refresh());
+  }
+
+  Future<void> loadUpdates() async {
+    try {
+      _updates = await _service.updates();
+      notifyListeners();
+    } catch (_) {
+      // Updates are extra: keep showing the last ones.
+    }
+  }
+
+  Future<void> markUpdatesRead() async {
+    if (unreadUpdates == 0) return;
+    final before = _updates;
+    _updates = [
+      for (final u in _updates)
+        DriverUpdate(id: u.id, kind: u.kind, title: u.title, body: u.body, createdAt: u.createdAt, isRead: true),
+    ];
+    notifyListeners();
+    try {
+      await _service.markUpdatesRead();
+    } catch (_) {
+      _updates = before;
+      notifyListeners();
+    }
+  }
+
+  /// The route's line and stops for the map, fetched once; null if it has none
+  /// (a failed fetch is tried again next time).
+  Future<TransportRoute?> routeLine(String routeId) {
+    return _routeLines[routeId] ??= _service.route(routeId).then<TransportRoute?>(
+      (route) => route,
+      onError: (Object _) {
+        _routeLines.remove(routeId);
+        return null;
+      },
+    );
+  }
+
+  // ── Phone GPS (the tracker's backup) ────────────────────────
+
+  Future<void> _syncPhoneGps() async {
+    final shift = _shift;
+    if (shift == null) {
+      if (gps.isActive) await gps.stop();
+      _gpsError = null;
+      return;
+    }
+    if (gps.isActive || _gpsError != null) return;   // a refused permission isn't asked again by itself
+    try {
+      await gps.start(shift.vehicleId);
+    } catch (e) {
+      _gpsError = e.toString().replaceFirst('Exception: ', '');
+      notifyListeners();
+    }
+  }
+
+  /// "Try again" after turning location on.
+  Future<void> retryPhoneGps() async {
+    _gpsError = null;
+    notifyListeners();
+    await _syncPhoneGps();
   }
 
   // ── Reports during a shift ──────────────────────────────────
-
-  Future<String?> setDutyStatus(DutyStatus status) async {
-    if (status == _dutyStatus) return null;
-    if (!onShift && status != DutyStatus.unavailable) return noShiftMessage;
-    final previous = _dutyStatus;
-    _dutyStatus = status;
-    notifyListeners();
-    try {
-      await _service.setDutyStatus(status);
-      return null;
-    } catch (e) {
-      _dutyStatus = previous;
-      notifyListeners();
-      return apiErrorMessage(e);
-    }
-  }
 
   /// Moves the slider without saving (called while dragging).
   void previewCrowd(int percent) {
@@ -235,25 +259,7 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// Turns the GPS broadcast on or off; only during a shift, and only on a
-  /// vehicle with a GPS tracker set up.
-  Future<String?> setBroadcasting(bool on) async {
-    final vehicleId = _shift?.vehicleId;
-    if (on && vehicleId == null) return noShiftMessage;
-    if (on && !canBroadcast) return noTrackerMessage;
-    if (!on) {
-      await gps.stop();
-      return null;
-    }
-    try {
-      await gps.start(vehicleId!);
-      return null;
-    } catch (e) {
-      return e.toString().replaceFirst('Exception: ', '');
-    }
-  }
-
-  // ── Internals ───────────────────────────────────────────────
+  // ── Live feed ───────────────────────────────────────────────
 
   void _listenForLiveUpdates() {
     final feed = _liveFeed;
@@ -262,24 +268,31 @@ class DriverProvider extends ChangeNotifier {
     feed.connect();
     feed.listenForMessages((message) {
       final json = jsonDecode(message as String) as Map<String, dynamic>;
-      final update = VehicleLiveUpdate.fromJson(json);
-      if (update.vehicleId != vehicle?.id) return;
-      final current = _live;
-      // merge() returns null for an older fix that arrived late.
-      final next = current == null || current.vehicleId != update.vehicleId ? update : current.merge(update);
-      if (next == null) return;
-      _live = next;
-      notifyListeners();
+      if (json['vehicle_id'] is! String) return;   // e.g. transit alerts
+      onLiveFrame(VehicleLiveUpdate.fromJson(json));
     });
   }
 
-  void _setBusy(bool value) {
-    _busy = value;
+  /// One frame from the live feed (public for tests).
+  @visibleForTesting
+  void onLiveFrame(VehicleLiveUpdate update) {
+    if (update.vehicleId != vehicle?.id) return;
+    if (update.shiftEnded) {
+      unawaited(refresh());   // the operator ended the shift
+      return;
+    }
+    final current = _live;
+    // merge() returns null for an older fix that arrived late.
+    final next = current == null || current.vehicleId != update.vehicleId ? update : current.merge(update);
+    if (next == null) return;
+    _live = next;
+    if (update.location != null) _liveAt = _now();
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     gps.removeListener(notifyListeners);
     gps.dispose();
     _liveFeed?.disconnect();

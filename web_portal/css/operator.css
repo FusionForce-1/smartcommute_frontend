@@ -1041,3 +1041,42 @@
   .rp-row input { grid-column: 1 / -1; }
   .rp-map { height: 280px; }
 }
+
+/* ---------- Playback ---------- */
+
+.op-pb-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.op-pb-controls .op-field {
+  min-width: 180px;
+  margin: 0;
+}
+
+.op-pb-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.op-pb-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.op-pb-player input[type="range"] {
+  flex: 1 1 240px;
+  accent-color: #3B8A9E;
+}
+
+.op-pb-readout {
+  flex-basis: 100%;
+  color: var(--op-muted);
+  font-variant-numeric: tabular-nums;
+}

@@ -1,10 +1,16 @@
-// The Driver Dashboard against a fake backend. The Shift Active card
-// animates forever (live dot), so these pump fixed durations instead of
-// pumpAndSettle.
+// The Driver Dashboard against a fake backend. The shift card animates
+// forever (live dot), so these pump fixed durations instead of pumpAndSettle.
+
+import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/providers/driver_provider.dart';
 import 'package:smartcommute_app/screens/driver/driver_dashboard_view.dart';
 import 'package:smartcommute_app/services/driver_service.dart';
@@ -18,7 +24,10 @@ Future<DriverProvider> pumpDashboard(WidgetTester tester, Map<String, Object?> r
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
 
-  final driver = DriverProvider(DriverService(fakeDio(fakeBackend(routes))), gps: FakeGpsSession());
+  final driver = DriverProvider(
+    DriverService(fakeDio(fakeBackend({'GET /notifications': <Map<String, dynamic>>[], ...routes}))),
+    gps: FakeGpsSession(),
+  );
   await tester.runAsync(driver.load);
   await tester.pumpWidget(MaterialApp(
     home: ChangeNotifierProvider.value(
@@ -26,101 +35,98 @@ Future<DriverProvider> pumpDashboard(WidgetTester tester, Map<String, Object?> r
       child: DriverDashboardView(onSignOut: () {}),
     ),
   ));
+  await settle(tester);   // the map's route request
   return driver;
 }
 
-/// Scrolls the screen's list until [finder] is built and fully on screen.
-Future<void> reveal(WidgetTester tester, Finder finder) async {
-  await tester.scrollUntilVisible(finder, 200, scrollable: find.byType(Scrollable).first);
-  await tester.ensureVisible(finder);
-  await tester.pump();
-}
-
-/// Taps [finder], then lets chained work finish: the fake backend answers
-/// on real time, and animations / navigation need frames in between.
-Future<void> tapAndWait(WidgetTester tester, Finder finder, {bool scroll = true}) async {
-  if (scroll) await reveal(tester, finder);
-  await tester.tap(finder);
+/// Lets the fake backend (real time) answer and the frames after it run.
+Future<void> settle(WidgetTester tester) async {
   for (var i = 0; i < 3; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
     await tester.pump(const Duration(milliseconds: 300));
   }
 }
 
+/// Scrolls the screen's list until [finder] is built and on screen. Scrolls
+/// the list itself: a drag could land on the map and pan it instead.
+Future<void> reveal(WidgetTester tester, Finder finder) async {
+  final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+  while (finder.evaluate().isEmpty && position.pixels < position.maxScrollExtent) {
+    position.jumpTo(math.min(position.pixels + 200, position.maxScrollExtent));
+    await tester.pump();
+  }
+  await tester.ensureVisible(finder);
+  await tester.pump();
+}
+
+/// Taps [finder], then lets the fake backend answer.
+Future<void> tapAndWait(WidgetTester tester, Finder finder) async {
+  await reveal(tester, finder);
+  await tester.tap(finder);
+  await settle(tester);
+}
+
 void main() {
-  testWidgets('shows the driver, their vehicle and START SHIFT', (tester) async {
+  setUp(() {
+    dotenv.loadFromString(envString: 'API_BASE_URL=http://test');
+    // The map's tile cache asks path_provider for a folder; tests have no plugins.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => Directory.systemTemp.path,
+    );
+  });
+
+  testWidgets('off shift: the map, the driver, their route, and no shift controls', (tester) async {
     await pumpDashboard(tester, {'GET /drivers/me': dashboardJson()});
 
     expect(find.text('Driver Dashboard'), findsOneWidget);
     expect(find.text('Juan Dela Cruz'), findsOneWidget);
-    expect(find.text('Route: J02'), findsOneWidget);
-    expect(find.text('Vehicle: ABC 123'), findsOneWidget);
-    expect(find.text('Share your location with commuters'), findsOneWidget);
-    expect(find.text('0% Full'), findsOneWidget);
-    await reveal(tester, find.text('View My Route on Map'));
-    expect(find.text('START SHIFT'), findsOneWidget);
+    expect(find.byTooltip('Full screen'), findsOneWidget);
+    await reveal(tester, find.byKey(const Key('offShift')));
+    expect(find.text('Not on shift'), findsOneWidget);
+    expect(find.text('START SHIFT'), findsNothing);
+    expect(find.text('Crowd Activity Estimate'), findsNothing);
+    await reveal(tester, find.text('My Route'));
+    expect(find.text('J02 · ABC 123'), findsOneWidget);
   });
 
-  testWidgets('without a GPS tracker the broadcast switch is off and disabled', (tester) async {
+  testWidgets('on shift: no END SHIFT, but crowd and passengers', (tester) async {
     await pumpDashboard(tester, {
-      'GET /drivers/me': dashboardJson(vehicles: [vehicleJson(hasTracker: false)]),
-    });
-
-    expect(find.text('No GPS tracker is set up for this vehicle. Ask your operator.'), findsOneWidget);
-    final gpsSwitch = tester.widget<Switch>(find.byType(Switch).first);
-    expect(gpsSwitch.value, isFalse);
-    expect(gpsSwitch.onChanged, isNull);
-  });
-
-  testWidgets('reporting a status before the shift asks to start it', (tester) async {
-    await pumpDashboard(tester, {'GET /drivers/me': dashboardJson()});
-
-    await tapAndWait(tester, find.text('Delayed'));
-
-    expect(find.text('Start your shift first.'), findsOneWidget);
-  });
-
-  testWidgets('a full shift: start, count a passenger, end, see the summary', (tester) async {
-    await pumpDashboard(tester, {
-      'GET /drivers/me': dashboardJson(),
-      'POST /drivers/me/shift': shiftJson(),
+      'GET /drivers/me': dashboardJson(shift: shiftJson()),
       'POST /drivers/me/shift/passengers': {'passengers': 1},
-      'POST /drivers/me/shift/end': summaryJson(),
     });
 
-    await tapAndWait(tester, find.text('START SHIFT'));
-    await reveal(tester, find.text('END SHIFT'));
-    expect(find.text('Shift Active'), findsOneWidget);
+    await reveal(tester, find.byKey(const Key('onShift')));
+    expect(find.text('On Shift'), findsOneWidget);
+    expect(find.text('END SHIFT'), findsNothing);
 
     await tapAndWait(tester, find.text('1 Passenger'));
     expect(find.text('Passengers: 1'), findsOneWidget);
-
-    await tapAndWait(tester, find.text('END SHIFT'));
-    expect(find.text('End Shift?'), findsOneWidget);
-    await tapAndWait(tester, find.widgetWithText(FilledButton, 'End Shift'), scroll: false);
-
-    expect(find.text('Shift Complete'), findsOneWidget);
-    expect(find.text('01:20:04'), findsOneWidget);
-    expect(find.text('1.1km'), findsOneWidget);
-    expect(find.text('15'), findsOneWidget);
-    expect(find.text('Route J02 Summary'), findsOneWidget);
-    expect(find.text('Talamban → Pier 1 Terminal'), findsOneWidget);
-    expect(find.text('60% avg occupancy'), findsOneWidget);
-    expect(find.text('Active throughout shift'), findsOneWidget);
-
-    await tapAndWait(tester, find.text('Start New Shift'), scroll: false);
-    await reveal(tester, find.text('START SHIFT'));
-    expect(find.text('START SHIFT'), findsOneWidget);
+    await reveal(tester, find.text('Crowd Activity Estimate'));
+    expect(find.text('0% Full'), findsOneWidget);
   });
 
-  testWidgets('a shift in progress shows the distance driven so far', (tester) async {
+  testWidgets('the shift card says where the GPS is coming from', (tester) async {
+    final driver = await pumpDashboard(tester, {'GET /drivers/me': dashboardJson(shift: shiftJson())});
+    await reveal(tester, find.byKey(const Key('jeepGps')));
+    expect(find.text('No GPS from the jeep right now'), findsOneWidget);
+
+    driver.onLiveFrame(const VehicleLiveUpdate(
+        vehicleId: 'v1', status: 'en_route', location: LatLng(10.3, 123.9), source: 'phone'));
+    await tester.pump();
+
+    expect(find.text("Tracker offline — sharing your phone's location"), findsOneWidget);
+  });
+
+  testWidgets('updates from the operator are listed', (tester) async {
     await pumpDashboard(tester, {
-      'GET /drivers/me': dashboardJson(shift: shiftJson(distanceKm: 4.2), dutyStatus: 'on_route'),
+      'GET /drivers/me': dashboardJson(shift: shiftJson()),
+      'GET /notifications': [updateJson()],
     });
 
-    await reveal(tester, find.text('Distance: 4.2 km'));
-
-    expect(find.text('Distance: 4.2 km'), findsOneWidget);
+    await reveal(tester, find.text('Updates'));
+    expect(find.text('Your shift started'), findsOneWidget);
+    expect(find.text('Mark all read'), findsOneWidget);
   });
 
   testWidgets('a failed first load offers a retry', (tester) async {

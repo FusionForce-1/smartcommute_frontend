@@ -1,20 +1,14 @@
 // lib/services/api_service.dart
 //
-// This is your F1 file. Every method here does the same 3 things:
-//   1. Call `_dio.get/post/patch/delete(...)` with the right endpoint
-//   2. Convert the raw JSON response into a typed model (from models.dart)
-//   3. Let DioException bubble up uncaught — the SCREEN that calls this
-//      method should wrap it in try/catch and show an error, since only
-//      the screen knows how to display that error appropriately.
-//      (The DioInterceptor from Step 2 already handles token refresh
-//      and 401/403 transparently underneath, so you don't repeat that
-//      logic here.)
+// Sign-in, registration and password reset, plus the general API calls.
+// Each method calls an endpoint, turns the JSON into a model (models.dart)
+// and lets a DioException through: the screen that called it shows the
+// error. DioInterceptor refreshes tokens underneath.
 
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 import 'dio_interceptor.dart';
-import 'mock_auth_adapter.dart';
 
 /// Thrown by [ApiService.login] when the account has two-factor
 /// authentication on: a code was emailed and must be confirmed with
@@ -35,30 +29,19 @@ class TwoFactorRequired implements Exception {
 class ApiService {
   final Dio _dio;
   final FlutterSecureStorage _secureStorage;
-  final MockAuthAdapter _authMocks;
-
-  /// TODO: Velez — set to false when FastAPI auth endpoints are live.
-  /// Keep mocks inside this Francis-owned service layer, never in main.dart.
-  static const bool useAuthMocks = false;
 
   // Constructor takes the pre-configured Dio from dio_interceptor.dart
   // rather than building its own — this way there's only ONE Dio
   // instance (with the interceptor attached) for the whole app.
   ApiService({Dio? dio, FlutterSecureStorage? secureStorage})
       : _dio = dio ?? buildDioClient(),
-        _secureStorage = secureStorage ?? const FlutterSecureStorage(),
-        _authMocks = MockAuthAdapter();
+        _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   // =================================================================
-  // AUTH (6 methods)
+  // AUTH
   // =================================================================
 
   Future<TokenResponse> login(String email, String password) async {
-    if (useAuthMocks) {
-      final tokens = await _authMocks.login(email, password);
-      await _storeTokens(tokens);
-      return tokens;
-    }
     final response = await _dio.post('/auth/login', data: {
       'email': email.trim(),
       'password': password,
@@ -89,11 +72,6 @@ class ApiService {
   /// [acceptedTerms]: sent from the register screen once its User
   /// Agreement / Privacy Policy box is ticked; the backend records it.
   Future<TokenResponse> loginWithGoogle(String idToken, {bool acceptedTerms = false}) async {
-    if (useAuthMocks) {
-      final tokens = await _authMocks.loginWithGoogle(idToken);
-      await _storeTokens(tokens);
-      return tokens;
-    }
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
       if (acceptedTerms) 'accepted_terms': true,
@@ -104,9 +82,6 @@ class ApiService {
   }
 
   Future<UserModel> register(UserCreate data) async {
-    if (useAuthMocks) {
-      return _authMocks.register(data);
-    }
     final response = await _dio.post('/auth/register', data: data.toJson());
     // Backend returns UserResponse — registration does NOT log the user
     // in automatically (no tokens in this response), so we just return
@@ -153,16 +128,8 @@ class ApiService {
     await _secureStorage.write(key: 'refresh_token', value: tokens.refreshToken);
   }
 
-  // NOT in the original 19-method F1 list — added to support
-  // ForgotPasswordScreen.onSendOtp, which needs SOME network call to
-  // exist. Endpoint path/shape is my best guess from the screen file's
-  // own comment ("POST /auth/forgot-password -> HTTP 202"); confirm
-  // the exact path and response shape with your backend teammate.
+  /// Emails a password reset code (POST /auth/forgot-password, 202).
   Future<void> sendPasswordResetOtp(String email) async {
-    if (useAuthMocks) {
-      await _authMocks.sendPasswordResetOtp(email);
-      return;
-    }
     await _dio.post('/auth/forgot-password', data: {'email': email});
   }
 
@@ -174,10 +141,6 @@ class ApiService {
     String otp,
     String newPassword,
   ) async {
-    if (useAuthMocks) {
-      await _authMocks.verifyOtpAndResetPassword(email, otp, newPassword);
-      return;
-    }
     await _dio.post('/auth/reset-password', data: {
       'email': email,
       'otp': otp,

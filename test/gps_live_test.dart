@@ -129,29 +129,4 @@ void main() {
     expect(f['spd'], isNull);
     expect(f['hdg'], isNull);
   });
-
-  test('driver distance adds up the hops between frames sent', () {
-    Position at(double lat) => Position(
-          latitude: lat,
-          longitude: 123.9,
-          timestamp: DateTime.utc(2026, 9, 30, 4),
-          accuracy: 5,
-          altitude: 0,
-          altitudeAccuracy: 0,
-          heading: 0,
-          headingAccuracy: 0,
-          speed: 0,
-          speedAccuracy: 0,
-        );
-    final session = GpsIngestionSession(accessToken: () async => null);
-
-    session.countSent(at(10.3));
-    session.countSent(at(10.3)); // keepalive re-sends the same fix
-    session.countSent(at(10.3 + 1 / 111.195)); // ~1 km north
-    expect(session.distanceMetres, closeTo(1000, 5));
-
-    session.resetDistance();
-    session.countSent(at(10.4)); // nothing to measure from
-    expect(session.distanceMetres, 0);
-  });
 }

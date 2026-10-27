@@ -1,7 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:smartcommute_app/models/driver_dashboard.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/providers/driver_provider.dart';
 import 'package:smartcommute_app/providers/load_state.dart';
 import 'package:smartcommute_app/services/driver_service.dart';
@@ -10,104 +9,143 @@ import '../support/commuter_fixtures.dart';
 import '../support/driver_fixtures.dart';
 import '../support/fake_dio.dart';
 
-DriverProvider buildProvider(FakeAdapter backend, {FakeGpsSession? gps}) =>
-    DriverProvider(DriverService(fakeDio(backend)), gps: gps ?? FakeGpsSession());
+/// A backend whose answers the test can change, e.g. the operator starting the shift.
+class Backend {
+  Backend(this.routes);
 
-Future<DriverProvider> onShift(Map<String, Object?> extra, {FakeGpsSession? gps}) async {
-  final driver = buildProvider(
-    fakeBackend({'GET /drivers/me': dashboardJson(shift: shiftJson(), dutyStatus: 'on_route'), ...extra}),
-    gps: gps,
-  );
-  await driver.load();
-  return driver;
+  final Map<String, Object?> routes;
+  late final FakeAdapter adapter = FakeAdapter((options) => fakeBackend(routes).handler(options));
 }
 
-Object? lastBody(FakeAdapter backend) {
-  final data = backend.requests.last.data;
-  return data is String ? jsonDecode(data) : data;
-}
+DriverProvider buildProvider(Backend backend, {FakeGpsSession? gps, DateTime Function()? clock}) =>
+    DriverProvider(DriverService(fakeDio(backend.adapter)), gps: gps ?? FakeGpsSession(), clock: clock);
+
+Backend backendWith({Map<String, dynamic>? shift, List<Map<String, dynamic>>? vehicles, Map<String, Object?> extra = const {}}) =>
+    Backend({
+      'GET /drivers/me': dashboardJson(shift: shift, vehicles: vehicles),
+      'GET /notifications': <Map<String, dynamic>>[],
+      ...extra,
+    });
+
+VehicleLiveUpdate frame({String source = 'tracker', String status = 'en_route', bool shiftEnded = false}) =>
+    VehicleLiveUpdate(
+      vehicleId: 'v1',
+      status: status,
+      location: shiftEnded || status == 'signal_lost' ? null : const LatLng(10.3, 123.9),
+      source: source,
+      shiftEnded: shiftEnded,
+    );
 
 void main() {
-  test('load shows the driver and picks their first vehicle', () async {
-    final driver = buildProvider(fakeBackend({
-      'GET /drivers/me': dashboardJson(vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'DEF 456')]),
-    }));
+  test('load shows the driver, their vehicle and route', () async {
+    final driver = buildProvider(backendWith(vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'DEF 456')]));
 
     await driver.load();
 
     expect(driver.loadState, LoadState.ready);
     expect(driver.name, 'Juan Dela Cruz');
+    expect(driver.vehicles.length, 2);
     expect(driver.vehicle!.plateNumber, 'ABC 123');
     expect(driver.vehicle!.routeLine, 'Talamban → Pier 1 Terminal');
     expect(driver.onShift, isFalse);
-    expect(driver.dutyStatus, DutyStatus.unavailable);
   });
 
-  test('a shift in progress is restored, on its own vehicle', () async {
-    final driver = buildProvider(fakeBackend({
-      'GET /drivers/me': dashboardJson(
-        vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'DEF 456')],
-        shift: shiftJson(vehicleId: 'v2', crowd: 60, passengers: 4),
-        dutyStatus: 'delayed',
-      ),
-    }));
+  test('a shift the operator started is shown, on its own vehicle', () async {
+    final driver = buildProvider(backendWith(
+      vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'DEF 456')],
+      shift: shiftJson(vehicleId: 'v2', crowd: 60, passengers: 4),
+    ));
 
     await driver.load();
 
     expect(driver.vehicle!.plateNumber, 'DEF 456');
-    expect(driver.dutyStatus, DutyStatus.delayed);
     expect(driver.crowdPercent, 60);
     expect(driver.shift!.passengers, 4);
   });
 
-  test('reopening the dashboard mid-shift turns GPS back on', () async {
+  test("the phone backs up the tracker while a shift is open, and stops after", () async {
     final gps = FakeGpsSession();
+    final backend = backendWith();
+    final driver = buildProvider(backend, gps: gps);
+    await driver.load();
+    expect(gps.started, isEmpty, reason: 'no shift, no GPS');
 
-    await onShift({}, gps: gps);
-
+    backend.routes['GET /drivers/me'] = dashboardJson(shift: shiftJson());   // operator starts the shift
+    await driver.refresh();
+    expect(driver.onShift, isTrue);
     expect(gps.started, ['v1']);
+
+    await driver.refresh();
+    expect(gps.started, ['v1'], reason: 'started once');
+
+    backend.routes['GET /drivers/me'] = dashboardJson();                     // operator ends it
+    await driver.refresh();
+    expect(driver.onShift, isFalse);
+    expect(gps.stops, 1);
   });
 
-  test('refreshing leaves GPS off if the driver switched it off', () async {
-    final gps = FakeGpsSession();
-    final driver = await onShift({}, gps: gps);
-    await driver.setBroadcasting(false);
+  test('a refused location permission is shown and only retried on request', () async {
+    final gps = FakeGpsSession(startError: Exception('Location permission denied.'));
+    final driver = buildProvider(backendWith(shift: shiftJson()), gps: gps);
 
     await driver.load();
+    expect(driver.onShift, isTrue);
+    expect(driver.gpsError, 'Location permission denied.');
 
+    gps.startError = null;
+    await driver.refresh();
+    expect(gps.started, isEmpty, reason: "a refresh doesn't ask again");
+
+    await driver.retryPhoneGps();
     expect(gps.started, ['v1']);
-    expect(driver.broadcasting, isFalse);
+    expect(driver.gpsError, isNull);
   });
 
-  test('distance is what the server stored plus what has been sent since', () async {
+  test('where the GPS comes from follows the live feed', () async {
+    var now = DateTime(2026, 10, 27, 8);
+    final driver = buildProvider(backendWith(shift: shiftJson()), clock: () => now);
+    await driver.load();
+    expect(driver.jeepGps, JeepGps.none);
+
+    driver.onLiveFrame(frame());
+    expect(driver.jeepGps, JeepGps.tracker);
+
+    driver.onLiveFrame(frame(source: 'phone'));
+    expect(driver.jeepGps, JeepGps.phone);
+
+    now = now.add(const Duration(minutes: 1));     // nothing since
+    expect(driver.jeepGps, JeepGps.none);
+
+    driver.onLiveFrame(frame());
+    driver.onLiveFrame(frame(status: 'signal_lost'));
+    expect(driver.jeepGps, JeepGps.none);
+  });
+
+  test('frames of other jeeps are ignored', () async {
+    final driver = buildProvider(backendWith(shift: shiftJson()));
+    await driver.load();
+
+    driver.onLiveFrame(const VehicleLiveUpdate(vehicleId: 'other', status: 'en_route', location: LatLng(10.3, 123.9)));
+
+    expect(driver.live, isNull);
+  });
+
+  test('a shift ended on the live feed is picked up right away', () async {
     final gps = FakeGpsSession();
-    final driver = buildProvider(
-      fakeBackend({'GET /drivers/me': dashboardJson(shift: shiftJson(distanceKm: 4.2))}),
-      gps: gps,
-    );
-    await driver.load();
-    expect(driver.distanceKm, 4.2);
-
-    gps.drive(1500);
-
-    expect(driver.distanceKm, closeTo(5.7, 1e-9));
-  });
-
-  test('a new shift counts its distance from zero', () async {
-    final gps = FakeGpsSession()..drive(3000); // left over from an earlier shift
-    final driver = buildProvider(
-      fakeBackend({'GET /drivers/me': dashboardJson(), 'POST /drivers/me/shift': shiftJson()}),
-      gps: gps,
-    );
+    final backend = backendWith(shift: shiftJson());
+    final driver = buildProvider(backend, gps: gps);
     await driver.load();
 
-    await driver.startShift();
+    backend.routes['GET /drivers/me'] = dashboardJson();
+    driver.onLiveFrame(frame(shiftEnded: true));
+    await Future<void>.delayed(const Duration(milliseconds: 50));
 
-    expect(driver.distanceKm, 0);
+    expect(driver.onShift, isFalse);
+    expect(gps.stops, 1);
   });
 
   test('a failed first load is an error', () async {
-    final driver = buildProvider(fakeBackend({'GET /drivers/me': 500}));
+    final driver = buildProvider(Backend({'GET /drivers/me': 500}));
 
     await driver.load();
 
@@ -115,149 +153,55 @@ void main() {
     expect(driver.loadError, 'Request failed');
   });
 
-  test('starting a shift puts the driver on route and turns on GPS', () async {
-    final gps = FakeGpsSession();
-    final backend = fakeBackend({'GET /drivers/me': dashboardJson(), 'POST /drivers/me/shift': shiftJson()});
-    final driver = buildProvider(backend, gps: gps);
-    await driver.load();
-
-    final error = await driver.startShift();
-
-    expect(error, isNull);
-    expect(lastBody(backend), {'vehicle_id': 'v1'});
-    expect(driver.onShift, isTrue);
-    expect(driver.dutyStatus, DutyStatus.onRoute);
-    expect(gps.started, ['v1']);
-  });
-
-  test('the shift still starts when GPS cannot', () async {
-    final gps = FakeGpsSession(startError: Exception('Location permission denied.'));
-    final driver = buildProvider(
-      fakeBackend({'GET /drivers/me': dashboardJson(), 'POST /drivers/me/shift': shiftJson()}),
-      gps: gps,
-    );
-    await driver.load();
-
-    final error = await driver.startShift();
-
-    expect(driver.onShift, isTrue);
-    expect(error, 'Shift started, but GPS is off: Location permission denied.');
-  });
-
-  test('without a GPS tracker the shift starts but GPS stays off', () async {
-    final gps = FakeGpsSession();
-    final driver = buildProvider(
-      fakeBackend({
-        'GET /drivers/me': dashboardJson(vehicles: [vehicleJson(hasTracker: false)]),
-        'POST /drivers/me/shift': shiftJson(),
-      }),
-      gps: gps,
-    );
-    await driver.load();
-
-    final error = await driver.startShift();
-
-    expect(driver.onShift, isTrue);
-    expect(driver.canBroadcast, isFalse);
-    expect(error, 'Shift started, but GPS is off: ${DriverProvider.noTrackerMessage}');
-    expect(await driver.setBroadcasting(true), DriverProvider.noTrackerMessage);
-    expect(gps.started, isEmpty);
-  });
-
-  test('without a vehicle there is nothing to start', () async {
-    final backend = fakeBackend({'GET /drivers/me': dashboardJson(vehicles: [])});
+  test('updates are loaded, and can be marked read', () async {
+    final backend = backendWith(extra: {
+      'GET /notifications': [updateJson(), updateJson(id: 'n2', read: true)],
+      'POST /notifications/read-all': {'updated': 1},
+    });
     final driver = buildProvider(backend);
     await driver.load();
 
-    expect(await driver.startShift(), contains('No vehicle is assigned'));
-    expect(calls(backend), ['GET /drivers/me']);
+    expect(driver.updates.map((u) => u.title), ['Your shift started', 'Your shift started']);
+    expect(driver.unreadUpdates, 1);
+
+    await driver.markUpdatesRead();
+    expect(driver.unreadUpdates, 0);
+    expect(calls(backend.adapter), contains('POST /notifications/read-all'));
   });
 
-  test('the vehicle is locked during a shift', () async {
-    final driver = buildProvider(fakeBackend({
-      'GET /drivers/me': dashboardJson(
-        vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'DEF 456')],
-        shift: shiftJson(),
-      ),
-    }));
-    await driver.load();
-
-    driver.selectVehicle('v2');
-
-    expect(driver.vehicle!.id, 'v1');
-  });
-
-  test('duty status, crowd and passengers need a shift', () async {
-    final backend = fakeBackend({'GET /drivers/me': dashboardJson()});
+  test('crowd and passengers need a shift', () async {
+    final backend = backendWith();
     final driver = buildProvider(backend);
     await driver.load();
 
-    expect(await driver.setDutyStatus(DutyStatus.delayed), DriverProvider.noShiftMessage);
     expect(await driver.commitCrowd(40), DriverProvider.noShiftMessage);
     expect(await driver.changePassengers(1), DriverProvider.noShiftMessage);
-    expect(await driver.setBroadcasting(true), DriverProvider.noShiftMessage);
-    expect(calls(backend), ['GET /drivers/me']);
-  });
-
-  test('duty status is rolled back if the server refuses it', () async {
-    final driver = await onShift({'PUT /drivers/me/status': 500});
-
-    final error = await driver.setDutyStatus(DutyStatus.delayed);
-
-    expect(error, 'Request failed');
-    expect(driver.dutyStatus, DutyStatus.onRoute);
+    expect(calls(backend.adapter).where((c) => c.contains('/shift/')), isEmpty);
   });
 
   test('crowd is saved where the slider is let go, and rolled back on failure', () async {
-    final ok = await onShift({'PUT /drivers/me/shift/crowd': {'percent': 60}});
+    final ok = buildProvider(backendWith(shift: shiftJson(), extra: {'PUT /drivers/me/shift/crowd': {'percent': 60}}));
+    await ok.load();
     ok.previewCrowd(55);
     expect(ok.crowdPercent, 55);
     expect(await ok.commitCrowd(60), isNull);
     expect(ok.crowdPercent, 60);
 
-    final failing = await onShift({'PUT /drivers/me/shift/crowd': 500});
+    final failing = buildProvider(backendWith(shift: shiftJson(), extra: {'PUT /drivers/me/shift/crowd': 500}));
+    await failing.load();
     await failing.commitCrowd(80);
     expect(failing.crowdPercent, 0);
   });
 
-  test('passenger count follows the server', () async {
-    final driver = await onShift({'POST /drivers/me/shift/passengers': {'passengers': 7}});
+  test('passenger count follows the server, and a refused tap is undone', () async {
+    final ok = buildProvider(backendWith(shift: shiftJson(), extra: {'POST /drivers/me/shift/passengers': {'passengers': 7}}));
+    await ok.load();
+    await ok.changePassengers(1);
+    expect(ok.shift!.passengers, 7);
 
-    await driver.changePassengers(1);
-
-    expect(driver.shift!.passengers, 7);
-  });
-
-  test('a refused passenger tap is undone', () async {
-    final driver = await onShift({'POST /drivers/me/shift/passengers': 500});
-
-    final error = await driver.changePassengers(1);
-
-    expect(error, 'Request failed');
-    expect(driver.shift!.passengers, 0);
-  });
-
-  test('ending the shift stops GPS and returns its summary', () async {
-    final gps = FakeGpsSession();
-    final driver = await onShift({'POST /drivers/me/shift/end': summaryJson()}, gps: gps);
-
-    final result = await driver.endShift();
-
-    expect(result.error, isNull);
-    expect(result.summary!.passengers, 15);
-    expect(result.summary!.gpsCoverage, GpsCoverage.full);
-    expect(gps.stops, 1);
-    expect(driver.onShift, isFalse);
-    expect(driver.dutyStatus, DutyStatus.unavailable);
-  });
-
-  test('a failed end keeps the shift open', () async {
-    final driver = await onShift({'POST /drivers/me/shift/end': 500});
-
-    final result = await driver.endShift();
-
-    expect(result.summary, isNull);
-    expect(result.error, 'Request failed');
-    expect(driver.onShift, isTrue);
+    final failing = buildProvider(backendWith(shift: shiftJson(), extra: {'POST /drivers/me/shift/passengers': 500}));
+    await failing.load();
+    expect(await failing.changePassengers(1), 'Request failed');
+    expect(failing.shift!.passengers, 0);
   });
 }

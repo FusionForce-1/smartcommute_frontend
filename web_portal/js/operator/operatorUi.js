@@ -9,8 +9,9 @@ const OperatorUi = (() => {
   /** API timestamps are naive UTC; a string without a zone is treated as UTC. */
   function parseDate(value) {
     if (!value) return null;
-    const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(value);
-    const date = new Date(hasZone ? value : `${value}Z`);
+    const iso = String(value).replace(' ', 'T');   // live GPS frames send "2026-10-23 04:46:21.17"
+    const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(iso);
+    const date = new Date(hasZone ? iso : `${iso}Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
@@ -122,12 +123,23 @@ const OperatorUi = (() => {
     action();
   }
 
+  /** Degrees from north going from a to b ([lat, lng] pairs). */
+  function bearing(a, b) {
+    const toRad = (d) => (d * Math.PI) / 180;
+    const [lat1, lng1] = a.map(toRad);
+    const [lat2, lng2] = b.map(toRad);
+    const y = Math.sin(lng2 - lng1) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lng2 - lng1);
+    return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  }
+
   const TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
 
   return {
     TRASH_ICON,
     parseDate,
     timeAgo,
+    bearing,
     fare,
     chip,
     stats,

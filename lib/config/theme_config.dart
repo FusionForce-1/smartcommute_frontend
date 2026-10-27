@@ -38,9 +38,9 @@ class AppColors {
   static const Color infoBlue = Color(0xFF1E63C6); // "Info" transit alerts
 
   // Driver dashboard.
-  static const Color shiftGreen = Color(0xFF0E7C4F); // Start shift, On-Route
-  static const Color shiftGreenTint = Color(0xFFEEF7F1); // Shift Active card
-  static const Color panelGrey = Color(0xFFF2F1EE); // End-shift details box
+  static const Color shiftGreen = Color(0xFF0E7C4F); // On Shift, On-Route
+  static const Color shiftGreenTint = Color(0xFFEEF7F1); // On Shift card
+  static const Color panelGrey = Color(0xFFF2F1EE); // Crowd slider track and badge
 }
 
 /// E1 corner-radius tokens.

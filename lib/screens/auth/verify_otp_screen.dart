@@ -55,7 +55,6 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
     });
 
     try {
-      // TODO: Velez — on 200, notifyListeners() and pop to Login
       await widget.onVerifyOtp?.call(_otp.text.trim());
     } catch (e) {
       if (mounted) {
