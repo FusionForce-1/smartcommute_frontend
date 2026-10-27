@@ -84,6 +84,28 @@ void main() {
     expect(gps.stops, 1);
   });
 
+  test("a jeep without a tracker gets no phone backup (the backend would refuse it)", () async {
+    final gps = FakeGpsSession();
+    final driver = buildProvider(backendWith(shift: shiftJson(), vehicles: [vehicleJson(hasTracker: false)]), gps: gps);
+
+    await driver.load();
+
+    expect(driver.onShift, isTrue);
+    expect(gps.started, isEmpty);
+    expect(driver.gpsError, DriverProvider.noTrackerMessage);
+  });
+
+  test('the distance driven comes from the server, refreshed with the dashboard', () async {
+    final backend = backendWith(shift: shiftJson(distanceKm: 4.2));
+    final driver = buildProvider(backend);
+    await driver.load();
+    expect(driver.shift!.distanceKm, 4.2);
+
+    backend.routes['GET /drivers/me'] = dashboardJson(shift: shiftJson(distanceKm: 5.7));
+    await driver.refresh();
+    expect(driver.shift!.distanceKm, 5.7);
+  });
+
   test('a refused location permission is shown and only retried on request', () async {
     final gps = FakeGpsSession(startError: Exception('Location permission denied.'));
     final driver = buildProvider(backendWith(shift: shiftJson()), gps: gps);

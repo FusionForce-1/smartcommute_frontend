@@ -1,8 +1,9 @@
 // lib/widgets/driver/shift_card.dart
 //
 // The driver's shift, as their operator runs it: off shift, or on shift
-// with the running time, where the jeep's GPS is coming from (its tracker,
-// or this phone while the tracker is offline) and the passenger counter.
+// with the running time, the distance driven so far, where the jeep's GPS
+// is coming from (its tracker, or this phone while the tracker is offline)
+// and the passenger counter.
 
 import 'package:flutter/material.dart';
 
@@ -100,6 +101,14 @@ class ShiftCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.trending_up, size: 22, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.xs),
+              Text('Distance: ${shift.distanceKm.toStringAsFixed(1)} km', style: detail),
+            ],
+          ),
+          const SizedBox(height: 12),
           _GpsLine(jeepGps: jeepGps, gpsError: gpsError, onRetry: onRetryGps),
           const SizedBox(height: 12),
           _PassengerCounter(count: shift.passengers, onChange: onPassengerChange),
@@ -135,7 +144,12 @@ class _GpsLine extends StatelessWidget {
             Expanded(child: Text(text, style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.w600))),
           ],
         ),
-        if (error != null)
+        if (error == DriverProvider.noTrackerMessage)
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(DriverProvider.noTrackerMessage, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+          )
+        else if (error != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Row(

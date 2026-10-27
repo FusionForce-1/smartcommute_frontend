@@ -57,6 +57,7 @@ class DriverProvider extends ChangeNotifier {
   final DateTime Function() _now;
 
   static const String noShiftMessage = "Your operator hasn't started your shift yet.";
+  static const String noTrackerMessage = 'No GPS tracker is set up for this jeep, so your phone has nothing to back up. Ask your operator.';
 
   /// No live fix for this long and the jeep counts as having no GPS.
   static const Duration liveFresh = Duration(seconds: 30);
@@ -197,6 +198,11 @@ class DriverProvider extends ChangeNotifier {
     if (shift == null) {
       if (gps.isActive) await gps.stop();
       _gpsError = null;
+      return;
+    }
+    if (vehicle?.hasTracker != true) {   // the backend only takes a phone's GPS as a tracker's backup
+      if (gps.isActive) await gps.stop();
+      _gpsError = noTrackerMessage;
       return;
     }
     if (gps.isActive || _gpsError != null) return;   // a refused permission isn't asked again by itself

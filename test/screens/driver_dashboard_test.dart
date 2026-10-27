@@ -106,6 +106,17 @@ void main() {
     expect(find.text('0% Full'), findsOneWidget);
   });
 
+  testWidgets('the shift card shows the distance, and explains a jeep without a tracker', (tester) async {
+    await pumpDashboard(tester, {
+      'GET /drivers/me': dashboardJson(shift: shiftJson(distanceKm: 4.2), vehicles: [vehicleJson(hasTracker: false)]),
+    });
+
+    await reveal(tester, find.text('Distance: 4.2 km'));
+    expect(find.text('Distance: 4.2 km'), findsOneWidget);
+    await reveal(tester, find.text(DriverProvider.noTrackerMessage));
+    expect(find.text('Try again'), findsNothing);
+  });
+
   testWidgets('the shift card says where the GPS is coming from', (tester) async {
     final driver = await pumpDashboard(tester, {'GET /drivers/me': dashboardJson(shift: shiftJson())});
     await reveal(tester, find.byKey(const Key('jeepGps')));
