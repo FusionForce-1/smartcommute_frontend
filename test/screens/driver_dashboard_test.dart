@@ -13,6 +13,8 @@ import 'package:provider/provider.dart';
 import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/providers/driver_provider.dart';
 import 'package:smartcommute_app/screens/driver/driver_dashboard_view.dart';
+import 'package:smartcommute_app/screens/driver/driver_map_tab.dart';
+import 'package:smartcommute_app/services/location_source.dart';
 import 'package:smartcommute_app/models/driver_dashboard.dart';
 import 'package:smartcommute_app/services/driver_service.dart';
 import 'package:smartcommute_app/services/profile_service.dart';
@@ -21,6 +23,7 @@ import 'package:smartcommute_app/widgets/commuter/commuter_nav_bar.dart';
 import '../support/commuter_fixtures.dart';
 import '../support/driver_fixtures.dart';
 import '../support/fake_dio.dart';
+import '../support/fake_location_source.dart';
 
 /// The dashboard against a fake backend; [backend] records every request.
 Future<({DriverProvider driver, FakeAdapter backend})> pumpDashboard(
@@ -183,6 +186,55 @@ void main() {
     await settle(tester);
     expect(sheet, findsNothing);
     expect(find.text('Driver Dashboard'), findsOneWidget);
+  });
+
+  group('Centre on my location', () {
+    /// Just the Map tab, with a fake phone location.
+    Future<void> pumpMapTab(WidgetTester tester, FakeLocationSource location) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 2.5;
+      addTearDown(tester.view.reset);
+      final driver = DriverProvider(
+        DriverService(fakeDio(fakeBackend({
+          'GET /drivers/me': dashboardJson(),
+          'GET /notifications': <Map<String, dynamic>>[],
+        }))),
+        gps: FakeGpsSession(),
+      );
+      await tester.runAsync(driver.load);
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: DriverMapTab(driver: driver, locationSource: location)),
+      ));
+      await settle(tester);
+    }
+
+    testWidgets('is there off shift, on the card and full screen', (tester) async {
+      await pumpDashboard(tester, {'GET /drivers/me': dashboardJson()});
+      expect(find.byTooltip('Center on my location'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('mapExpandToggle')));
+      await settle(tester);
+      expect(find.byTooltip('Center on my location'), findsOneWidget);
+    });
+
+    testWidgets('with no jeep position it shows where the phone is', (tester) async {
+      await pumpMapTab(tester, FakeLocationSource(result: const LatLng(10.3, 123.9)));
+      expect(find.byKey(const Key('driverMyLocation')), findsNothing);
+
+      await tester.tap(find.byTooltip('Center on my location'));
+      await settle(tester);
+
+      expect(find.byKey(const Key('driverMyLocation')), findsOneWidget);
+    });
+
+    testWidgets('says why when location is not allowed', (tester) async {
+      await pumpMapTab(tester, FakeLocationSource(failure: LocationFailure.denied));
+
+      await tester.tap(find.byTooltip('Center on my location'));
+      await settle(tester);
+
+      expect(find.text('Allow location for SmartCommute to see where you are on the map.'), findsOneWidget);
+    });
   });
 
   // ── Updates tab ────────────────────────────────────────────

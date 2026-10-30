@@ -3,14 +3,16 @@
 // The driver's route line and stops with the jeep on top: where the live
 // feed puts it (its tracker, or this phone while the tracker is offline),
 // else this phone's own fix. The Map tab shows it as a card and full screen
-// ([expanded]); the buttons (expand / collapse, centre on the jeep, zoom)
-// are the commuter map's MapControls.
+// ([expanded]); the buttons (expand / collapse, centre on my location, zoom)
+// are the commuter map's MapControls. [myLocation] (a blue dot) is where the
+// phone found the driver when no jeep position is known, e.g. off shift.
 
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../config/map_config.dart';
 import '../../config/theme_config.dart';
@@ -25,6 +27,8 @@ class DriverMap extends StatefulWidget {
     required this.controller,
     this.expanded = false,
     this.onToggleExpanded,
+    this.onLocate,
+    this.myLocation,
     this.showControls = true,
   });
 
@@ -35,14 +39,14 @@ class DriverMap extends StatefulWidget {
   final bool expanded;
   final VoidCallback? onToggleExpanded;
 
+  /// "Centre on my location" (always shown when set).
+  final VoidCallback? onLocate;
+
+  /// The phone's own position, drawn while the jeep's isn't known.
+  final LatLng? myLocation;
+
   /// False when the parent places the controls itself (above a sheet).
   final bool showControls;
-
-  /// Centres the map on the driver's jeep, if we know where it is.
-  static void centreOnJeep(DriverProvider driver, MapController controller) {
-    final jeep = driver.jeepPosition;
-    if (jeep != null) controller.move(jeep, 16);
-  }
 
   @override
   State<DriverMap> createState() => _DriverMapState();
@@ -118,6 +122,10 @@ class _DriverMapState extends State<DriverMap> {
           if (jeep != null)
             MarkerLayer(markers: [
               Marker(point: jeep, width: 44, height: 44, child: _JeepMarker(heading: _heading(driver))),
+            ])
+          else if (widget.myLocation case final here?)
+            MarkerLayer(markers: [
+              Marker(point: here, width: 26, height: 26, child: const _MyLocationDot()),
             ]),
           if (widget.showControls)
             Align(
@@ -128,7 +136,7 @@ class _DriverMapState extends State<DriverMap> {
                   controller: widget.controller,
                   expanded: widget.expanded,
                   onToggleExpanded: widget.onToggleExpanded,
-                  onLocate: jeep == null ? null : () => DriverMap.centreOnJeep(driver, widget.controller),
+                  onLocate: widget.onLocate,
                 ),
               ),
             ),
@@ -149,6 +157,24 @@ class _StopDot extends StatelessWidget {
         color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(color: AppColors.brandTeal, width: 4),
+      ),
+    );
+  }
+}
+
+/// Where the phone found the driver: a blue dot with a white ring.
+class _MyLocationDot extends StatelessWidget {
+  const _MyLocationDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('driverMyLocation'),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2F6FED),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 1))],
       ),
     );
   }

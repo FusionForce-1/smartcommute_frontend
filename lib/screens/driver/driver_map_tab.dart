@@ -6,12 +6,17 @@
 // the right, and "My Route" (GPS, next stop, ETA, distance) in a sheet that
 // drags up, or down to just its handle. The same map moves between the two
 // layouts, keeping its camera. Back leaves full screen.
+//
+// "Centre on my location" is always there: it goes to the jeep when its
+// position is known, else asks the phone where the driver is (off shift).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../config/theme_config.dart';
 import '../../providers/driver_provider.dart';
+import '../../services/location_source.dart';
 import '../../widgets/commuter/live_map.dart' show MapControls;
 import '../../widgets/driver/crowd_estimate_card.dart';
 import '../../widgets/driver/driver_map.dart';
@@ -20,9 +25,12 @@ import '../../widgets/driver/route_status_card.dart';
 import '../../widgets/driver/shift_card.dart';
 
 class DriverMapTab extends StatefulWidget {
-  const DriverMapTab({super.key, required this.driver});
+  const DriverMapTab({super.key, required this.driver, this.locationSource});
 
   final DriverProvider driver;
+
+  /// The phone's location for "Centre on my location"; tests pass a fake.
+  final LocationSource? locationSource;
 
   @override
   State<DriverMapTab> createState() => _DriverMapTabState();
@@ -35,6 +43,11 @@ class _DriverMapTabState extends State<DriverMapTab> {
   final GlobalKey _mapKey = GlobalKey();
 
   bool _expanded = false;
+
+  /// Where the phone found the driver (shown while the jeep's isn't known).
+  LatLng? _myLocation;
+  bool _locating = false;
+  late final LocationSource _location = widget.locationSource ?? GeolocatorLocationSource();
   final DraggableScrollableController _sheet = DraggableScrollableController();
 
   /// How much of the full-screen height the sheet covers; the map buttons
@@ -80,12 +93,50 @@ class _DriverMapTabState extends State<DriverMapTab> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// The jeep when we know where it is, else the phone's own location.
+  Future<void> _centreOnMe() async {
+    final jeep = widget.driver.jeepPosition;
+    if (jeep != null) {
+      _map.move(jeep, 16);
+      return;
+    }
+    if (_locating) return;
+    _locating = true;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final here = await _location.currentLocation();
+      if (!mounted) return;
+      setState(() => _myLocation = here);
+      _map.move(here, 16);
+    } on LocationException catch (e) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(_locationProblem(e.reason))));
+    } catch (_) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Couldn't find your location. Try again.")));
+    } finally {
+      _locating = false;
+    }
+  }
+
+  /// The planner's location messages talk about trips; these are for drivers.
+  static String _locationProblem(LocationFailure reason) => switch (reason) {
+        LocationFailure.servicesOff => "Turn on your phone's location to see where you are.",
+        LocationFailure.denied => 'Allow location for SmartCommute to see where you are on the map.',
+        LocationFailure.unavailable => "Couldn't get a location fix. Turn on Wi-Fi or move near a window.",
+        LocationFailure.timeout => 'Finding your location took too long. Try again.',
+      };
+
   Widget _driverMap({required bool expanded}) => DriverMap(
         key: _mapKey,
         driver: widget.driver,
         controller: _map,
         expanded: expanded,
         onToggleExpanded: () => _setExpanded(!_expanded),
+        onLocate: _centreOnMe,
+        myLocation: _myLocation,
         // Full screen: the buttons sit above the sheet, placed below.
         showControls: !expanded,
       );
@@ -174,7 +225,7 @@ class _DriverMapTabState extends State<DriverMapTab> {
                 controller: _map,
                 expanded: true,
                 onToggleExpanded: () => _setExpanded(false),
-                onLocate: driver.jeepPosition == null ? null : () => DriverMap.centreOnJeep(driver, _map),
+                onLocate: _centreOnMe,
               ),
             ),
             NotificationListener<DraggableScrollableNotification>(
