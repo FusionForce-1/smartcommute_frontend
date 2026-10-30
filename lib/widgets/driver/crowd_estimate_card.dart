@@ -1,7 +1,8 @@
 // lib/widgets/driver/crowd_estimate_card.dart
 //
 // How full the vehicle is, from Empty to Full. The value is saved when the
-// driver lets go of the slider, not on every step of the drag.
+// driver lets go of the slider, not on every step of the drag. Without the
+// callbacks (off shift) it's shown but locked.
 
 import 'package:flutter/material.dart';
 
@@ -12,13 +13,15 @@ class CrowdEstimateCard extends StatelessWidget {
   const CrowdEstimateCard({
     super.key,
     required this.percent,
-    required this.onChanged,
-    required this.onChangeEnd,
+    this.onChanged,
+    this.onChangeEnd,
   });
 
   final int percent;
-  final ValueChanged<int> onChanged;
-  final ValueChanged<int> onChangeEnd;
+
+  /// Null while off shift: the slider is locked.
+  final ValueChanged<int>? onChanged;
+  final ValueChanged<int>? onChangeEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +44,9 @@ class CrowdEstimateCard extends StatelessWidget {
               activeTrackColor: AppColors.textPrimary,
               inactiveTrackColor: AppColors.panelGrey,
               thumbColor: Colors.white,
+              disabledActiveTrackColor: AppColors.navInactive,
+              disabledInactiveTrackColor: AppColors.panelGrey,
+              disabledThumbColor: Colors.white,
               overlayShape: SliderComponentShape.noOverlay,
               thumbShape: const _OutlinedThumb(),
               trackShape: const RoundedRectSliderTrackShape(),
@@ -50,8 +56,8 @@ class CrowdEstimateCard extends StatelessWidget {
               max: 100,
               divisions: 20,
               semanticFormatterCallback: (v) => '${v.round()}% full',
-              onChanged: (v) => onChanged(v.round()),
-              onChangeEnd: (v) => onChangeEnd(v.round()),
+              onChanged: onChanged == null ? null : (v) => onChanged!(v.round()),
+              onChangeEnd: onChangeEnd == null ? null : (v) => onChangeEnd!(v.round()),
             ),
           ),
           const SizedBox(height: 6),

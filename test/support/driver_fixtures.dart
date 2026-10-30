@@ -33,13 +33,18 @@ Map<String, dynamic> shiftJson({
 Map<String, dynamic> dashboardJson({
   List<Map<String, dynamic>>? vehicles,
   Map<String, dynamic>? shift,
+  String? dutyStatus,
+  Map<String, dynamic>? recentRoute,
 }) =>
     {
       'name': 'Juan Dela Cruz',
       'driver_code': 'DRV-001',
-      'duty_status': shift == null ? 'unavailable' : 'on_route',
+      'email': 'juan.delacruz@smartcommute.ph',
+      'duty_status': dutyStatus ?? (shift == null ? 'unavailable' : 'on_route'),
       'vehicles': vehicles ?? [vehicleJson()],
       'shift': shift,
+      'operator': {'company_name': 'Cebu Transit Co', 'owner_name': 'John'},
+      'recent_route': recentRoute,
     };
 
 Map<String, dynamic> updateJson({

@@ -3,8 +3,9 @@
 // Driver dashboard shell: owns the driver's state (shift, backup phone GPS,
 // live feed) for as long as the dashboard is open, checks for shift
 // changes from the operator, and handles sign-out. The screen itself is
-// DriverDashboardView.
+// DriverDashboardView (Map, Updates and Profile tabs).
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,6 +14,7 @@ import '../../providers/driver_provider.dart';
 import '../../router/app_router.dart';
 import '../../services/dio_interceptor.dart';
 import '../../services/driver_service.dart';
+import '../../services/profile_service.dart';
 import '../../services/websocket_service.dart';
 import 'driver_dashboard_view.dart';
 
@@ -24,10 +26,15 @@ class DriverDashboard extends StatefulWidget {
 }
 
 class _DriverDashboardState extends State<DriverDashboard> {
+  final Dio _dio = buildDioClient();
+
   late final DriverProvider _driver = DriverProvider(
-    DriverService(buildDioClient()),
+    DriverService(_dio),
     liveFeed: WebSocketService(),
   );
+
+  /// Privacy & Security on the Profile tab (/users/me/*).
+  late final ProfileService _profileService = ProfileService(_dio);
 
   @override
   void initState() {
@@ -57,7 +64,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
       value: _driver,
-      child: DriverDashboardView(onSignOut: _signOut),
+      child: DriverDashboardView(onSignOut: _signOut, profileService: _profileService),
     );
   }
 }

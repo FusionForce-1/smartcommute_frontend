@@ -32,8 +32,17 @@ class DriverService {
   }
 
   /// The newest notifications first.
-  Future<List<DriverUpdate>> updates({int limit = 20}) async {
-    final response = await _dio.get('/notifications', queryParameters: {'limit': limit});
+  /// Route Status during a shift: On-Route / Delayed / Unavailable.
+  Future<void> setRouteStatus(RouteStatus status) =>
+      _dio.put('/drivers/me/shift/status', data: {'status': status.apiValue});
+
+  /// Newest first; [since] / [until] narrow it to a period.
+  Future<List<DriverUpdate>> updates({int limit = 50, DateTime? since, DateTime? until}) async {
+    final response = await _dio.get('/notifications', queryParameters: {
+      'limit': limit,
+      if (since != null) 'since': since.toUtc().toIso8601String(),
+      if (until != null) 'until': until.toUtc().toIso8601String(),
+    });
     return [for (final n in response.data as List) DriverUpdate.fromJson(n as Map<String, dynamic>)];
   }
 

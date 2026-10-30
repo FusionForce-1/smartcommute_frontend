@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:smartcommute_app/models/driver_dashboard.dart';
 import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/providers/driver_provider.dart';
 import 'package:smartcommute_app/providers/load_state.dart';
@@ -225,5 +226,97 @@ void main() {
     await failing.load();
     expect(await failing.changePassengers(1), 'Request failed');
     expect(failing.shift!.passengers, 0);
+  });
+
+  test('profile details: email, operator and most recent route', () async {
+    final driver = buildProvider(Backend({
+      'GET /drivers/me': dashboardJson(recentRoute: vehicleJson(id: 'v9', plate: 'KEN-124')),
+      'GET /notifications': <Map<String, dynamic>>[],
+    }));
+    await driver.load();
+
+    expect(driver.email, 'juan.delacruz@smartcommute.ph');
+    expect(driver.operator!.companyName, 'Cebu Transit Co');
+    expect(driver.operator!.ownerName, 'John');
+    expect(driver.recentRoute!.plateNumber, 'KEN-124');
+  });
+
+  group('route status', () {
+    test('is Unavailable off shift and can only change during one', () async {
+      final backend = backendWith();
+      final driver = buildProvider(backend);
+      await driver.load();
+
+      expect(driver.routeStatus, RouteStatus.unavailable);
+      expect(await driver.setRouteStatus(RouteStatus.delayed), DriverProvider.noShiftMessage);
+      expect(calls(backend.adapter), isNot(contains('PUT /drivers/me/shift/status')));
+    });
+
+    test('is saved, and rolled back if the server refuses it', () async {
+      final ok = buildProvider(backendWith(shift: shiftJson(), extra: {'PUT /drivers/me/shift/status': {'status': 'delayed'}}));
+      await ok.load();
+      expect(ok.routeStatus, RouteStatus.onRoute);
+      expect(await ok.setRouteStatus(RouteStatus.delayed), isNull);
+      expect(ok.routeStatus, RouteStatus.delayed);
+
+      final failing = buildProvider(backendWith(shift: shiftJson(), extra: {'PUT /drivers/me/shift/status': 500}));
+      await failing.load();
+      expect(await failing.setRouteStatus(RouteStatus.delayed), 'Request failed');
+      expect(failing.routeStatus, RouteStatus.onRoute);
+    });
+  });
+
+  group('updates by period', () {
+    final now = DateTime(2026, 10, 29, 15, 30);
+    final today = DateTime(2026, 10, 29);
+
+    test('each period covers the right days', () {
+      expect(updatesRange(UpdatesPeriod.recent, now), (since: null, until: null));
+      expect(updatesRange(UpdatesPeriod.today, now), (since: today, until: null));
+      expect(updatesRange(UpdatesPeriod.yesterday, now), (since: DateTime(2026, 10, 28), until: today));
+      expect(updatesRange(UpdatesPeriod.lastMonth, now).since, DateTime(2026, 9, 29));
+      expect(updatesRange(UpdatesPeriod.lastYear, now).since, DateTime(2025, 10, 29));
+      expect(
+        updatesRange(UpdatesPeriod.day, now, day: DateTime(2026, 10, 3)),
+        (since: DateTime(2026, 10, 3), until: DateTime(2026, 10, 4)),
+      );
+    });
+
+    test('picking one asks the server for that period', () async {
+      final backend = backendWith();
+      final driver = buildProvider(backend, clock: () => now);
+      await driver.load();
+
+      await driver.showUpdates(UpdatesPeriod.day, day: DateTime(2026, 10, 3));
+
+      final query = backend.adapter.requests.lastWhere((r) => r.path == '/notifications').queryParameters;
+      expect(DateTime.parse(query['since'] as String), DateTime(2026, 10, 3).toUtc());
+      expect(DateTime.parse(query['until'] as String), DateTime(2026, 10, 4).toUtc());
+      expect(driver.updatesPeriod, UpdatesPeriod.day);
+      expect(driver.updatesDay, DateTime(2026, 10, 3));
+    });
+  });
+
+  test('distance to the next stop comes from the live feed and the route stops', () async {
+    final driver = buildProvider(backendWith(shift: shiftJson(), extra: {
+      'GET /routes/r1': {
+        'id': 'r1',
+        'name': 'Talamban – Pier 1',
+        'code': 'J02',
+        'is_active': true,
+        'geometry': {'type': 'LineString', 'coordinates': [[123.9, 10.3], [123.9, 10.31]]},
+        'stops': [
+          {'id': 's1', 'name': 'Pier 1', 'sequence': 1, 'location': {'type': 'Point', 'coordinates': [123.9, 10.301]}},
+        ],
+      },
+    }));
+    await driver.load();
+    await Future<void>.delayed(const Duration(milliseconds: 20));   // the route line
+    expect(driver.distanceToNextStopM, isNull);
+
+    driver.onLiveFrame(const VehicleLiveUpdate(
+        vehicleId: 'v1', status: 'en_route', location: LatLng(10.3, 123.9), nextStop: 'Pier 1'));
+
+    expect(driver.distanceToNextStopM, closeTo(111, 2));   // 0.001° of latitude
   });
 }

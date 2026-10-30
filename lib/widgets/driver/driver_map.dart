@@ -2,77 +2,67 @@
 //
 // The driver's route line and stops with the jeep on top: where the live
 // feed puts it (its tracker, or this phone while the tracker is offline),
-// else this phone's own fix. Used on the dashboard and full screen.
+// else this phone's own fix. The Map tab shows it as a card and full screen
+// ([expanded]); the buttons (expand / collapse, centre on the jeep, zoom)
+// are the commuter map's MapControls.
 
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:latlong2/latlong.dart';
 
 import '../../config/map_config.dart';
 import '../../config/theme_config.dart';
-import '../../models/transport_model.dart';
 import '../../providers/driver_provider.dart';
+import '../commuter/live_map.dart' show MapControls;
 import '../commuter/vehicle_marker.dart';
 
 class DriverMap extends StatefulWidget {
-  const DriverMap({super.key, required this.driver, this.onExpand});
+  const DriverMap({
+    super.key,
+    required this.driver,
+    required this.controller,
+    this.expanded = false,
+    this.onToggleExpanded,
+    this.showControls = true,
+  });
 
   final DriverProvider driver;
+  final MapController controller;
 
-  /// Adds a full-screen button (the dashboard's small map).
-  final VoidCallback? onExpand;
+  /// Full screen: edge to edge, no card corners.
+  final bool expanded;
+  final VoidCallback? onToggleExpanded;
+
+  /// False when the parent places the controls itself (above a sheet).
+  final bool showControls;
+
+  /// Centres the map on the driver's jeep, if we know where it is.
+  static void centreOnJeep(DriverProvider driver, MapController controller) {
+    final jeep = driver.jeepPosition;
+    if (jeep != null) controller.move(jeep, 16);
+  }
 
   @override
   State<DriverMap> createState() => _DriverMapState();
 }
 
 class _DriverMapState extends State<DriverMap> {
-  final _map = MapController();
-  TransportRoute? _route;
-  String? _routeId;
-  bool _loading = false;
+  bool _ready = false;
+  String? _framedRouteId;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadRoute();
-  }
-
-  @override
-  void didUpdateWidget(DriverMap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.driver.vehicle?.routeId != _routeId) _loadRoute();
-  }
-
-  /// Called from initState / didUpdateWidget, which rebuild anyway: the
-  /// fields are set directly until the first await.
-  Future<void> _loadRoute() async {
-    final routeId = widget.driver.vehicle?.routeId;
-    _routeId = routeId;
-    _route = null;
-    if (routeId == null || routeId.isEmpty) return;
-    _loading = true;
-    final route = await widget.driver.routeLine(routeId);   // null: no map line yet, show the jeep only
-    if (!mounted || routeId != _routeId) return;
-    setState(() {
-      _route = route;
-      _loading = false;
-    });
-    final line = route?.geometry ?? const <LatLng>[];
-    if (line.length < 2) return;
+  /// Frames the route once per route, when both it and the map are ready.
+  void _frameRoute() {
+    final route = widget.driver.route;
+    if (!_ready || route == null || route.id == _framedRouteId || route.geometry.length < 2) return;
+    _framedRouteId = route.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _map.fitCamera(CameraFit.coordinates(coordinates: line, padding: const EdgeInsets.all(32), maxZoom: 16));
+      widget.controller.fitCamera(
+        CameraFit.coordinates(coordinates: route.geometry, padding: const EdgeInsets.all(32), maxZoom: 16),
+      );
     });
-  }
-
-  LatLng? _jeep(DriverProvider driver) {
-    if (driver.jeepGps != JeepGps.none) return driver.live?.location;
-    final fix = driver.gps.lastFix;
-    return fix == null ? driver.live?.location : LatLng(fix.latitude, fix.longitude);
   }
 
   /// The course while moving; null while stopped (it swings at random).
@@ -87,79 +77,68 @@ class _DriverMapState extends State<DriverMap> {
   @override
   Widget build(BuildContext context) {
     final driver = widget.driver;
-    final jeep = _jeep(driver);
-    final heading = _heading(driver);
-    final route = _route;
+    final jeep = driver.jeepPosition;
+    final route = driver.route;
+    _frameRoute();
 
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _map,
-          options: MapOptions(
-            initialCenter: jeep ?? MapConfig.defaultCenter,
-            initialZoom: jeep != null ? 15 : 13,
-            minZoom: MapConfig.minZoom,
-            maxZoom: MapConfig.maxZoom,
-            cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
-          ),
-          children: [
-            TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: MapConfig.userAgentPackageName),
-            if (route != null && route.geometry.length > 1)
-              PolylineLayer(polylines: [
-                Polyline(points: route.geometry, color: AppColors.brandTeal, strokeWidth: 5),
-              ]),
-            if (route != null)
-              MarkerLayer(markers: [
-                for (final stop in route.stops)
-                  Marker(point: stop.location, width: 14, height: 14, child: const _StopDot()),
-              ]),
-            if (jeep != null)
-              MarkerLayer(markers: [
-                Marker(point: jeep, width: 44, height: 44, child: _JeepMarker(heading: heading)),
-              ]),
-          ],
+    return Container(
+      decoration: widget.expanded
+          ? const BoxDecoration()
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(AppSpacing.sm),
+              boxShadow: AppShadows.card,
+              border: Border.all(color: AppColors.divider),
+            ),
+      clipBehavior: Clip.antiAlias,
+      child: FlutterMap(
+        mapController: widget.controller,
+        options: MapOptions(
+          initialCenter: jeep ?? MapConfig.defaultCenter,
+          initialZoom: jeep != null ? 15 : 13,
+          minZoom: MapConfig.minZoom,
+          maxZoom: MapConfig.maxZoom,
+          cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
+          interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+          onMapReady: () {
+            _ready = true;
+            _frameRoute();
+          },
         ),
-        if (_loading) const Positioned(top: 8, left: 8, child: SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-        Positioned(
-          right: AppSpacing.xs,
-          bottom: AppSpacing.xs,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.onExpand != null)
-                _MapButton(tooltip: 'Full screen', icon: Icons.open_in_full, onPressed: widget.onExpand!),
-              if (jeep != null) ...[
-                const SizedBox(height: 6),
-                _MapButton(tooltip: 'Centre on the jeep', icon: Icons.my_location, onPressed: () => _map.move(jeep, 16)),
-              ],
-            ],
-          ),
-        ),
-      ],
+        children: [
+          TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: MapConfig.userAgentPackageName),
+          if (route != null && route.geometry.length > 1)
+            PolylineLayer(polylines: [
+              Polyline(points: route.geometry, color: AppColors.brandTeal, strokeWidth: 6),
+            ]),
+          if (route != null)
+            MarkerLayer(markers: [
+              for (final stop in route.stops)
+                Marker(point: stop.location, width: 18, height: 18, child: const _StopDot()),
+            ]),
+          if (jeep != null)
+            MarkerLayer(markers: [
+              Marker(point: jeep, width: 44, height: 44, child: _JeepMarker(heading: _heading(driver))),
+            ]),
+          if (widget.showControls)
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xs),
+                child: MapControls(
+                  controller: widget.controller,
+                  expanded: widget.expanded,
+                  onToggleExpanded: widget.onToggleExpanded,
+                  onLocate: jeep == null ? null : () => DriverMap.centreOnJeep(driver, widget.controller),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
 
-class _MapButton extends StatelessWidget {
-  const _MapButton({required this.tooltip, required this.icon, required this.onPressed});
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return FloatingActionButton.small(
-      heroTag: null,
-      tooltip: tooltip,
-      backgroundColor: Colors.white,
-      foregroundColor: AppColors.brandTeal,
-      onPressed: onPressed,
-      child: Icon(icon),
-    );
-  }
-}
-
+/// A route stop: white with a thick teal ring.
 class _StopDot extends StatelessWidget {
   const _StopDot();
 
@@ -169,7 +148,7 @@ class _StopDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
-        border: Border.all(color: AppColors.brandTeal, width: 3),
+        border: Border.all(color: AppColors.brandTeal, width: 4),
       ),
     );
   }

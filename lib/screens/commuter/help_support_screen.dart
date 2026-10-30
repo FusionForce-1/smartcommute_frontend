@@ -13,9 +13,12 @@ import '../../widgets/auth/consent_checkbox.dart';
 import '../../widgets/commuter/settings_group.dart';
 
 class HelpSupportScreen extends StatelessWidget {
-  const HelpSupportScreen({super.key});
+  const HelpSupportScreen({super.key, this.faqs = commuterFaqs});
 
-  static const faqs = [
+  /// (question, answer) pairs shown under "Frequently asked questions".
+  final List<(String, String)> faqs;
+
+  static const commuterFaqs = [
     (
       'How do I plan a trip?',
       'Open the Route tab, choose From and To (and a departure time if you like), then tap '
@@ -58,6 +61,39 @@ class HelpSupportScreen extends StatelessWidget {
       'Under the Data Privacy Act you can ask for a copy of your data, or for it to be '
           'corrected or deleted. Contact us with the email address on your account and we '
           'will handle your request.',
+    ),
+  ];
+
+  static const driverFaqs = [
+    (
+      'Who starts and ends my shift?',
+      'Your operator does, from their portal. The Map tab shows "On Shift" with the time, '
+          'distance and passenger counter as soon as it starts, and the Updates tab tells you.',
+    ),
+    (
+      'What does Route Status do?',
+      'During a shift, choose On-Route, Delayed or Unavailable. Commuters see it on the live '
+          "map, so set Delayed when you're held up and Unavailable when you stop taking passengers.",
+    ),
+    (
+      'How do I report how full the PUV is?',
+      'Slide the Crowd Activity Estimate from Empty to Full and let go — it is saved then. '
+          'Tap "+1 Passenger" each time someone boards.',
+    ),
+    (
+      'Where does my GPS come from?',
+      "From your PUV's GPS tracker. If the tracker goes offline during a shift, your phone "
+          'shares its location as a backup, so keep location turned on for SmartCommute.',
+    ),
+    (
+      'How do I see my route full screen?',
+      'Tap the expand button on the map. Drag the My Route panel up for your next stop, ETA '
+          'and distance, or down to see more of the map. Tap collapse or Back to return.',
+    ),
+    (
+      'How do I find an older update?',
+      'On the Updates tab, tap Today, Yesterday, Last Month or Last Year, or pick a day with '
+          'the Calendar.',
     ),
   ];
 

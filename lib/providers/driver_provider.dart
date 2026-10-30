@@ -1,8 +1,9 @@
 // lib/providers/driver_provider.dart
 //
 // State behind the Driver Dashboard: who the driver is, their assigned
-// vehicles and routes, the shift their operator started, crowd and
-// passenger reports during it, and their updates (notifications).
+// vehicles and routes, the shift their operator started, crowd, passenger
+// and route-status reports during it, who they drive for, and their
+// updates (notifications), filtered by period on the Updates tab.
 //
 // The operator starts and ends shifts in the portal; [refresh] (every
 // [refreshInterval] once [startAutoRefresh] is called, and right away when
@@ -20,6 +21,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../models/driver_dashboard.dart';
 import '../models/transport_model.dart';
@@ -67,7 +69,12 @@ class DriverProvider extends ChangeNotifier {
   DriverDashboardData? _data;
   DriverShift? _shift;
   int _crowdPercent = 0;
+  RouteStatus _routeStatus = RouteStatus.unavailable;
   List<DriverUpdate> _updates = const [];
+  UpdatesPeriod _updatesPeriod = UpdatesPeriod.recent;
+  DateTime? _updatesDay;
+  bool _updatesLoading = false;
+  TransportRoute? _route;   // the current vehicle's line and stops
   VehicleLiveUpdate? _live;
   DateTime? _liveAt;
   String? _gpsError;
@@ -79,6 +86,15 @@ class DriverProvider extends ChangeNotifier {
   LoadState get loadState => _loadState;
   String? get loadError => _loadError;
   String get name => _data?.name ?? '';
+  String? get email => _data?.email;
+  DriverOperator? get operator => _data?.operator;
+  AssignedVehicle? get recentRoute => _data?.recentRoute;
+  RouteStatus get routeStatus => onShift ? _routeStatus : RouteStatus.unavailable;
+  UpdatesPeriod get updatesPeriod => _updatesPeriod;
+
+  /// The calendar day picked on the Updates tab (period [UpdatesPeriod.day]).
+  DateTime? get updatesDay => _updatesDay;
+  bool get updatesLoading => _updatesLoading;
   List<AssignedVehicle> get vehicles => _data?.vehicles ?? const [];
   DriverShift? get shift => _shift;
   bool get onShift => _shift != null;
@@ -130,10 +146,12 @@ class DriverProvider extends ChangeNotifier {
         _crowdPercent = data.shift?.crowdPercent ?? 0;
         if (data.shift == null) _live = null;
       }
+      _routeStatus = data.routeStatus;
       _loadState = LoadState.ready;
       _loadError = null;
       _listenForLiveUpdates();
       notifyListeners();
+      unawaited(_loadCurrentRoute());
       await _syncPhoneGps();
       await loadUpdates();
     } catch (e) {
@@ -155,12 +173,26 @@ class DriverProvider extends ChangeNotifier {
   }
 
   Future<void> loadUpdates() async {
+    final range = updatesRange(_updatesPeriod, _now(), day: _updatesDay);
+    final period = _updatesPeriod;
+    _updatesLoading = true;
+    notifyListeners();
     try {
-      _updates = await _service.updates();
-      notifyListeners();
+      final list = await _service.updates(since: range.since, until: range.until);
+      if (period == _updatesPeriod) _updates = list;   // ignore a slower, older request
     } catch (_) {
       // Updates are extra: keep showing the last ones.
+    } finally {
+      _updatesLoading = false;
+      notifyListeners();
     }
+  }
+
+  /// A filter chip ([period]) or a calendar [day] on the Updates tab.
+  Future<void> showUpdates(UpdatesPeriod period, {DateTime? day}) {
+    _updatesPeriod = period;
+    _updatesDay = period == UpdatesPeriod.day ? day : null;
+    return loadUpdates();
   }
 
   Future<void> markUpdatesRead() async {
@@ -189,6 +221,40 @@ class DriverProvider extends ChangeNotifier {
         return null;
       },
     );
+  }
+
+  /// The current vehicle's route line and stops (for the map and "Distance").
+  TransportRoute? get route => _route?.id == vehicle?.routeId ? _route : null;
+
+  Future<void> _loadCurrentRoute() async {
+    final routeId = vehicle?.routeId;
+    if (routeId == null || routeId.isEmpty || _route?.id == routeId) return;
+    final line = await routeLine(routeId);
+    if (line != null && routeId == vehicle?.routeId) {
+      _route = line;
+      notifyListeners();
+    }
+  }
+
+  /// Where the jeep is: the live feed (its tracker or this phone as backup),
+  /// else this phone's own last fix.
+  LatLng? get jeepPosition {
+    if (jeepGps != JeepGps.none) return live?.location;
+    final fix = gps.lastFix;
+    return fix == null ? live?.location : LatLng(fix.latitude, fix.longitude);
+  }
+
+  /// Metres from the jeep to the next stop the live feed names; null when
+  /// either is unknown.
+  double? get distanceToNextStopM {
+    final name = live?.nextStop;
+    final at = jeepPosition;
+    final stops = route?.stops;
+    if (name == null || at == null || stops == null) return null;
+    for (final stop in stops) {
+      if (stop.name == name) return const Distance().as(LengthUnit.Meter, at, stop.location);
+    }
+    return null;
   }
 
   // ── Phone GPS (the tracker's backup) ────────────────────────
@@ -242,6 +308,23 @@ class DriverProvider extends ChangeNotifier {
       return null;
     } catch (e) {
       _crowdPercent = shift.crowdPercent;
+      notifyListeners();
+      return apiErrorMessage(e);
+    }
+  }
+
+  /// On-Route / Delayed / Unavailable; shown straight away, undone if refused.
+  Future<String?> setRouteStatus(RouteStatus status) async {
+    if (!onShift) return noShiftMessage;
+    final before = _routeStatus;
+    if (status == before) return null;
+    _routeStatus = status;
+    notifyListeners();
+    try {
+      await _service.setRouteStatus(status);
+      return null;
+    } catch (e) {
+      _routeStatus = before;
       notifyListeners();
       return apiErrorMessage(e);
     }
