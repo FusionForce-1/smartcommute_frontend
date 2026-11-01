@@ -19,22 +19,16 @@ class RegisterScreen extends StatefulWidget {
   const RegisterScreen({
     super.key,
     this.onRegister,
-    this.onGoogleSignIn,
     this.onBack,
     this.onConsentChanged,
   });
 
-  /// TODO: Velez — AuthProvider.registerCommuter(fullName, email, password)
-  /// → ApiService.register(UserCreate{..., role: "commuter"})
-  /// → POST /auth/register
+  /// Creates a commuter account (POST /auth/register).
   final Future<void> Function(
     String fullName,
     String email,
     String password,
   )? onRegister;
-
-  /// TODO: Velez — AuthProvider.loginWithGoogle(idToken) → POST /auth/google
-  final Future<void> Function()? onGoogleSignIn;
 
   final VoidCallback? onBack;
 
@@ -85,7 +79,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      // TODO: Velez — after 201, route to Login and notifyListeners()
       await widget.onRegister?.call(
         _fullName.text.trim(),
         _email.text.trim(),
@@ -99,16 +92,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGoogle() async {
-    try {
-      await widget.onGoogleSignIn?.call();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Google sign-in failed. Try again.');
-      }
     }
   }
 

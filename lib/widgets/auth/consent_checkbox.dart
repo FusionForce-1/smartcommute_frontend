@@ -149,3 +149,33 @@ Future<void> showLegalDoc(BuildContext context, LegalDoc doc) {
     ),
   );
 }
+
+/// "Terms & Privacy Policy" on a profile: pick which document to read.
+void showLegalChoices(BuildContext context) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (icon, doc) in [
+            (Icons.description_outlined, userAgreement),
+            (Icons.privacy_tip_outlined, privacyPolicy),
+          ])
+            ListTile(
+              leading: Icon(icon, color: AppColors.brandTeal),
+              title: Text(doc.title),
+              subtitle: Text('Last updated ${doc.updated}'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                showLegalDoc(context, doc);
+              },
+            ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+      ),
+    ),
+  );
+}

@@ -1,12 +1,8 @@
-// lib/screens/auth/auth_app.dart
+// lib/router/app_router.dart
 //
-// Emae D. Calonia — click-through navigator for the four auth screens.
-// Navigation only lives here. API mocks live in Francis's MockAuthAdapter
-// (via AuthProvider / ApiService) — not in main.dart.
-//
-// FIXED by Francis: Google Sign-In on web needs two things wired up at
-// startup that were previously missing entirely — see _setUpGoogleSignIn()
-// below for why.
+// Emae D. Calonia — navigation for the auth screens and into each role's
+// dashboard. Google Sign-In: the Google button signs in by itself, and
+// _setUpGoogleSignIn() below turns its result into a session.
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -215,18 +211,6 @@ class LoginScreenHost extends StatelessWidget {
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
       },
-      // NOTE: this callback is effectively DEAD CODE on web now — see
-      // _setUpGoogleSignIn() above, which handles the whole web flow
-      // independently since GoogleSignInButton has no onPressed to
-      // trigger this. Kept here only in case a non-web platform later
-      // uses a real clickable button that calls this directly.
-      onGoogleSignIn: () async {
-        final idToken = await GoogleAuthService.instance.signInAndGetIdToken();
-        if (idToken == null) return;
-        await auth.loginWithGoogle(idToken);
-        if (!context.mounted) return;
-        _openDashboardForRole(context, auth.role);
-      },
       onGuestContinue: () {
         auth.continueAsGuest();
         _openDashboardForRole(context, 'commuter', isGuest: true);
@@ -269,13 +253,6 @@ class RegisterScreenHost extends StatelessWidget {
         await auth.login(email, password);
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
-      },
-      onGoogleSignIn: () async {
-        final idToken = await GoogleAuthService.instance.signInAndGetIdToken();
-        if (idToken == null) return;
-        await auth.loginWithGoogle(idToken);
-        if (!context.mounted) return;
-        Navigator.of(context).pop();
       },
     );
   }

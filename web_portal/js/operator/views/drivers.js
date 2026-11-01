@@ -4,8 +4,9 @@
 // both sides of their LTO license (POST /drivers/scan-license), reviewing
 // what was read, and saving (POST /drivers) — which also generates their
 // app login, shown once. Profiles can be viewed, edited, and removed.
-// Tapping a driver's row opens their activity log and live location
-// (DriverActivity, js/operator/driverActivity.js).
+// The operator starts and ends each driver's shift here (the driver app
+// follows); ending one shows its summary. Tapping a driver's row opens
+// their activity log and live location (js/operator/driverActivity.js).
 
 OperatorRouter.register('drivers', {
   title: 'Drivers',
@@ -40,6 +41,7 @@ OperatorRouter.register('drivers', {
 
     let drivers;          // undefined = loading
     let fleet = [];
+    let routes = [];      // to warn when a vehicle's route is inactive
 
     el.innerHTML = `
       <div class="op-page-head">
@@ -80,6 +82,16 @@ OperatorRouter.register('drivers', {
       return fleet.find((v) => v.driver_id === driverId);
     }
 
+    const vehiclesOf = (driverId) => fleet.filter((v) => v.driver_id === driverId);
+
+    const clock = (iso) => OperatorUi.parseDate(iso)?.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) || '';
+
+    function shiftCell(d) {
+      if (!d.shift) return OperatorUi.chip('Off shift');
+      return `${OperatorUi.chip('On shift', 'green')}
+        <div style="color:var(--op-muted);font-size:0.8rem;margin-top:2px;">${esc(d.shift.plate_number)} · since ${esc(clock(d.shift.started_at))}</div>`;
+    }
+
     // ---------- Roster ----------
 
     function renderStats() {
@@ -87,8 +99,8 @@ OperatorRouter.register('drivers', {
       const count = (fn) => (loaded ? drivers.filter(fn).length : undefined);
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Drivers', loaded ? drivers.length : undefined],
-        ['On Duty', count((d) => d.status === 'active'), 'green'],
-        ['Off Duty', count((d) => d.status !== 'active'), 'blue'],
+        ['On Shift', count((d) => d.shift), 'green'],
+        ['Off Shift', count((d) => !d.shift), 'blue'],
         ['Licenses Needing Renewal', count((d) => daysUntil(d.expiration_date) <= EXPIRING_DAYS), 'amber'],
       ]);
     }
@@ -110,9 +122,12 @@ OperatorRouter.register('drivers', {
           <td style="font-family:Consolas,'Courier New',monospace;">${esc(d.license_number)}</td>
           <td>${esc(formatDay(d.expiration_date))}<br>${OperatorUi.chip(lic.label, lic.tone)}</td>
           <td>${vehicle ? esc(vehicle.plate_number) : '<span style="color:var(--op-muted)">—</span>'}</td>
-          <td>${d.status === 'active' ? OperatorUi.chip('On Duty', 'green') : OperatorUi.chip('Off Duty')}</td>
+          <td>${shiftCell(d)}</td>
           <td>
             <div class="data-table__actions">
+              ${d.shift
+                ? `<button type="button" class="btn-sm btn-sm--danger" data-action="end" data-id="${d.id}">End shift</button>`
+                : `<button type="button" class="btn-sm btn-sm--teal" data-action="start" data-id="${d.id}">Start shift</button>`}
               <button type="button" class="btn-sm" data-action="view" data-id="${d.id}">View</button>
               <button type="button" class="btn-sm btn-sm--teal" data-action="edit" data-id="${d.id}">Edit</button>
               <button type="button" class="btn-sm" data-action="login" data-id="${d.id}"
@@ -132,7 +147,7 @@ OperatorRouter.register('drivers', {
         <div class="table-wrap">
           <table class="data-table">
             <thead>
-              <tr><th>Driver</th><th>App Login</th><th>License No.</th><th>Expiry</th><th>Vehicle</th><th>Status</th><th>Actions</th></tr>
+              <tr><th>Driver</th><th>App Login</th><th>License No.</th><th>Expiry</th><th>Vehicle</th><th>Shift</th><th>Actions</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
@@ -144,11 +159,14 @@ OperatorRouter.register('drivers', {
       countEl.textContent = 'Loading drivers…';
       renderStats();
       AdminUi.loadInto(tableEl, async () => {
-        const [d, f] = await Promise.all([OperatorApi.drivers(), OperatorApi.fleet().catch(() => [])]);
-        return { d, f };
-      }, ({ d, f }) => {
+        const [d, f, r] = await Promise.all([
+          OperatorApi.drivers(), OperatorApi.fleet().catch(() => []), OperatorApi.myRoutes().catch(() => []),
+        ]);
+        return { d, f, r };
+      }, ({ d, f, r }) => {
         drivers = d;
         fleet = f;
+        routes = r;
         renderStats();
         renderTable();
       }).then(() => {
@@ -341,7 +359,7 @@ OperatorRouter.register('drivers', {
       const rows = [
         ['Driver Code', d.driver_code],
         ['Full Name (license)', d.full_name],
-        ['Status', d.status === 'active' ? 'On Duty' : 'Off Duty'],
+        ['Shift', d.shift ? `On shift on ${d.shift.plate_number} since ${clock(d.shift.started_at)}` : 'Off shift'],
         ['App Login', d.email || 'No login'],
         ['License Number', d.license_number],
         ['License Expiry', `${formatDay(d.expiration_date)} (${lic.label})`],
@@ -381,25 +399,16 @@ OperatorRouter.register('drivers', {
       AdminModal.open({
         title: `Edit ${OperatorUi.driverName(d)}`,
         size: 'wide',
-        body: `
-          <div class="op-field" style="max-width:240px;margin-bottom:16px;">
-            <label for="df-status">Duty Status</label>
-            <select id="df-status">
-              <option value="active"${d.status === 'active' ? ' selected' : ''}>On Duty</option>
-              <option value="off_duty"${d.status !== 'active' ? ' selected' : ''}>Off Duty</option>
-            </select>
-          </div>
-          ${fieldsHtml(d)}`,
+        body: fieldsHtml(d),
         actions: [
           { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
           {
             label: 'Save Changes',
             variant: 'primary',
             onClick: async (m) => {
-              const body = readForm(m, { forCreate: false });
-              body.status = m.querySelector('#df-status').value;
-              const updated = await OperatorApi.updateDriver(d.id, body);
-              drivers = drivers.map((x) => (x.id === d.id ? { ...x, ...updated, email: x.email, has_signed_in: x.has_signed_in } : x));
+              const updated = await OperatorApi.updateDriver(d.id, readForm(m, { forCreate: false }));
+              drivers = drivers.map((x) => (x.id === d.id
+                ? { ...x, ...updated, email: x.email, has_signed_in: x.has_signed_in, shift: x.shift } : x));
               AdminModal.close();
               renderStats();
               renderTable();
@@ -470,6 +479,124 @@ OperatorRouter.register('drivers', {
       });
     }
 
+    // ---------- Shifts (the driver app follows these) ----------
+
+    /** Why commuters wouldn't see this vehicle even on shift, if they wouldn't. */
+    function visibilityWarnings(v) {
+      const warnings = [];
+      const route = routes.find((r) => r.id === v.route_id);
+      if (route && !route.is_active) {
+        warnings.push(`Route ${route.code} is inactive, so commuters won't see ${v.plate_number}. Activate it on Routes & Stops.`);
+      }
+      if (!v.last_position) {
+        warnings.push(`No GPS from ${v.plate_number} in the last 24 hours. Check its tracker (Vehicles → Set up GPS); the driver's phone fills in while the tracker is offline.`);
+      }
+      return warnings;
+    }
+
+    const warningsHtml = (v) => visibilityWarnings(v)
+      .map((w) => `<p class="modal-text" style="color:var(--op-amber);margin-top:8px;">${esc(w)}</p>`).join('');
+
+    function openStartShift(d) {
+      const name = OperatorUi.driverName(d);
+      const vehicles = vehiclesOf(d.id);
+      if (!vehicles.length) {
+        AdminModal.open({
+          title: 'No vehicle assigned',
+          size: 'sm',
+          body: `<p class="modal-text">Assign a vehicle to ${esc(name)} on the Vehicles page first, then start their shift.</p>`,
+          actions: [
+            { label: 'Close', variant: 'ghost', onClick: AdminModal.close },
+            { label: 'Go to Vehicles', variant: 'primary', onClick: () => { AdminModal.close(); location.hash = '#/vehicles'; } },
+          ],
+        });
+        return;
+      }
+      const choice = vehicles.length > 1
+        ? `<div class="form-field" style="margin-top:12px;">
+             <label for="shift-vehicle">Vehicle</label>
+             <select id="shift-vehicle">${vehicles.map((v) => `<option value="${esc(v.vehicle_id)}">${esc(v.plate_number)}</option>`).join('')}</select>
+           </div>`
+        : '';
+      const modal = AdminModal.open({
+        title: `Start ${name}'s shift?`,
+        size: 'sm',
+        body: `
+          <p class="modal-text">${vehicles.length > 1
+            ? `Pick the vehicle ${esc(name)} is driving.`
+            : `${esc(name)} will be on shift on <strong>${esc(vehicles[0].plate_number)}</strong>.`}
+            Their app switches to On Shift, and commuters can see and board the PUV.</p>
+          ${choice}
+          <div id="shift-warnings">${warningsHtml(vehicles[0])}</div>`,
+        actions: [
+          { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+          {
+            label: 'Start Shift',
+            variant: 'primary',
+            onClick: async (m) => {
+              const vehicleId = vehicles.length > 1 ? m.querySelector('#shift-vehicle').value : undefined;
+              const shift = await OperatorApi.startShift(d.id, vehicleId);
+              AdminModal.close();
+              AdminUi.toast(`${name}'s shift started on ${shift.plate_number}.`);
+              load();
+            },
+          },
+        ],
+      });
+      modal.querySelector('#shift-vehicle')?.addEventListener('change', (e) => {
+        const v = vehicles.find((x) => x.vehicle_id === e.target.value);
+        modal.querySelector('#shift-warnings').innerHTML = v ? warningsHtml(v) : '';
+      });
+    }
+
+    function confirmEndShift(d) {
+      const name = OperatorUi.driverName(d);
+      // Not AdminModal.confirm: it closes itself after the action, which would close the summary too.
+      AdminModal.open({
+        title: `End ${name}'s shift?`,
+        size: 'sm',
+        body: `<p class="modal-text">${esc(name)} is on shift on <strong>${esc(d.shift.plate_number)}</strong>
+          since ${esc(clock(d.shift.started_at))}. Ending it takes the PUV off the commuters' map until the next shift.</p>`,
+        actions: [
+          { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+          {
+            label: 'End Shift',
+            variant: 'decline',
+            onClick: async () => {
+              const summary = await OperatorApi.endShift(d.id);
+              load();
+              showSummary(name, summary);
+            },
+          },
+        ],
+      });
+    }
+
+    function showSummary(name, s) {
+      const minutes = Math.round(s.duration_seconds / 60);
+      const duration = minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`;
+      const gps = { full: 'GPS the whole shift', partial: 'GPS for part of the shift', none: 'No GPS during the shift' }[s.gps_coverage] || '—';
+      const rows = [
+        ['Vehicle', `${s.vehicle.plate_number}${s.vehicle.route_code ? ` · ${s.vehicle.route_code}` : ''}`],
+        ['Time', `${clock(s.started_at)} – ${clock(s.ended_at)} (${duration})`],
+        ['Trips', s.trips],
+        ['Passengers', s.passengers],
+        ['Distance', `${s.distance_km} km`],
+        ['Average crowd', `${s.avg_crowd_percent}% full`],
+        ['GPS', gps],
+      ];
+      AdminModal.open({
+        title: `${name}'s shift ended`,
+        size: 'sm',
+        body: `
+          <dl class="detail-list">
+            ${rows.map(([label, value]) => `
+              <div class="detail-list__row"><dt>${esc(label)}</dt><dd>${esc(String(value))}</dd></div>`).join('')}
+          </dl>`,
+        actions: [{ label: 'Done', variant: 'primary', onClick: AdminModal.close }],
+      });
+    }
+
     // ---------- Events ----------
 
     /** Driver monitoring: fetches their activity log and focuses the map on them. */
@@ -484,7 +611,15 @@ OperatorRouter.register('drivers', {
         if (btn.disabled) return;
         const driver = drivers.find((d) => d.id === btn.dataset.id);
         if (!driver) return;
-        ({ view: openView, edit: openEdit, login: openLogin, remove: confirmRemove })[btn.dataset.action]?.(driver);
+        const actions = {
+          start: (x) => OperatorUi.whenVerified(() => openStartShift(x)),
+          end: confirmEndShift,
+          view: openView,
+          edit: openEdit,
+          login: openLogin,
+          remove: confirmRemove,
+        };
+        actions[btn.dataset.action]?.(driver);
         return;
       }
       const row = e.target.closest('tr[data-driver-id]');

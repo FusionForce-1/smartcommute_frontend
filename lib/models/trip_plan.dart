@@ -157,8 +157,7 @@ class RouteLeg {
 
   String get boardLabel => boardStop.displayName;
 
-  /// Ang backend stub mo-return og placeholder para sa alight stop usab
-  /// (parehas sa board) — dili "Your location" kay sayop man.
+  /// A placeholder alight stop (no stop near the destination) reads as the destination.
   String get alightLabel =>
       alightStop.isPlaceholder ? 'Your destination' : alightStop.name;
 

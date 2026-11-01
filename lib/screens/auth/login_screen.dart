@@ -22,25 +22,19 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     this.onLogin,
-    this.onGoogleSignIn,
     this.onGuestContinue,
     this.onForgotPassword,
     this.onCreateAccount,
   });
 
-  /// TODO: Velez — AuthProvider.login(email, password, rememberMe: rememberMe)
-  /// → ApiService.login() → POST /auth/login
+  /// Signs in (POST /auth/login); throws when the details are wrong.
   final Future<void> Function(
     String email,
     String password,
     bool rememberMe,
   )? onLogin;
 
-  /// TODO: Velez — google_sign_in idToken then
-  /// AuthProvider.loginWithGoogle(idToken) → POST /auth/google
-  final Future<void> Function()? onGoogleSignIn;
-
-  /// TODO: Velez — AuthProvider.continueAsGuest() (local only, no HTTP)
+  /// Browses as a guest: no account, nothing sent.
   final VoidCallback? onGuestContinue;
 
   final VoidCallback? onForgotPassword;
@@ -73,7 +67,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // TODO: Velez — trigger AuthProvider.notifyListeners() after POST /auth/login
       await widget.onLogin?.call(
         _emailController.text.trim(),
         _passwordController.text,
@@ -85,17 +78,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleGoogle() async {
-    try {
-      // TODO: Velez — obtain Google idToken, then POST /auth/google
-      await widget.onGoogleSignIn?.call();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _errorMessage = 'Google sign-in failed. Try again.');
-      }
     }
   }
 

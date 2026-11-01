@@ -5,7 +5,7 @@ import 'package:latlong2/latlong.dart';
 //
 //   {"vehicle_id", "lat", "lng", "speed", "heading", "ts",
 //    "status", "crowd", "eta_next_stop", "next_stop", "traffic",
-//    "duty_status"}
+//    "duty_status", "source"}
 //
 // When a shift ends (by the driver, or because the GPS stayed off) a frame
 // with "shift_ended": true tells live maps to drop the jeep.
@@ -25,6 +25,7 @@ class VehicleLiveUpdate {
     this.nextStop,
     this.traffic,
     this.dutyStatus,
+    this.source,
     this.shiftEnded = false,
   });
 
@@ -39,6 +40,9 @@ class VehicleLiveUpdate {
   final String? nextStop; // name of the stop the jeep reaches next
   final String? traffic; // "light" | "moderate" | "heavy" on this route now
   final String? dutyStatus; // driver's Route Status: on_route | delayed | unavailable
+
+  /// Where the fix came from: "tracker", or "phone" while the tracker is offline.
+  final String? source;
 
   /// The driver's shift is over: the jeep is off the map until the next one.
   final bool shiftEnded;
@@ -66,6 +70,7 @@ class VehicleLiveUpdate {
       nextStop: json['next_stop'] as String?,
       traffic: json['traffic'] as String?,
       dutyStatus: json['duty_status'] as String?,
+      source: json['source'] as String?,
       shiftEnded: json['shift_ended'] == true,
     );
   }
@@ -87,6 +92,7 @@ class VehicleLiveUpdate {
         crowd: update.crowd ?? crowd,
         etaNextStop: update.etaNextStop,
         dutyStatus: update.dutyStatus ?? dutyStatus,
+        source: source,
       );
     }
 

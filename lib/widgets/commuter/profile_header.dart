@@ -35,7 +35,7 @@ class ProfileHeader extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _Avatar(initials: profile.initials),
+                    ProfileAvatar(initials: profile.initials),
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Column(
@@ -68,7 +68,7 @@ class ProfileHeader extends StatelessWidget {
                               style: const TextStyle(fontSize: 15, color: Colors.white),
                             ),
                           const SizedBox(height: AppSpacing.xs),
-                          _RoleBadge(label: role[0].toUpperCase() + role.substring(1)),
+                          RoleBadge(label: role[0].toUpperCase() + role.substring(1)),
                         ],
                       ),
                     ),
@@ -93,16 +93,18 @@ class ProfileHeader extends StatelessWidget {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.initials});
+/// Initials in a white-ringed circle on the teal header.
+class ProfileAvatar extends StatelessWidget {
+  const ProfileAvatar({super.key, required this.initials, this.size = 104});
 
   final String initials;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 104,
-      height: 104,
+      width: size,
+      height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.18),
@@ -111,14 +113,15 @@ class _Avatar extends StatelessWidget {
       ),
       child: Text(
         initials,
-        style: const TextStyle(fontSize: 38, fontWeight: FontWeight.w600, color: Colors.white),
+        style: TextStyle(fontSize: size * 0.36, fontWeight: FontWeight.w600, color: Colors.white),
       ),
     );
   }
 }
 
-class _RoleBadge extends StatelessWidget {
-  const _RoleBadge({required this.label});
+/// "Commuter" / "Driver" pill.
+class RoleBadge extends StatelessWidget {
+  const RoleBadge({super.key, required this.label});
 
   final String label;
 

@@ -1,6 +1,7 @@
 // lib/widgets/driver/route_status_card.dart
 //
-// On-Route / Delayed / Unavailable: what commuters are told about this trip.
+// "Route Status": On-Route / Delayed / Unavailable. The chosen one is
+// filled; commuters see it on the live map. Only changeable during a shift.
 
 import 'package:flutter/material.dart';
 
@@ -9,34 +10,50 @@ import '../../models/driver_dashboard.dart';
 import 'driver_card.dart';
 
 class RouteStatusCard extends StatelessWidget {
-  const RouteStatusCard({super.key, required this.selected, required this.onSelected});
+  const RouteStatusCard({super.key, required this.status, required this.onChanged});
 
-  final DutyStatus selected;
-  final ValueChanged<DutyStatus> onSelected;
+  final RouteStatus status;
 
-  static Color colorOf(DutyStatus status) => switch (status) {
-        DutyStatus.onRoute => AppColors.shiftGreen,
-        DutyStatus.delayed => AppColors.accent,
-        DutyStatus.unavailable => AppColors.navInactive,
+  /// Null while off shift: the buttons are shown but locked.
+  final ValueChanged<RouteStatus>? onChanged;
+
+  static Color colorOf(RouteStatus status) => switch (status) {
+        RouteStatus.onRoute => AppColors.shiftGreen,
+        RouteStatus.delayed => AppColors.accent,
+        RouteStatus.unavailable => AppColors.navInactive,
       };
 
   @override
   Widget build(BuildContext context) {
+    final onChanged = this.onChanged;
     return DriverCard(
+      key: const Key('routeStatusCard'),
       title: 'Route Status',
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final status in DutyStatus.values) ...[
-            if (status != DutyStatus.values.first) const SizedBox(width: 12),
-            Expanded(
-              child: _StatusButton(
-                label: status.label,
-                color: colorOf(status),
-                selected: status == selected,
-                onTap: () => onSelected(status),
+          Row(
+            children: [
+              for (final s in RouteStatus.values) ...[
+                if (s != RouteStatus.values.first) const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: _StatusButton(
+                    status: s,
+                    selected: s == status,
+                    onPressed: onChanged == null ? null : () => onChanged(s),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (onChanged == null)
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                'You can change this once your shift starts.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
             ),
-          ],
         ],
       ),
     );
@@ -44,44 +61,44 @@ class RouteStatusCard extends StatelessWidget {
 }
 
 class _StatusButton extends StatelessWidget {
-  const _StatusButton({
-    required this.label,
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
+  const _StatusButton({required this.status, required this.selected, required this.onPressed});
 
-  final String label;
-  final Color color;
+  final RouteStatus status;
   final bool selected;
-  final VoidCallback onTap;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final shape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
-      side: BorderSide(color: selected ? color : AppColors.divider, width: 1.4),
-    );
-    return Semantics(
-      button: true,
-      selected: selected,
+    final color = RouteStatusCard.colorOf(status);
+    final enabled = onPressed != null;
+    return AnimatedContainer(
+      key: Key('routeStatus_${status.apiValue}'),
+      duration: const Duration(milliseconds: 200),
+      height: 40,
+      decoration: BoxDecoration(
+        color: selected ? color.withValues(alpha: enabled ? 1 : 0.45) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: selected ? Colors.transparent : AppColors.divider, width: 1.4),
+      ),
       child: Material(
-        color: selected ? color : Colors.white,
-        shape: shape,
+        type: MaterialType.transparency,
         child: InkWell(
-          onTap: onTap,
-          customBorder: shape,
-          child: SizedBox(
-            height: 44,
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: 15, color: selected ? Colors.white : AppColors.textPrimary),
-                  ),
+          borderRadius: BorderRadius.circular(10),
+          onTap: selected ? null : onPressed,
+          child: Center(
+            child: Semantics(
+              selected: selected,
+              button: true,
+              child: Text(
+                status.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                  color: selected
+                      ? Colors.white
+                      : (enabled ? AppColors.textPrimary : AppColors.navInactive),
                 ),
               ),
             ),

@@ -15,3 +15,14 @@ String timeAgo(DateTime time, {DateTime? now}) {
   if (hours < 48) return 'Yesterday';
   return '${_months[local.month - 1]} ${local.day}';
 }
+
+const _longMonths = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/// "October 29, 2026" in local time.
+String formatLongDate(DateTime time) {
+  final local = time.toLocal();
+  return '${_longMonths[local.month - 1]} ${local.day}, ${local.year}';
+}

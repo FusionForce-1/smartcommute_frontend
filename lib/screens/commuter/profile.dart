@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
-import '../../constants/legal_text.dart';
 import '../../models/commuter_profile.dart';
 import '../../models/ride_review.dart';
 import '../../models/vehicles.dart';
@@ -219,39 +218,9 @@ List<Widget> _infoLinks(BuildContext context) => [
       SettingsLinkRow(
         icon: Icons.description_outlined,
         label: 'Terms & Privacy Policy',
-        onTap: () => _showLegalChoices(context),
+        onTap: () => showLegalChoices(context),
       ),
     ];
-
-/// Lets the commuter pick which document to read.
-void _showLegalChoices(BuildContext context) {
-  showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (icon, doc) in [
-            (Icons.description_outlined, userAgreement),
-            (Icons.privacy_tip_outlined, privacyPolicy),
-          ])
-            ListTile(
-              leading: Icon(icon, color: AppColors.brandTeal),
-              title: Text(doc.title),
-              subtitle: Text('Last updated ${doc.updated}'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                showLegalDoc(context, doc);
-              },
-            ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-      ),
-    ),
-  );
-}
 
 /// "Rate Your Ride": a button to review a ride, and the latest reviews sent.
 class _RateYourRide extends StatelessWidget {

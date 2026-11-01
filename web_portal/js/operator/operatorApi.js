@@ -38,8 +38,16 @@ const OperatorApi = {
   deleteDriver: (id) => ApiClient.delete(`/drivers/${id}`),
   /** Driver monitoring: { name, on_shift, duty_status, current_location, events[] }. */
   driverActivity: (id) => ApiClient.get(`/drivers/${id}/activity`),
-  /** Commuters' ride reviews of this operator's drivers (+ per-driver summary). */
-  driverReviews: (driverId) => ApiClient.get('/reviews/operator', driverId ? { driver_id: driverId } : undefined),
+  /** Starts the driver's shift; vehicleId only when they have several. Returns { id, plate_number, started_at }. */
+  startShift: (driverId, vehicleId) => ApiClient.post(`/drivers/${driverId}/shift`, vehicleId ? { vehicle_id: vehicleId } : {}),
+  /** Ends it and returns its summary (trips, passengers, km, duration). */
+  endShift: (driverId) => ApiClient.post(`/drivers/${driverId}/shift/end`),
+  /** Commuters' ride reviews of this operator's drivers (+ per-driver summary), for a period and in an order. */
+  driverReviews: ({ driverId, days, sort } = {}) => ApiClient.get('/reviews/operator', {
+    ...(driverId ? { driver_id: driverId } : {}),
+    ...(days ? { days } : {}),
+    ...(sort ? { sort } : {}),
+  }),
   addVehicle: ({ plate_number, route_id, driver_id }) =>
     ApiClient.post('/vehicles', { plate_number, route_id, driver_id: driver_id || null }),
   updateVehicle: (id, changes) => ApiClient.patch(`/vehicles/${id}`, changes),
@@ -54,11 +62,13 @@ const OperatorApi = {
   setTrackerWifi: (vehicleId, networks) => ApiClient.put(`/vehicles/${vehicleId}/tracker-wifi`, { networks }),
   trackerFirmware: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-firmware`),
   updateTrackerFirmware: (vehicleId) => ApiClient.post(`/vehicles/${vehicleId}/tracker-firmware/update`),
+  /** Where the vehicle went between start and end (ISO, UTC; last 24 h only), for Playback. */
+  vehicleTrack: (vehicleId, { start, end }) => ApiClient.get(`/vehicles/${vehicleId}/track`, { start, end }),
 
   // ---- Routes ----
   myRoutes: () => ApiClient.get('/routes/mine'),
-  /** Active routes with their map geometry (public list). */
-  mapRoutes: () => ApiClient.get('/routes'),
+  /** One route with its line and stops. */
+  route: (id) => ApiClient.get(`/routes/${id}`),
   createRoute: ({ code, name, origin, destination, baseFare, originAt, destinationAt, path }) =>
     ApiClient.post('/routes', {
       code,

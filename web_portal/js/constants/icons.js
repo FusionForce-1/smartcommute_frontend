@@ -53,6 +53,7 @@ const ICONS = Object.freeze({
   navRoutes: 'route',
   navVehicles: 'bus',
   navDrivers: 'id-card',
+  navPlayback: 'history',
   navAnnouncements: 'megaphone',
   navOperatorReports: 'bar-chart-3',
   navProfile: 'user-round',

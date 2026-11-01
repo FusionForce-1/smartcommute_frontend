@@ -63,10 +63,6 @@ class GoogleAuthService {
         }
       }
     }
-
-    if (event is GoogleSignInAuthenticationEventSignOut) {
-      print('Google user signed out.');
-    }
   }
 
   void _handleAuthError(Object error) {
