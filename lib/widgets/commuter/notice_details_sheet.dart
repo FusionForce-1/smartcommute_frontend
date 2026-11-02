@@ -1,35 +1,34 @@
-// lib/widgets/commuter/alert_details_sheet.dart
+// lib/widgets/commuter/notice_details_sheet.dart
 //
-// Full text of a transit alert, opened by tapping its card.
+// Full text of an operator notice, opened by tapping its card.
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
-import '../../models/commuter_alert.dart';
+import '../../models/commuter_notice.dart';
 import '../../utils/time_ago.dart';
-import 'alert_style.dart';
+import 'notice_style.dart';
 import 'route_code_chip.dart';
 
-Future<void> showAlertDetailsSheet(BuildContext context, CommuterAlert alert) {
+Future<void> showNoticeDetailsSheet(BuildContext context, CommuterNotice notice) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: Colors.white,
-    builder: (_) => SafeArea(child: AlertDetailsSheet(alert: alert)),
+    builder: (_) => SafeArea(child: NoticeDetailsSheet(notice: notice)),
   );
 }
 
-class AlertDetailsSheet extends StatelessWidget {
-  const AlertDetailsSheet({super.key, required this.alert});
+class NoticeDetailsSheet extends StatelessWidget {
+  const NoticeDetailsSheet({super.key, required this.notice});
 
-  final CommuterAlert alert;
+  final CommuterNotice notice;
 
   @override
   Widget build(BuildContext context) {
-    final style = AlertStyle.of(alert);
-    final resolvedAt = alert.resolvedAt;
-    final source = alert.companyName;
+    final style = NoticeStyle.of(notice);
+    final source = notice.companyName;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
@@ -44,24 +43,19 @@ class AlertDetailsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(alert.title, style: Theme.of(context).textTheme.titleLarge),
+          Text(notice.title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.xs),
-          RouteCodeChip(code: alert.routeCode ?? 'All routes'),
+          RouteCodeChip(code: noticeRoutes(notice)),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            alert.message,
+            notice.message,
             style: const TextStyle(fontSize: 15, color: AppColors.textPrimary, height: 1.4),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            ['Posted · ${timeAgo(alert.createdAt)}', if (source != null) source].join(' · '),
+            ['Posted · ${timeAgo(notice.createdAt)}', if (source != null) source].join(' · '),
             style: const TextStyle(fontSize: 13, color: AppColors.navInactive),
           ),
-          if (resolvedAt != null)
-            Text(
-              'Resolved · ${timeAgo(resolvedAt)}',
-              style: const TextStyle(fontSize: 13, color: AppColors.success),
-            ),
         ],
       ),
     );

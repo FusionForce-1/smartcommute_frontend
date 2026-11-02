@@ -2,8 +2,8 @@
 //
 // State behind the Driver Dashboard: who the driver is, their assigned
 // vehicles and routes, the shift their operator started, crowd, passenger
-// and route-status reports during it, who they drive for, and their
-// updates (notifications), filtered by period on the Updates tab.
+// and route-status reports during it, who they drive for, and the reports
+// they send their operator, filtered by period on the Reports tab.
 //
 // The operator starts and ends shifts in the portal; [refresh] (every
 // [refreshInterval] once [startAutoRefresh] is called, and right away when
@@ -24,6 +24,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/driver_dashboard.dart';
+import '../models/driver_report.dart';
 import '../models/transport_model.dart';
 import '../models/vehicle_live_update.dart';
 import '../services/api_error.dart';
@@ -70,10 +71,10 @@ class DriverProvider extends ChangeNotifier {
   DriverShift? _shift;
   int _crowdPercent = 0;
   RouteStatus _routeStatus = RouteStatus.unavailable;
-  List<DriverUpdate> _updates = const [];
-  UpdatesPeriod _updatesPeriod = UpdatesPeriod.recent;
-  DateTime? _updatesDay;
-  bool _updatesLoading = false;
+  List<DriverReport> _reports = const [];
+  ReportsPeriod _reportsPeriod = ReportsPeriod.recent;
+  DateTime? _reportsDay;
+  bool _reportsLoading = false;
   TransportRoute? _route;   // the current vehicle's line and stops
   VehicleLiveUpdate? _live;
   DateTime? _liveAt;
@@ -90,17 +91,18 @@ class DriverProvider extends ChangeNotifier {
   DriverOperator? get operator => _data?.operator;
   AssignedVehicle? get recentRoute => _data?.recentRoute;
   RouteStatus get routeStatus => onShift ? _routeStatus : RouteStatus.unavailable;
-  UpdatesPeriod get updatesPeriod => _updatesPeriod;
+  ReportsPeriod get reportsPeriod => _reportsPeriod;
 
-  /// The calendar day picked on the Updates tab (period [UpdatesPeriod.day]).
-  DateTime? get updatesDay => _updatesDay;
-  bool get updatesLoading => _updatesLoading;
+  /// The calendar day picked on the Reports tab (period [ReportsPeriod.day]).
+  DateTime? get reportsDay => _reportsDay;
+  bool get reportsLoading => _reportsLoading;
   List<AssignedVehicle> get vehicles => _data?.vehicles ?? const [];
   DriverShift? get shift => _shift;
   bool get onShift => _shift != null;
   int get crowdPercent => _crowdPercent;
-  List<DriverUpdate> get updates => _updates;
-  int get unreadUpdates => _updates.where((u) => !u.isRead).length;
+
+  /// The reports this driver sent in the chosen period, newest first.
+  List<DriverReport> get reports => _reports;
 
   /// Why the phone isn't sharing its location (e.g. permission denied), if so.
   String? get gpsError => _gpsError;
@@ -153,7 +155,7 @@ class DriverProvider extends ChangeNotifier {
       notifyListeners();
       unawaited(_loadCurrentRoute());
       await _syncPhoneGps();
-      await loadUpdates();
+      await loadReports();
     } catch (e) {
       _loadError = apiErrorMessage(e);
       if (_data == null) _loadState = LoadState.error;
@@ -172,42 +174,45 @@ class DriverProvider extends ChangeNotifier {
     _timer = Timer.periodic(refreshInterval, (_) => refresh());
   }
 
-  Future<void> loadUpdates() async {
-    final range = updatesRange(_updatesPeriod, _now(), day: _updatesDay);
-    final period = _updatesPeriod;
-    _updatesLoading = true;
+  Future<void> loadReports() async {
+    final period = _reportsPeriod;
+    final day = _reportsDay;
+    final range = reportsRange(period, _now(), day: day);
+    _reportsLoading = true;
     notifyListeners();
     try {
-      final list = await _service.updates(since: range.since, until: range.until);
-      if (period == _updatesPeriod) _updates = list;   // ignore a slower, older request
+      final list = await _service.sentReports(since: range.since, until: range.until);
+      // Ignore a slower answer for a filter that's no longer chosen.
+      if (period == _reportsPeriod && day == _reportsDay) _reports = list;
     } catch (_) {
-      // Updates are extra: keep showing the last ones.
+      // The list is extra: keep showing the last one.
     } finally {
-      _updatesLoading = false;
+      _reportsLoading = false;
       notifyListeners();
     }
   }
 
-  /// A filter chip ([period]) or a calendar [day] on the Updates tab.
-  Future<void> showUpdates(UpdatesPeriod period, {DateTime? day}) {
-    _updatesPeriod = period;
-    _updatesDay = period == UpdatesPeriod.day ? day : null;
-    return loadUpdates();
+  /// A filter chip ([period]) or a calendar [day] on the Reports tab.
+  Future<void> showReports(ReportsPeriod period, {DateTime? day}) {
+    _reportsPeriod = period;
+    _reportsDay = period == ReportsPeriod.day ? day : null;
+    return loadReports();
   }
 
-  Future<void> markUpdatesRead() async {
-    if (unreadUpdates == 0) return;
-    final before = _updates;
-    _updates = [
-      for (final u in _updates)
-        DriverUpdate(id: u.id, kind: u.kind, title: u.title, body: u.body, createdAt: u.createdAt, isRead: true),
-    ];
-    notifyListeners();
+  /// Sends a report to the driver's operator. [requestId] stays the same for
+  /// retries of one report, so a resend after a dropped connection is stored
+  /// once. Returns the stored report, or a message to show.
+  Future<({DriverReport? sent, String? error})> sendReport(
+    DriverReportCategory category, {
+    String? note,
+    required String requestId,
+  }) async {
     try {
-      await _service.markUpdatesRead();
-    } catch (_) {
-      _updates = before;
-      notifyListeners();
+      final sent = await _service.sendReport(category: category, note: note, requestId: requestId);
+      unawaited(loadReports());
+      return (sent: sent, error: null);
+    } catch (e) {
+      return (sent: null, error: apiErrorMessage(e));
     }
   }
 

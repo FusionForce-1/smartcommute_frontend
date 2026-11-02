@@ -11,6 +11,7 @@ OperatorRouter.register('fleet', {
     const CEBU = [10.3157, 123.8854];
     const POLL_MS = 30000;
     const RECENT_PING_MS = 10 * 60 * 1000;
+    const ALERT_RECENT_MS = 24 * 60 * 60 * 1000;
     // Green only while GPS is actually arriving: the stored status stays
     // "active" when a tracker is switched off or never connected (the
     // backend only notices a stop while it is running), so the map goes by
@@ -233,7 +234,10 @@ OperatorRouter.register('fleet', {
       fleet.forEach((v) => {
         if (v.route_status === 'congested' || v.route_status === 'suspended') troubled.set(v.route_id, v.route_status);
       });
-      const open = alerts.filter((a) => !a.is_resolved);
+      // Service alerts sent in the last day and not withdrawn (notices have no "resolved").
+      const dayAgo = Date.now() - ALERT_RECENT_MS;
+      const open = alerts.filter((a) => a.category === 'service_alert' && !a.withdrawn_at
+        && (OperatorUi.parseDate(a.created_at) || 0) >= dayAgo);
 
       const items = [
         ...[...troubled].map(([id, status]) => {
@@ -249,7 +253,7 @@ OperatorRouter.register('fleet', {
           return `
             <div class="op-list__item">
               <div class="op-list__meta">
-                ${OperatorUi.chip(sev.label, sev.tone)} ${OperatorUi.chip(a.route_code || 'All routes')}
+                ${OperatorUi.chip(sev.label, sev.tone)} ${OperatorUi.chip(a.route_codes.length === 1 ? a.route_codes[0] : 'Your routes')}
                 <span>${esc(OperatorUi.timeAgo(a.created_at))}</span>
               </div>
               <strong>${esc(a.title)}</strong>
@@ -327,7 +331,7 @@ OperatorRouter.register('fleet', {
         const [f, r, a] = await Promise.all([
           OperatorApi.fleet(),
           OperatorApi.myRoutes(),
-          OperatorApi.myAlerts().catch(() => []),
+          OperatorApi.sentNotices({ limit: 20 }).catch(() => []),
         ]);
         return { f, r, a };
       };
@@ -370,7 +374,6 @@ OperatorRouter.register('fleet', {
       socket.addEventListener('message', (event) => {
         let msg;
         try { msg = JSON.parse(event.data); } catch { return; }
-        if (msg.type === 'transit_alert') return; // published from Announcements
         const vehicle = fleet.find((v) => v.vehicle_id === msg.vehicle_id);
         if (!vehicle) return; // another operator's vehicle
         if (typeof msg.lat === 'number' && typeof msg.lng === 'number') {

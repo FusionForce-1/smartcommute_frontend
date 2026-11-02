@@ -190,7 +190,12 @@ const AdminUi = (() => {
 
   // ---------- Toast ----------
 
-  function toast(message, { error = false } = {}) {
+  /**
+   * `sticky` keeps it up until its × is clicked (for things that must not be
+   * missed); `onClick` makes the toast itself a button that also closes it.
+   * Returns the toast element, so the caller can take it down early.
+   */
+  function toast(message, { error = false, sticky = false, onClick = null } = {}) {
     let root = document.getElementById('toast-root');
     if (!root) {
       root = document.createElement('div');
@@ -200,10 +205,33 @@ const AdminUi = (() => {
       document.body.appendChild(root);
     }
     const el = document.createElement('div');
-    el.className = `toast${error ? ' toast--error' : ''}`;
-    el.textContent = message;
+    el.className = `toast${error ? ' toast--error' : ''}${onClick ? ' toast--action' : ''}`;
+    const text = document.createElement('span');
+    text.textContent = message;
+    el.appendChild(text);
+
+    if (onClick) {
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      const activate = () => { el.remove(); onClick(); };
+      el.addEventListener('click', activate);
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+      });
+    }
+    if (sticky) {
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'toast__close';
+      close.setAttribute('aria-label', 'Dismiss');
+      close.textContent = '×';
+      close.addEventListener('click', (e) => { e.stopPropagation(); el.remove(); });
+      el.appendChild(close);
+    } else {
+      setTimeout(() => el.remove(), 3500);
+    }
     root.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
+    return el;
   }
 
   return {

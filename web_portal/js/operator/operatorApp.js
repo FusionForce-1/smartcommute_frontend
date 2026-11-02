@@ -12,6 +12,7 @@ const OperatorApp = (() => {
     { route: 'routes', label: 'Routes & Stops', icon: 'navRoutes' },
     { route: 'vehicles', label: 'Vehicles', icon: 'navVehicles' },
     { route: 'drivers', label: 'Drivers', icon: 'navDrivers' },
+    { route: 'driver-reports', label: 'Driver Reports', icon: 'navDriverReports', badgeId: 'op-reports-badge' },
     { route: 'announcements', label: 'Announcements', icon: 'navAnnouncements' },
     { route: 'reports', label: 'Reports', icon: 'navOperatorReports' },
     { route: 'profile', label: 'Profile', icon: 'navProfile' },
@@ -24,7 +25,8 @@ const OperatorApp = (() => {
     ['Routes & Stops', 'Add and edit routes, fares and stops. New routes start inactive until you are ready to begin service.'],
     ['Vehicles', 'Register vehicles, assign them to routes and drivers, and manage their GPS trackers.'],
     ['Drivers', 'Add a driver by scanning both sides of their license, then hand them the app login shown once after saving. You also start and end each shift here; the driver app follows.'],
-    ['Announcements', 'Publish transit alerts to notify commuters and drivers about service changes.'],
+    ['Driver Reports', 'Emergencies, breakdowns, delays and other reports your drivers send from the app, with the vehicle, route and location when they are on shift. The red badge counts unread ones; new reports pop up on any page within 30 seconds.'],
+    ['Announcements', 'Send service alerts, schedule changes and promotions to the commuters who ride your routes.'],
     ['Reports', 'Fleet and service figures, and revenue from the daily remittances you record for each vehicle.'],
     ['Subscription (top-right button)', 'Your first 3 months are free. After that the plan is ₱1,000 a year, paid with PayPal, for unlimited vehicles.'],
     ['Profile & Settings', 'Update your company details, and turn two-factor authentication on or off.'],
@@ -58,10 +60,11 @@ const OperatorApp = (() => {
   }
 
   // Same sidebar markup as the admin portal (see adminApp.js), styled by admin.css.
-  function navLink({ route, label, icon }) {
+  function navLink({ route, label, icon, badgeId }) {
     return `
       <a href="#/${route}" class="admin-nav__link" data-route="${route}">
         ${iconMarkup(icon)}<span class="admin-nav__label">${label}</span>
+        ${badgeId ? `<span class="op-nav-badge" id="${badgeId}" title="Unread" hidden></span>` : ''}
       </a>`;
   }
 
@@ -142,6 +145,7 @@ const OperatorApp = (() => {
     renderSidebar();
     loadProfile();
     OperatorRouter.start(onRouteChange);
+    DriverReportAlerts.start();
     document.getElementById('op-subscription').addEventListener('click', OperatorSubscription.open);
     // Back from PayPal (?paypal=return|cancel): reopen the Subscription popup.
     if (new URLSearchParams(location.search).has('paypal')) OperatorSubscription.open();

@@ -105,7 +105,7 @@ class SavedRoute {
 
 /// Which commuter notifications to receive.
 enum NotificationPref {
-  routeAlerts('route_alerts', 'Route Alerts', 'Delays, suspensions, incidents'),
+  routeAlerts('route_alerts', 'Route Alerts', 'Delays, suspensions, incidents. Critical alerts always come through'),
   scheduleUpdates('schedule_updates', 'Schedule Updates', 'New stops, time changes'),
   promotions('promotions', 'Promotions', 'Fare discounts, special offers');
 

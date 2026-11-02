@@ -736,6 +736,22 @@ body.admin-body {
   background: var(--color-error);
 }
 
+.toast--action {
+  cursor: pointer;
+}
+
+.toast__close {
+  margin-left: 0.75rem;
+  padding: 0 0.25rem;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(0.5rem); }
 }

@@ -669,6 +669,38 @@
   font-size: 13px;
 }
 
+/* ---------- Driver reports ---------- */
+
+.op-dr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: var(--space-sm);
+}
+
+.op-dr-filters .op-field { width: 220px; }
+
+/* Unread count on the sidebar's Driver Reports link */
+.op-nav-badge {
+  min-width: 1.5rem;
+  margin-left: auto;
+  padding: 0.125rem 0.45rem;
+  border-radius: 999px;
+  background: var(--op-red);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+}
+
+/* Their display rules would otherwise override the hidden attribute. */
+.op-nav-badge[hidden],
+.op-btn[hidden],
+.op-field[hidden] { display: none; }
+
 /* ---------- Profile ---------- */
 
 .op-narrow {
@@ -1014,6 +1046,17 @@
   .op-grid--2,
   .op-form__grid,
   .op-upload-grid { grid-template-columns: 1fr; }
+  /* Icon-only sidebar: pin the badge to the icon's corner. */
+  .op-body .admin-nav__link { position: relative; }
+  .op-nav-badge {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    min-width: 1.1rem;
+    padding: 0 0.3rem;
+    font-size: 0.65rem;
+  }
+  .op-dr-filters .op-field { width: 100%; }
 }
 
 /* ---------- Create Route: Origin → Destination map picker (routePicker.js) ---------- */

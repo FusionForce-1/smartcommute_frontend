@@ -2,8 +2,7 @@
 //
 // The signed-in driver's dashboard (GET /drivers/me): their assigned
 // vehicles and routes, the shift their operator started, their route
-// status, who they drive for, their most recent route, and their updates
-// (GET /notifications, filtered by [UpdatesPeriod]).
+// status, who they drive for, and their most recent route.
 
 import 'vehicle_live_update.dart' show parseServerTime;
 
@@ -153,66 +152,5 @@ class DriverDashboardData {
         recentRoute: json['recent_route'] == null
             ? null
             : AssignedVehicle.fromJson(json['recent_route'] as Map<String, dynamic>),
-      );
-}
-
-/// The Updates tab's filter chips (and the calendar's [day]).
-enum UpdatesPeriod {
-  recent('Recent'),
-  today('Today'),
-  yesterday('Yesterday'),
-  lastMonth('Last Month'),
-  lastYear('Last Year'),
-  day('Day');
-
-  const UpdatesPeriod(this.label);
-
-  final String label;
-}
-
-/// The [since, until) a period covers, in local time; nulls mean open-ended.
-/// "Last Month" / "Last Year" are the past 30 / 365 days up to now.
-({DateTime? since, DateTime? until}) updatesRange(UpdatesPeriod period, DateTime now, {DateTime? day}) {
-  final today = DateTime(now.year, now.month, now.day);
-  return switch (period) {
-    UpdatesPeriod.recent => (since: null, until: null),
-    UpdatesPeriod.today => (since: today, until: null),
-    UpdatesPeriod.yesterday => (since: today.subtract(const Duration(days: 1)), until: today),
-    UpdatesPeriod.lastMonth => (since: today.subtract(const Duration(days: 30)), until: null),
-    UpdatesPeriod.lastYear => (since: today.subtract(const Duration(days: 365)), until: null),
-    UpdatesPeriod.day => () {
-        final d = day ?? today;
-        final start = DateTime(d.year, d.month, d.day);
-        return (since: start, until: DateTime(start.year, start.month, start.day + 1));
-      }(),
-  };
-}
-
-/// One of the driver's notifications: shift started / ended, a vehicle
-/// assigned, an operator announcement, ...
-class DriverUpdate {
-  const DriverUpdate({
-    required this.id,
-    required this.kind,
-    required this.title,
-    required this.body,
-    required this.createdAt,
-    this.isRead = false,
-  });
-
-  final String id;
-  final String kind;
-  final String title;
-  final String body;
-  final DateTime createdAt;
-  final bool isRead;
-
-  factory DriverUpdate.fromJson(Map<String, dynamic> json) => DriverUpdate(
-        id: json['id'] as String,
-        kind: json['kind'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        body: json['body'] as String? ?? '',
-        createdAt: parseServerTime(json['created_at']) ?? DateTime.now(),
-        isRead: json['is_read'] as bool? ?? false,
       );
 }

@@ -1,17 +1,17 @@
-// lib/widgets/commuter/alert_filter_bar.dart
+// lib/widgets/commuter/notice_filter_bar.dart
 //
-// Scrollable row of filter pills (All / Critical / Warning / Info / Resolved).
+// Scrollable row of filter pills (All / Service alerts / Schedule / Promotions).
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
-import '../../models/commuter_alert.dart';
+import '../../models/commuter_notice.dart';
 
-class AlertFilterBar extends StatelessWidget {
-  const AlertFilterBar({super.key, required this.selected, required this.onSelected});
+class NoticeFilterBar extends StatelessWidget {
+  const NoticeFilterBar({super.key, required this.selected, required this.onSelected});
 
-  final AlertFilter selected;
-  final ValueChanged<AlertFilter> onSelected;
+  final NoticeFilter selected;
+  final ValueChanged<NoticeFilter> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +19,7 @@ class AlertFilterBar extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
-          for (final filter in AlertFilter.values)
+          for (final filter in NoticeFilter.values)
             Padding(
               padding: const EdgeInsets.only(right: AppSpacing.xs),
               child: _FilterPill(

@@ -1,17 +1,19 @@
 // lib/widgets/commuter/commuter_nav_bar.dart
 //
 // Bottom navigation for the commuter dashboard: the selected tab is a
-// filled teal tile, the others are grey icon + label.
+// filled teal tile, the others are grey icon + label. A tab can show a dot
+// (e.g. unread notifications).
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
 class CommuterNavItem {
-  const CommuterNavItem({required this.icon, required this.label});
+  const CommuterNavItem({required this.icon, required this.label, this.showDot = false});
 
   final IconData icon;
   final String label;
+  final bool showDot;
 }
 
 class CommuterNavBar extends StatelessWidget {
@@ -86,7 +88,12 @@ class _NavButton extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(item.icon, size: 28, color: color),
+                  Badge(
+                    isLabelVisible: item.showDot,
+                    smallSize: 9,
+                    backgroundColor: AppColors.error,
+                    child: Icon(item.icon, size: 28, color: color),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     item.label,

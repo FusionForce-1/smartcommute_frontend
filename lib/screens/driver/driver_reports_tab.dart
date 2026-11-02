@@ -1,40 +1,41 @@
-// lib/screens/driver/driver_updates_tab.dart
+// lib/screens/driver/driver_reports_tab.dart
 //
-// The driver's Updates tab: their notifications (shift started / ended,
-// vehicle assigned or removed, announcements), filtered with the chips
+// The driver's Reports tab: "Report to operator" (a breakdown, a delay, an
+// emergency, ...) and the reports they've sent, filtered with the chips
 // (Recent, Today, Yesterday, Last Month, Last Year) or a calendar day.
-// Each filter asks the server for that period. Opening the tab marks the
-// updates read.
+// Reports only go to the driver's own operator, and operators can't reply
+// here, so there is no read state to show.
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
-import '../../models/driver_dashboard.dart';
+import '../../models/driver_report.dart';
 import '../../providers/driver_provider.dart';
 import '../../utils/shift_time.dart';
 import '../../utils/time_ago.dart';
+import '../../widgets/driver/report_sheet.dart';
 
-class DriverUpdatesTab extends StatelessWidget {
-  const DriverUpdatesTab({super.key, required this.driver});
+class DriverReportsTab extends StatelessWidget {
+  const DriverReportsTab({super.key, required this.driver});
 
   final DriverProvider driver;
 
   static const _chips = [
-    UpdatesPeriod.recent,
-    UpdatesPeriod.today,
-    UpdatesPeriod.yesterday,
-    UpdatesPeriod.lastMonth,
-    UpdatesPeriod.lastYear,
+    ReportsPeriod.recent,
+    ReportsPeriod.today,
+    ReportsPeriod.yesterday,
+    ReportsPeriod.lastMonth,
+    ReportsPeriod.lastYear,
   ];
 
   Future<void> _pickDay(BuildContext context) async {
     final today = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: driver.updatesDay ?? today,
+      initialDate: driver.reportsDay ?? today,
       firstDate: DateTime(today.year - 2),
       lastDate: today,
-      helpText: 'Show updates from',
+      helpText: 'Show reports from',
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(primary: AppColors.brandTeal),
@@ -42,28 +43,60 @@ class DriverUpdatesTab extends StatelessWidget {
         child: child!,
       ),
     );
-    if (picked != null) driver.showUpdates(UpdatesPeriod.day, day: picked);
+    if (picked != null) driver.showReports(ReportsPeriod.day, day: picked);
   }
 
-  String get _emptyText => switch (driver.updatesPeriod) {
-        UpdatesPeriod.recent => 'No updates yet.',
-        UpdatesPeriod.today => 'No updates today.',
-        UpdatesPeriod.yesterday => 'No updates yesterday.',
-        UpdatesPeriod.lastMonth => 'No updates in the last month.',
-        UpdatesPeriod.lastYear => 'No updates in the last year.',
-        UpdatesPeriod.day => 'No updates on ${formatLongDate(driver.updatesDay ?? DateTime.now())}.',
+  Future<void> _report(BuildContext context) async {
+    final confirmation = await showReportSheet(context, driver);
+    if (confirmation != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(confirmation)));
+    }
+  }
+
+  String get _emptyText => switch (driver.reportsPeriod) {
+        ReportsPeriod.recent => 'No reports sent yet.',
+        ReportsPeriod.today => 'No reports sent today.',
+        ReportsPeriod.yesterday => 'No reports sent yesterday.',
+        ReportsPeriod.lastMonth => 'No reports sent in the last month.',
+        ReportsPeriod.lastYear => 'No reports sent in the last year.',
+        ReportsPeriod.day => 'No reports sent on ${formatLongDate(driver.reportsDay ?? DateTime.now())}.',
       };
 
   @override
   Widget build(BuildContext context) {
-    final updates = driver.updates;
-    final day = driver.updatesDay;
+    final reports = driver.reports;
+    final day = driver.reportsDay;
 
     return RefreshIndicator(
-      onRefresh: driver.loadUpdates,
+      onRefresh: driver.loadReports,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.lg),
         children: [
+          const Text(
+            'Reports',
+            style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Tell your operator about a breakdown, a delay or an emergency.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              key: const Key('reportToOperator'),
+              onPressed: () => _report(context),
+              icon: const Icon(Icons.campaign_outlined),
+              label: const Text('Report to operator'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandTeal,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -72,13 +105,13 @@ class DriverUpdatesTab extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Updates',
-                      style: TextStyle(fontSize: 30, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                      'Sent reports',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Date: ${formatLongDate(day ?? DateTime.now())}',
-                      key: const Key('updatesDate'),
+                      key: const Key('reportsDate'),
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
                     ),
                   ],
@@ -97,8 +130,8 @@ class DriverUpdatesTab extends StatelessWidget {
                     padding: const EdgeInsets.only(right: 6),
                     child: _PeriodChip(
                       label: period.label,
-                      selected: driver.updatesPeriod == period,
-                      onTap: () => driver.showUpdates(period),
+                      selected: driver.reportsPeriod == period,
+                      onTap: () => driver.showReports(period),
                     ),
                   ),
               ],
@@ -107,13 +140,13 @@ class DriverUpdatesTab extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: driver.updatesLoading && updates.isEmpty
+            child: driver.reportsLoading && reports.isEmpty
                 ? const Padding(
                     key: ValueKey('loading'),
                     padding: EdgeInsets.all(AppSpacing.lg),
                     child: Center(child: CircularProgressIndicator()),
                   )
-                : updates.isEmpty
+                : reports.isEmpty
                     ? Padding(
                         key: const ValueKey('empty'),
                         padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
@@ -124,12 +157,12 @@ class DriverUpdatesTab extends StatelessWidget {
                         ),
                       )
                     : Column(
-                        key: ValueKey('${driver.updatesPeriod}${day ?? ''}'),
+                        key: ValueKey('${driver.reportsPeriod}${day ?? ''}'),
                         children: [
-                          for (final u in updates)
+                          for (final r in reports)
                             Padding(
                               padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                              child: UpdateCard(update: u),
+                              child: ReportCard(report: r),
                             ),
                         ],
                       ),
@@ -162,7 +195,7 @@ class _CalendarField extends StatelessWidget {
             side: BorderSide(color: day == null ? AppColors.divider : AppColors.brandTeal, width: 1.4),
           ),
           child: InkWell(
-            key: const Key('updatesCalendar'),
+            key: const Key('reportsCalendar'),
             borderRadius: BorderRadius.circular(8),
             onTap: onTap,
             child: Padding(
@@ -220,23 +253,19 @@ class _PeriodChip extends StatelessWidget {
   }
 }
 
-/// One update: icon, title, message and when ("5 hrs ago (October 29, 2026) 10:32 AM").
-class UpdateCard extends StatelessWidget {
-  const UpdateCard({super.key, required this.update});
+/// One sent report: category, note, the vehicle it was sent from, and when
+/// ("5 hrs ago (October 29, 2026) 10:32 AM").
+class ReportCard extends StatelessWidget {
+  const ReportCard({super.key, required this.report});
 
-  final DriverUpdate update;
-
-  static IconData iconOf(String kind) => switch (kind) {
-        'shift_started' => Icons.play_circle_outline,
-        'shift_ended' => Icons.stop_circle_outlined,
-        'vehicle_assigned' || 'vehicle_unassigned' => Icons.directions_bus_outlined,
-        'transit_alert' => Icons.campaign_outlined,
-        _ => Icons.notifications_none,
-      };
+  final DriverReport report;
 
   @override
   Widget build(BuildContext context) {
-    final u = update;
+    final r = report;
+    final style = ReportCategoryStyle.of(r.category);
+    final shiftInfo = r.context;
+    final note = r.note;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
@@ -247,37 +276,39 @@ class UpdateCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(iconOf(u.kind), size: 26, color: AppColors.brandTeal),
+          Icon(style.icon, size: 26, color: style.color),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  u.title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: u.isRead ? FontWeight.w600 : FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
+                  r.category.label,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
                 ),
-                if (u.body.isNotEmpty) ...[
+                if (note != null) ...[
                   const SizedBox(height: 2),
-                  Text(u.body, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                  Text(note, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary)),
+                ],
+                if (shiftInfo != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      shiftInfo.plateNumber,
+                      if (shiftInfo.routeCode != null) shiftInfo.routeCode!,
+                      if (shiftInfo.hasLocation) 'location shared',
+                    ].join(' · '),
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
                 ],
                 const SizedBox(height: 4),
                 Text(
-                  '${timeAgo(u.createdAt)} (${formatLongDate(u.createdAt)}) ${formatTimeOfDay(u.createdAt)}',
+                  '${timeAgo(r.createdAt)} (${formatLongDate(r.createdAt)}) ${formatTimeOfDay(r.createdAt)}',
                   style: const TextStyle(fontSize: 12, color: AppColors.navInactive),
                 ),
               ],
             ),
           ),
-          if (!u.isRead)
-            const Padding(
-              padding: EdgeInsets.only(top: 6, left: 6),
-              child: CircleAvatar(radius: 4, backgroundColor: AppColors.brandTeal),
-            ),
         ],
       ),
     );

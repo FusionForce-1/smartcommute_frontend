@@ -55,6 +55,7 @@ const ICONS = Object.freeze({
   navDrivers: 'id-card',
   navPlayback: 'history',
   navAnnouncements: 'megaphone',
+  navDriverReports: 'bell',
   navOperatorReports: 'bar-chart-3',
   navProfile: 'user-round',
   navSettings: 'settings',

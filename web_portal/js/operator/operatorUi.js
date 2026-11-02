@@ -65,6 +65,27 @@ const OperatorUi = (() => {
     critical: { label: 'Critical', button: 'Critical', tone: 'red' },
   };
 
+  const NOTICE_CATEGORY = {
+    service_alert: 'Service alert',
+    schedule_change: 'Schedule change',
+    promotion: 'Promotion',
+  };
+
+  // Same labels as the driver app's report sheet (lib/models/driver_report.dart).
+  const REPORT_CATEGORY = {
+    emergency: { label: 'Emergency', tone: 'red' },
+    breakdown: { label: 'Breakdown', tone: 'amber' },
+    delay: { label: 'Delay / Heavy traffic', tone: 'amber' },
+    vehicle_issue: { label: 'Vehicle issue', tone: 'amber' },
+    other: { label: 'Other', tone: '' },
+  };
+
+  /** An id for client_request_id (8–64 of A-Z a-z 0-9 _ -), so a resend is never sent twice. */
+  function requestId() {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
   const VEHICLE_STATUS = {
     active: { label: 'Active', tone: 'green' },
     inactive: { label: 'Inactive', tone: '' },
@@ -144,6 +165,9 @@ const OperatorUi = (() => {
     chip,
     stats,
     SEVERITY,
+    NOTICE_CATEGORY,
+    REPORT_CATEGORY,
+    requestId,
     ROUTE_STATUS,
     FEEDBACK_CATEGORY,
     vehicleStatusChip,

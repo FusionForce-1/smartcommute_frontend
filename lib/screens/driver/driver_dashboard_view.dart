@@ -1,7 +1,7 @@
 // lib/screens/driver/driver_dashboard_view.dart
 //
 // The driver app's screen: the logo header and three tabs — Map (the
-// dashboard, and the map full screen), Updates, and Profile — with the
+// dashboard, and the map full screen), Reports, and Profile — with the
 // bottom navigation. Reads DriverProvider from above. Every tab stays
 // alive, so the map keeps its camera while browsing the others.
 
@@ -17,7 +17,7 @@ import '../../widgets/commuter/commuter_header.dart';
 import '../../widgets/commuter/commuter_nav_bar.dart';
 import 'driver_map_tab.dart';
 import 'driver_profile_tab.dart';
-import 'driver_updates_tab.dart';
+import 'driver_reports_tab.dart';
 
 class DriverDashboardView extends StatefulWidget {
   const DriverDashboardView({super.key, required this.onSignOut, required this.profileService});
@@ -32,18 +32,15 @@ class DriverDashboardView extends StatefulWidget {
 class _DriverDashboardViewState extends State<DriverDashboardView> {
   static const _navItems = [
     CommuterNavItem(icon: Icons.location_on_outlined, label: 'Map'),
-    CommuterNavItem(icon: Icons.published_with_changes, label: 'Updates'),
+    CommuterNavItem(icon: Icons.campaign_outlined, label: 'Reports'),
     CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
   ];
-  static const _updatesTab = 1;
   static const _profileTab = 2;
 
   int _tab = 0;
 
   void _select(int tab) {
     if (tab == _tab) return;
-    // Leaving Updates: what was there has now been seen.
-    if (_tab == _updatesTab) context.read<DriverProvider>().markUpdatesRead();
     setState(() => _tab = tab);
   }
 
@@ -65,7 +62,7 @@ class _DriverDashboardViewState extends State<DriverDashboardView> {
                   index: _tab,
                   children: [
                     DriverMapTab(driver: driver),
-                    DriverUpdatesTab(driver: driver),
+                    DriverReportsTab(driver: driver),
                     DriverProfileTab(
                       driver: driver,
                       profileService: widget.profileService,

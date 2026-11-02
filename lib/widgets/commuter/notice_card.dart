@@ -1,34 +1,26 @@
-// lib/widgets/commuter/alert_card.dart
+// lib/widgets/commuter/notice_card.dart
 //
-// One alert on the Notifications screen. Unread alerts are tinted in
+// One notice on the Notifications screen. Unread notices are tinted in
 // their colour with a dot before the title; read ones turn white.
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
-import '../../models/commuter_alert.dart';
+import '../../models/commuter_notice.dart';
 import '../../utils/time_ago.dart';
-import 'alert_style.dart';
+import 'notice_style.dart';
 import 'route_code_chip.dart';
 
-class AlertCard extends StatelessWidget {
-  const AlertCard({
-    super.key,
-    required this.alert,
-    required this.onTap,
-    this.showUnread = true,
-  });
+class NoticeCard extends StatelessWidget {
+  const NoticeCard({super.key, required this.notice, required this.onTap});
 
-  final CommuterAlert alert;
+  final CommuterNotice notice;
   final VoidCallback onTap;
-
-  /// False for guests, who have no read state.
-  final bool showUnread;
 
   @override
   Widget build(BuildContext context) {
-    final style = AlertStyle.of(alert);
-    final unread = showUnread && !alert.isRead;
+    final style = NoticeStyle.of(notice);
+    final unread = !notice.isRead;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -46,9 +38,9 @@ class AlertCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _AlertIcon(style: style),
+                _NoticeIcon(style: style),
                 const SizedBox(width: 12),
-                Expanded(child: _AlertBody(alert: alert, style: style, unread: unread)),
+                Expanded(child: _NoticeBody(notice: notice, style: style, unread: unread)),
               ],
             ),
           ),
@@ -58,10 +50,10 @@ class AlertCard extends StatelessWidget {
   }
 }
 
-class _AlertIcon extends StatelessWidget {
-  const _AlertIcon({required this.style});
+class _NoticeIcon extends StatelessWidget {
+  const _NoticeIcon({required this.style});
 
-  final AlertStyle style;
+  final NoticeStyle style;
 
   @override
   Widget build(BuildContext context) {
@@ -78,15 +70,16 @@ class _AlertIcon extends StatelessWidget {
   }
 }
 
-class _AlertBody extends StatelessWidget {
-  const _AlertBody({required this.alert, required this.style, required this.unread});
+class _NoticeBody extends StatelessWidget {
+  const _NoticeBody({required this.notice, required this.style, required this.unread});
 
-  final CommuterAlert alert;
-  final AlertStyle style;
+  final CommuterNotice notice;
+  final NoticeStyle style;
   final bool unread;
 
   @override
   Widget build(BuildContext context) {
+    final company = notice.companyName;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -102,7 +95,7 @@ class _AlertBody extends StatelessWidget {
             ],
             Expanded(
               child: Text(
-                alert.title,
+                notice.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -115,21 +108,32 @@ class _AlertBody extends StatelessWidget {
             const Icon(Icons.schedule, size: 14, color: AppColors.navInactive),
             const SizedBox(width: 3),
             Text(
-              timeAgo(alert.createdAt),
+              timeAgo(notice.createdAt),
               style: const TextStyle(fontSize: 11, color: AppColors.navInactive),
             ),
             const Icon(Icons.chevron_right, size: 20, color: AppColors.navInactive),
           ],
         ),
         const SizedBox(height: 6),
-        RouteCodeChip(code: alert.routeCode ?? 'All routes', compact: true),
+        Wrap(
+          spacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            RouteCodeChip(code: noticeRoutes(notice), compact: true),
+            Text(style.label, style: TextStyle(fontSize: 12, color: style.color, fontWeight: FontWeight.w600)),
+          ],
+        ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          alert.message,
+          notice.message,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.3),
         ),
+        if (company != null) ...[
+          const SizedBox(height: 4),
+          Text('From $company', style: const TextStyle(fontSize: 12, color: AppColors.navInactive)),
+        ],
       ],
     );
   }

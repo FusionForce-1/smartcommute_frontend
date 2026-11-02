@@ -87,12 +87,32 @@ const OperatorApi = {
   stopSuggestions: (id) => ApiClient.get(`/routes/${id}/stops/suggestions`),
   deleteRoute: (id) => ApiClient.delete(`/routes/${id}`),
 
-  // ---- Announcements (transit alerts) ----
-  myAlerts: () => ApiClient.get('/alerts/mine'),
-  publishAlert: ({ title, message, severity, route_id }) =>
-    ApiClient.post('/alerts', { title, message, severity, route_id: route_id || null }),
-  setAlertResolved: (id, resolved) => ApiClient.patch(`/alerts/${id}/resolved`, { is_resolved: resolved }),
-  deleteAlert: (id) => ApiClient.delete(`/alerts/${id}`),
+  // ---- Announcements (notices to commuters) ----
+  /** The routes a notice may cover: [{ route_id, route_code, route_name }]. */
+  noticeTargets: () => ApiClient.get('/notices/targets'),
+  sentNotices: ({ limit = 50 } = {}) => ApiClient.get('/notices/sent', { limit }),
+  /** severity only for service alerts; no route_id = every route. Resending the same client_request_id returns the original. */
+  sendNotice: ({ category, severity, title, message, route_id, client_request_id }) =>
+    ApiClient.post('/notices', {
+      category,
+      ...(category === 'service_alert' ? { severity } : {}),
+      title,
+      message,
+      ...(route_id ? { route_id } : {}),
+      client_request_id,
+    }),
+  /** Takes it out of every commuter's inbox; returns it with withdrawn_at set. */
+  withdrawNotice: (id) => ApiClient.delete(`/notices/${id}`),
+
+  // ---- Driver reports (drivers -> this operator) ----
+  /** Newest first; since (inclusive) / until (exclusive) are API timestamps. */
+  driverReports: ({ unreadOnly, category, since, until, skip, limit } = {}) => ApiClient.get('/driver-reports/inbox', {
+    ...(unreadOnly ? { unread_only: true } : {}),
+    category, since, until, skip, limit,
+  }),
+  driverReportsUnreadCount: () => ApiClient.get('/driver-reports/inbox/unread-count'),
+  markDriverReportRead: (id) => ApiClient.patch(`/driver-reports/${id}/read`),
+  markAllDriverReportsRead: () => ApiClient.post('/driver-reports/read-all'),
 
   // ---- Revenue (daily remittances) ----
   revenueSummary: ({ start, end }) => ApiClient.get('/revenue/summary', { start, end }),

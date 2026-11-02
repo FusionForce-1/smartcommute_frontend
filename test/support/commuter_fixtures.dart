@@ -1,42 +1,60 @@
-// Sample alert / profile responses (same shape as the backend) and a fake
-// backend that answers by "METHOD /path".
+// Sample notification / profile responses (same shape as the backend) and
+// fake backends that answer by "METHOD /path".
 
 import 'package:dio/dio.dart';
 
 import 'fake_dio.dart';
 
-Map<String, dynamic> alertJson(
+Map<String, dynamic> noticeJson(
   String id, {
   String title = 'Route Suspended',
-  String severity = 'critical',
-  bool isResolved = false,
+  String category = 'service_alert',
+  String? severity = 'critical',
   bool isRead = false,
-  String? routeCode = 'J01',
+  List<String> routeCodes = const ['J01'],
   int minutesAgo = 2,
 }) =>
     {
       'id': id,
+      'category': category,
+      'severity': category == 'service_alert' ? severity : null,
       'title': title,
       'message': '$title — details for commuters.',
-      'severity': severity,
-      'route_id': routeCode == null ? null : 'r-$routeCode',
-      'route_code': routeCode,
-      'operator_id': 'op1',
       'company_name': 'Cebu City Transport Co.',
-      'is_resolved': isResolved,
+      'route_codes': routeCodes,
       'created_at': DateTime.now().toUtc().subtract(Duration(minutes: minutesAgo)).toIso8601String(),
-      'resolved_at': isResolved ? DateTime.now().toUtc().toIso8601String() : null,
       'is_read': isRead,
+      'read_at': null,
     };
 
-/// Same mix as the design: critical, warning, info, resolved, and one read.
-List<Map<String, dynamic>> sampleFeed() => [
-      alertJson('a1'),
-      alertJson('a2', title: 'Heavy Traffic Ahead', severity: 'warning', minutesAgo: 8),
-      alertJson('a3', title: 'Schedule Change', severity: 'info', routeCode: 'J03', minutesAgo: 22),
-      alertJson('a4', title: 'Incident Cleared', severity: 'warning', isResolved: true, minutesAgo: 30),
-      alertJson('a5', title: 'New Stop Added', severity: 'info', routeCode: 'B04', isRead: true, minutesAgo: 60),
+/// A mix of every kind: two service alerts, a schedule change, a promotion, and one read.
+List<Map<String, dynamic>> sampleInbox() => [
+      noticeJson('n1'),
+      noticeJson('n2', title: 'Heavy Traffic Ahead', severity: 'warning', minutesAgo: 8),
+      noticeJson('n3', title: 'New Stop Added', category: 'schedule_change', routeCodes: ['J03'], minutesAgo: 22),
+      noticeJson('n4', title: 'Free Ride Friday', category: 'promotion', routeCodes: ['J01', 'J02'], minutesAgo: 30),
+      noticeJson('n5', title: 'Road Reopened', severity: 'info', routeCodes: ['B04'], isRead: true, minutesAgo: 60),
     ];
+
+/// A backend with [inbox] that filters by ?category= and pages with ?skip=&limit=,
+/// like GET /notices/inbox; other requests are answered from [routes].
+FakeAdapter noticesBackend(List<Map<String, dynamic>> inbox, {Map<String, Object?> routes = const {}}) {
+  final rest = fakeBackend(routes);
+  return FakeAdapter((options) async {
+    final query = options.queryParameters;
+    if (options.method == 'GET' && options.path == '/notices/inbox') {
+      final category = query['category'];
+      final kept = [for (final n in inbox) if (category == null || n['category'] == category) n];
+      final skip = (query['skip'] as int?) ?? 0;
+      final limit = (query['limit'] as int?) ?? 50;
+      return jsonBody(kept.skip(skip).take(limit).toList());
+    }
+    if (options.method == 'GET' && options.path == '/notices/inbox/unread-count') {
+      return jsonBody({'count': inbox.where((n) => n['is_read'] != true).length});
+    }
+    return rest.handler(options);
+  });
+}
 
 Map<String, dynamic> profileJson({int trips = 47, int savedRoutes = 1, int reviews = 12}) => {
       'id': 'u1',

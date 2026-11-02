@@ -47,21 +47,30 @@ Map<String, dynamic> dashboardJson({
       'recent_route': recentRoute,
     };
 
-Map<String, dynamic> updateJson({
-  String id = 'n1',
-  String kind = 'shift_started',
-  String title = 'Your shift started',
-  String body = 'Your operator started your shift on ABC 123. Drive safe!',
-  bool read = false,
+Map<String, dynamic> reportJson({
+  String id = 'r1',
+  String category = 'breakdown',
+  String? note = 'Flat tyre near Ayala',
+  Map<String, dynamic>? context,
 }) =>
     {
       'id': id,
-      'kind': kind,
-      'title': title,
-      'body': body,
-      'data': <String, dynamic>{},
-      'is_read': read,
+      'category': category,
+      'note': note,
+      'context': context,
       'created_at': DateTime.now().toUtc().subtract(const Duration(minutes: 2)).toIso8601String(),
+    };
+
+/// The shift details the backend attaches to a report sent during a shift.
+Map<String, dynamic> reportContextJson({bool located = true}) => {
+      'shift_id': 's1',
+      'vehicle_id': 'v1',
+      'plate_number': 'ABC 123',
+      'route_id': 'r1',
+      'route_code': 'J02',
+      'lat': located ? 10.33 : null,
+      'lng': located ? 123.9 : null,
+      'located_at': located ? DateTime.now().toUtc().toIso8601String() : null,
     };
 
 class FakeGpsSession extends GpsIngestionSession {

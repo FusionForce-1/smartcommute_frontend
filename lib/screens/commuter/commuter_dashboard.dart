@@ -3,8 +3,10 @@
 // Commuter dashboard shell: logo header, the four tabs (Home, Route,
 // Alerts, Profile) and the bottom navigation. Loads stops, routes and
 // vehicles once and hands them to the tabs that need them, and owns the
-// trip, alert and profile state so it survives switching tabs — including
-// the route picked with "Select this route", shown on Home until cancelled.
+// trip, notification and profile state so it survives switching tabs —
+// including the route picked with "Select this route", shown on Home until
+// cancelled. New notifications are checked for every minute while the app
+// is in front, when it comes back, and when the Alerts tab is opened.
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -19,14 +21,14 @@ import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../models/trip_plan.dart';
 import '../../models/vehicles.dart';
-import '../../providers/alerts_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notices_provider.dart';
 import '../../providers/profile_provider.dart';
 import '../../providers/trip_plan_provider.dart';
 import '../../router/app_router.dart';
-import '../../services/alerts_service.dart';
 import '../../services/dio_interceptor.dart';
 import '../../services/location_source.dart';
+import '../../services/notices_service.dart';
 import '../../services/profile_service.dart';
 import '../../services/route_services.dart';
 import '../../services/stops_services.dart';
@@ -34,17 +36,16 @@ import '../../services/trip_plan_service.dart';
 import '../../services/vehicles_service.dart';
 import '../../widgets/commuter/commuter_header.dart';
 import '../../widgets/commuter/commuter_nav_bar.dart';
-import 'alert.dart';
 import '../../services/place_search.dart';
 import 'home.dart';
+import 'notifications_tab.dart';
 import 'profile.dart';
 import 'route.dart';
 
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
-  /// True when opened via "Continue as Guest" — no profile, and alerts
-  /// come from the public list without read state.
+  /// True when opened via "Continue as Guest" — no profile and no notifications.
   final bool isGuest;
 
   @override
@@ -52,26 +53,29 @@ class CommuterDashboard extends StatefulWidget {
 }
 
 class _CommuterDashboardState extends State<CommuterDashboard> {
-  static const _navItems = [
-    CommuterNavItem(icon: AppIcons.navHome, label: 'Home'),
-    CommuterNavItem(icon: AppIcons.navRoute, label: 'Route'),
-    CommuterNavItem(icon: AppIcons.navAlerts, label: 'Alerts'),
-    CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
-  ];
   static const _homeTab = 0;
   static const _routeTab = 1;
+  static const _alertsTab = 2;
   static const _profileTab = 3;
 
+  List<CommuterNavItem> get _navItems => [
+        const CommuterNavItem(icon: AppIcons.navHome, label: 'Home'),
+        const CommuterNavItem(icon: AppIcons.navRoute, label: 'Route'),
+        CommuterNavItem(icon: AppIcons.navAlerts, label: 'Alerts', showDot: _notices.unreadCount > 0),
+        const CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
+      ];
+
   // Signs requests with the commuter's token (and refreshes it);
-  // /trip-plan, /alerts/feed and /users/me reject anonymous calls.
+  // /trip-plan, /notices/inbox and /users/me reject anonymous calls.
   final Dio _dio = buildDioClient();
 
   late final TripPlanProvider _trip = TripPlanProvider(
     service: TripPlanService(_dio),
     locationSource: GeolocatorLocationSource(),
   );
-  late final AlertsProvider _alerts =
-      AlertsProvider(service: AlertsService(_dio), isGuest: widget.isGuest);
+  late final NoticesProvider _notices =
+      NoticesProvider(service: NoticesService(_dio), isGuest: widget.isGuest);
+  late final AppLifecycleListener _lifecycle;
   late final ProfileProvider _profile =
       ProfileProvider(service: ProfileService(_dio), isGuest: widget.isGuest);
 
@@ -89,14 +93,23 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     // Metro Cebu landmarks for From / To search: load now so it's instant later.
     PlaceIndex.landmarks();
     _loadFleet();
-    _alerts.load();
+    _notices.load();
+    _notices.startPolling();
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        _notices.checkForNew();
+        _notices.startPolling();
+      },
+      onHide: _notices.stopPolling,
+    );
     _profile.load();
   }
 
   @override
   void dispose() {
     _trip.dispose();
-    _alerts.dispose();
+    _lifecycle.dispose();
+    _notices.dispose();
     _profile.dispose();
     super.dispose();
   }
@@ -151,6 +164,11 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     }
   }
 
+  void _selectTab(int index) {
+    if (index == _alertsTab && index != _currentIndex) _notices.checkForNew();
+    setState(() => _currentIndex = index);
+  }
+
   /// Fills From / To on the Route tab with a saved route, then shows it.
   void _openSavedRoute(SavedRoute route) {
     final origin = route.origin;
@@ -197,7 +215,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _trip),
-        ChangeNotifierProvider.value(value: _alerts),
+        ChangeNotifierProvider.value(value: _notices),
         ChangeNotifierProvider.value(value: _profile),
       ],
       child: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -232,7 +250,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       // added since the app started shows up there too.
                       loadVehicles: VehiclesService(_dio).getVehicles,
                     ),
-                    const AlertsTab(),
+                    NotificationsTab(onCreateAccount: () => _signOut(createAccount: true)),
                     ProfileTab(
                       isGuest: widget.isGuest,
                       stops: _stops,
@@ -247,10 +265,13 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
               ),
             ],
           ),
-          bottomNavigationBar: CommuterNavBar(
-            items: _navItems,
-            selectedIndex: _currentIndex,
-            onSelected: (index) => setState(() => _currentIndex = index),
+          bottomNavigationBar: ListenableBuilder(
+            listenable: _notices,
+            builder: (context, _) => CommuterNavBar(
+              items: _navItems,
+              selectedIndex: _currentIndex,
+              onSelected: _selectTab,
+            ),
           ),
         ),
       ),

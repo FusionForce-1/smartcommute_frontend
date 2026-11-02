@@ -35,7 +35,7 @@ Future<({DriverProvider driver, FakeAdapter backend})> pumpDashboard(
   tester.view.devicePixelRatio = 2.5;
   addTearDown(tester.view.reset);
 
-  final backend = fakeBackend({'GET /notifications': <Map<String, dynamic>>[], ...routes});
+  final backend = fakeBackend({'GET /driver-reports/sent': <Map<String, dynamic>>[], ...routes});
   final dio = fakeDio(backend);
   final driver = DriverProvider(DriverService(dio), gps: FakeGpsSession());
   await tester.runAsync(driver.load);
@@ -197,7 +197,7 @@ void main() {
       final driver = DriverProvider(
         DriverService(fakeDio(fakeBackend({
           'GET /drivers/me': dashboardJson(),
-          'GET /notifications': <Map<String, dynamic>>[],
+          'GET /driver-reports/sent': <Map<String, dynamic>>[],
         }))),
         gps: FakeGpsSession(),
       );
@@ -237,32 +237,90 @@ void main() {
     });
   });
 
-  // ── Updates tab ────────────────────────────────────────────
+  // ── Reports tab ────────────────────────────────────────────
 
-  testWidgets('Updates: listed with their date, filtered by period, read when leaving', (tester) async {
+  testWidgets('Reports: sent ones listed with their date and jeep, filtered by period', (tester) async {
     final (driver: _, :backend) = await pumpDashboard(tester, {
       'GET /drivers/me': dashboardJson(shift: shiftJson()),
-      'GET /notifications': [updateJson()],
-      'POST /notifications/read-all': {'updated': 1},
+      'GET /driver-reports/sent': [reportJson(context: reportContextJson())],
     });
 
-    await openTab(tester, 'Updates');
-    expect(find.text('Your shift started'), findsOneWidget);
+    await openTab(tester, 'Reports');
+    expect(find.text('Breakdown'), findsOneWidget);
+    expect(find.text('Flat tyre near Ayala'), findsOneWidget);
+    expect(find.text('ABC 123 · J02 · location shared'), findsOneWidget);
     expect(find.textContaining('min ago ('), findsOneWidget);
     for (final chip in ['Recent', 'Today', 'Yesterday', 'Last Month', 'Last Year']) {
       expect(find.text(chip), findsOneWidget);
     }
     expect(find.text('Select Date'), findsOneWidget);
+    expect(find.textContaining('unread'), findsNothing, reason: 'drivers never see whether the operator read it');
 
     await tester.tap(find.text('Today'));
     await settle(tester);
-    final query = backend.requests.lastWhere((r) => r.path == '/notifications').queryParameters;
+    final query = backend.requests.lastWhere((r) => r.path == '/driver-reports/sent').queryParameters;
     expect(query['since'], isNotNull);
     expect(query.containsKey('until'), isFalse);
+  });
 
-    expect(backend.requests.any((r) => r.path == '/notifications/read-all'), isFalse);
-    await openTab(tester, 'Map');
-    expect(backend.requests.any((r) => r.path == '/notifications/read-all'), isTrue);
+  testWidgets('Report to operator: pick what happened, send, see what was attached', (tester) async {
+    final (driver: _, :backend) = await pumpDashboard(tester, {
+      'GET /drivers/me': dashboardJson(shift: shiftJson()),
+      'GET /driver-reports/sent': <Map<String, dynamic>>[],
+      'POST /driver-reports': reportJson(category: 'emergency', note: null, context: reportContextJson()),
+    });
+    await openTab(tester, 'Reports');
+
+    await tester.tap(find.byKey(const Key('reportToOperator')));
+    await settle(tester);
+    final send = find.byKey(const Key('sendReport'));
+    expect(tester.widget<FilledButton>(send).onPressed, isNull, reason: 'nothing picked yet');
+
+    await tester.tap(find.byKey(const Key('reportCategory_emergency')));
+    await tester.pump();
+    await tester.tap(send);
+    await settle(tester);
+
+    expect(find.text('Sent to your operator with ABC 123 and your location.'), findsOneWidget);
+    expect(find.byKey(const Key('sendReport')), findsNothing, reason: 'the sheet closed');
+    final body = backend.requests.lastWhere((r) => r.path == '/driver-reports').data as Map;
+    expect(body['category'], 'emergency');
+    expect(body.containsKey('note'), isFalse);
+    expect(body['client_request_id'], matches(RegExp(r'^[0-9a-f]{32}$')));
+  });
+
+  testWidgets('Other needs a note, and a refused report keeps the sheet and resends the same request', (tester) async {
+    final (driver: _, :backend) = await pumpDashboard(tester, {
+      'GET /drivers/me': dashboardJson(),
+      'GET /driver-reports/sent': <Map<String, dynamic>>[],
+      'POST /driver-reports': 403,
+    });
+    await openTab(tester, 'Reports');
+    await tester.tap(find.byKey(const Key('reportToOperator')));
+    await settle(tester);
+
+    await tester.tap(find.byKey(const Key('reportCategory_other')));
+    await tester.pump();
+    final send = find.byKey(const Key('sendReport'));
+    expect(tester.widget<FilledButton>(send).onPressed, isNull, reason: 'Other needs a note');
+
+    await tester.enterText(find.byKey(const Key('reportNote')), 'Passenger fainted');
+    await tester.pump();
+    await tester.tap(send);
+    await settle(tester);
+
+    expect(find.byKey(const Key('reportError')), findsOneWidget);
+    expect(find.text('Request failed'), findsOneWidget);
+    expect(find.text('Passenger fainted'), findsOneWidget, reason: 'the note is kept');
+    expect(find.text('Try again'), findsOneWidget);
+
+    await tester.tap(send);
+    await settle(tester);
+    final ids = {
+      for (final r in backend.requests)
+        if (r.path == '/driver-reports') (r.data as Map)['client_request_id']
+    };
+    expect(ids, hasLength(1), reason: 'a retry is the same report');
   });
 
   // ── Profile tab ────────────────────────────────────────────

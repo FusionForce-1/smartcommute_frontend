@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:smartcommute_app/models/driver_dashboard.dart';
+import 'package:smartcommute_app/models/driver_report.dart';
 import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/providers/driver_provider.dart';
 import 'package:smartcommute_app/providers/load_state.dart';
@@ -24,7 +25,7 @@ DriverProvider buildProvider(Backend backend, {FakeGpsSession? gps, DateTime Fun
 Backend backendWith({Map<String, dynamic>? shift, List<Map<String, dynamic>>? vehicles, Map<String, Object?> extra = const {}}) =>
     Backend({
       'GET /drivers/me': dashboardJson(shift: shift, vehicles: vehicles),
-      'GET /notifications': <Map<String, dynamic>>[],
+      'GET /driver-reports/sent': <Map<String, dynamic>>[],
       ...extra,
     });
 
@@ -176,20 +177,62 @@ void main() {
     expect(driver.loadError, 'Request failed');
   });
 
-  test('updates are loaded, and can be marked read', () async {
-    final backend = backendWith(extra: {
-      'GET /notifications': [updateJson(), updateJson(id: 'n2', read: true)],
-      'POST /notifications/read-all': {'updated': 1},
+  group('reports to the operator', () {
+    test('sent reports are loaded with the dashboard', () async {
+      final driver = buildProvider(backendWith(extra: {
+        'GET /driver-reports/sent': [reportJson(), reportJson(id: 'r2', category: 'delay', note: null)],
+      }));
+      await driver.load();
+
+      expect(driver.reports.map((r) => r.category), [DriverReportCategory.breakdown, DriverReportCategory.delay]);
+      expect(driver.reports.first.note, 'Flat tyre near Ayala');
+      expect(driver.reports.last.note, isNull);
     });
-    final driver = buildProvider(backend);
-    await driver.load();
 
-    expect(driver.updates.map((u) => u.title), ['Your shift started', 'Your shift started']);
-    expect(driver.unreadUpdates, 1);
+    test('sending one posts the category, note and request id, then refreshes the list', () async {
+      final backend = backendWith(extra: {
+        'POST /driver-reports': reportJson(id: 'r2', category: 'emergency', note: 'Help', context: reportContextJson()),
+      });
+      final driver = buildProvider(backend);
+      await driver.load();
+      final listLoads = calls(backend.adapter).where((c) => c == 'GET /driver-reports/sent').length;
 
-    await driver.markUpdatesRead();
-    expect(driver.unreadUpdates, 0);
-    expect(calls(backend.adapter), contains('POST /notifications/read-all'));
+      final result = await driver.sendReport(DriverReportCategory.emergency, note: '  Help  ', requestId: 'req-0001');
+      await pumpEventQueue();
+
+      expect(result.error, isNull);
+      expect(result.sent!.id, 'r2');
+      expect(result.sent!.context!.plateNumber, 'ABC 123');
+      expect(result.sent!.context!.hasLocation, isTrue);
+      final sent = backend.adapter.requests.lastWhere((r) => r.path == '/driver-reports');
+      expect(sent.data, {'category': 'emergency', 'note': 'Help', 'client_request_id': 'req-0001'});
+      expect(calls(backend.adapter).where((c) => c == 'GET /driver-reports/sent').length, listLoads + 1);
+    });
+
+    test('a blank note is left out', () async {
+      final backend = backendWith(extra: {'POST /driver-reports': reportJson(note: null)});
+      final driver = buildProvider(backend);
+      await driver.load();
+
+      await driver.sendReport(DriverReportCategory.delay, note: '   ', requestId: 'req-0002');
+
+      expect(backend.adapter.requests.lastWhere((r) => r.path == '/driver-reports').data,
+          {'category': 'delay', 'client_request_id': 'req-0002'});
+    });
+
+    test("a refused report returns the server's reason", () async {
+      final ok = backendWith();
+      final adapter = FakeAdapter((o) async => o.path == '/driver-reports'
+          ? jsonBody({'detail': "You've sent a lot of reports in the last 15 minutes."}, status: 429)
+          : await ok.adapter.handler(o));
+      final driver = DriverProvider(DriverService(fakeDio(adapter)), gps: FakeGpsSession());
+      await driver.load();
+
+      final result = await driver.sendReport(DriverReportCategory.delay, requestId: 'req-0003');
+
+      expect(result.sent, isNull);
+      expect(result.error, "You've sent a lot of reports in the last 15 minutes.");
+    });
   });
 
   test('crowd and passengers need a shift', () async {
@@ -231,7 +274,7 @@ void main() {
   test('profile details: email, operator and most recent route', () async {
     final driver = buildProvider(Backend({
       'GET /drivers/me': dashboardJson(recentRoute: vehicleJson(id: 'v9', plate: 'KEN-124')),
-      'GET /notifications': <Map<String, dynamic>>[],
+      'GET /driver-reports/sent': <Map<String, dynamic>>[],
     }));
     await driver.load();
 
@@ -266,18 +309,18 @@ void main() {
     });
   });
 
-  group('updates by period', () {
+  group('reports by period', () {
     final now = DateTime(2026, 10, 29, 15, 30);
     final today = DateTime(2026, 10, 29);
 
     test('each period covers the right days', () {
-      expect(updatesRange(UpdatesPeriod.recent, now), (since: null, until: null));
-      expect(updatesRange(UpdatesPeriod.today, now), (since: today, until: null));
-      expect(updatesRange(UpdatesPeriod.yesterday, now), (since: DateTime(2026, 10, 28), until: today));
-      expect(updatesRange(UpdatesPeriod.lastMonth, now).since, DateTime(2026, 9, 29));
-      expect(updatesRange(UpdatesPeriod.lastYear, now).since, DateTime(2025, 10, 29));
+      expect(reportsRange(ReportsPeriod.recent, now), (since: null, until: null));
+      expect(reportsRange(ReportsPeriod.today, now), (since: today, until: null));
+      expect(reportsRange(ReportsPeriod.yesterday, now), (since: DateTime(2026, 10, 28), until: today));
+      expect(reportsRange(ReportsPeriod.lastMonth, now).since, DateTime(2026, 9, 29));
+      expect(reportsRange(ReportsPeriod.lastYear, now).since, DateTime(2025, 10, 29));
       expect(
-        updatesRange(UpdatesPeriod.day, now, day: DateTime(2026, 10, 3)),
+        reportsRange(ReportsPeriod.day, now, day: DateTime(2026, 10, 3)),
         (since: DateTime(2026, 10, 3), until: DateTime(2026, 10, 4)),
       );
     });
@@ -287,13 +330,13 @@ void main() {
       final driver = buildProvider(backend, clock: () => now);
       await driver.load();
 
-      await driver.showUpdates(UpdatesPeriod.day, day: DateTime(2026, 10, 3));
+      await driver.showReports(ReportsPeriod.day, day: DateTime(2026, 10, 3));
 
-      final query = backend.adapter.requests.lastWhere((r) => r.path == '/notifications').queryParameters;
+      final query = backend.adapter.requests.lastWhere((r) => r.path == '/driver-reports/sent').queryParameters;
       expect(DateTime.parse(query['since'] as String), DateTime(2026, 10, 3).toUtc());
       expect(DateTime.parse(query['until'] as String), DateTime(2026, 10, 4).toUtc());
-      expect(driver.updatesPeriod, UpdatesPeriod.day);
-      expect(driver.updatesDay, DateTime(2026, 10, 3));
+      expect(driver.reportsPeriod, ReportsPeriod.day);
+      expect(driver.reportsDay, DateTime(2026, 10, 3));
     });
   });
 
