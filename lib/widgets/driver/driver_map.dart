@@ -6,9 +6,12 @@
 // ([expanded]); the buttons (expand / collapse, centre on my location, zoom)
 // are the commuter map's MapControls. [myLocation] (a blue dot) is where the
 // phone found the driver when no jeep position is known, e.g. off shift.
+// The route is framed only while neither is known: the parent's MapFollower
+// keeps the camera on them from then on.
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -28,6 +31,9 @@ class DriverMap extends StatefulWidget {
     this.expanded = false,
     this.onToggleExpanded,
     this.onLocate,
+    this.following,
+    this.onMapReady,
+    this.onMapEvent,
     this.myLocation,
     this.showControls = true,
   });
@@ -39,8 +45,15 @@ class DriverMap extends StatefulWidget {
   final bool expanded;
   final VoidCallback? onToggleExpanded;
 
-  /// "Centre on my location" (always shown when set).
+  /// "Centre on my location" (always shown when set), and whether the
+  /// camera is following.
   final VoidCallback? onLocate;
+  final ValueListenable<bool>? following;
+
+  final VoidCallback? onMapReady;
+
+  /// Every camera move, so dragging can stop the camera following.
+  final MapEventCallback? onMapEvent;
 
   /// The phone's own position, drawn while the jeep's isn't known.
   final LatLng? myLocation;
@@ -60,6 +73,7 @@ class _DriverMapState extends State<DriverMap> {
   void _frameRoute() {
     final route = widget.driver.route;
     if (!_ready || route == null || route.id == _framedRouteId || route.geometry.length < 2) return;
+    if (widget.driver.jeepPosition != null || widget.myLocation != null) return;
     _framedRouteId = route.id;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -105,8 +119,12 @@ class _DriverMapState extends State<DriverMap> {
           interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
           onMapReady: () {
             _ready = true;
+            widget.onMapReady?.call();
             _frameRoute();
           },
+          onMapEvent: widget.onMapEvent,
+          // Stays alive scrolled out of the dashboard: the camera still follows.
+          keepAlive: true,
         ),
         children: [
           TileLayer(urlTemplate: MapConfig.tileUrl, userAgentPackageName: MapConfig.userAgentPackageName),
@@ -137,6 +155,7 @@ class _DriverMapState extends State<DriverMap> {
                   expanded: widget.expanded,
                   onToggleExpanded: widget.onToggleExpanded,
                   onLocate: widget.onLocate,
+                  following: widget.following,
                 ),
               ),
             ),

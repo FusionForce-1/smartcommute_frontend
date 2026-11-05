@@ -83,10 +83,24 @@ void main() {
         onTap: () => taps++,
       )));
 
-      expect(find.text('1.3 km away'), findsOneWidget);
+      expect(find.text('1.25 km away'), findsOneWidget);
       expect(find.text('Delayed'), findsOneWidget);
       await tester.tap(find.text('PUV 07B'));
       expect(taps, 1);
+    });
+
+    testWidgets('says when it reaches you, or that it passed you', (tester) async {
+      await tester.pumpWidget(host(const NearbyVehicleCard(
+        routeCode: '07B', routeName: 'Banawa → Carbon', etaMinutes: 4, etaCaption: 'to reach you',
+      )));
+      expect(find.text('~4 min'), findsOneWidget);
+      expect(find.text('to reach you'), findsOneWidget);
+
+      await tester.pumpWidget(host(const NearbyVehicleCard(
+        routeCode: '07B', routeName: 'Banawa → Carbon', etaMinutes: 4, passed: true,
+      )));
+      expect(find.text('Passed you'), findsOneWidget);
+      expect(find.text('~4 min'), findsNothing);
     });
   });
 

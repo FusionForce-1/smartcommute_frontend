@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -190,13 +191,17 @@ void main() {
 
   group('Centre on my location', () {
     /// Just the Map tab, with a fake phone location.
-    Future<void> pumpMapTab(WidgetTester tester, FakeLocationSource location) async {
+    Future<DriverProvider> pumpMapTab(
+      WidgetTester tester,
+      FakeLocationSource location, {
+      Map<String, dynamic>? shift,
+    }) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 2.5;
       addTearDown(tester.view.reset);
       final driver = DriverProvider(
         DriverService(fakeDio(fakeBackend({
-          'GET /drivers/me': dashboardJson(),
+          'GET /drivers/me': dashboardJson(shift: shift),
           'GET /driver-reports/sent': <Map<String, dynamic>>[],
         }))),
         gps: FakeGpsSession(),
@@ -206,7 +211,13 @@ void main() {
         home: Scaffold(body: DriverMapTab(driver: driver, locationSource: location)),
       ));
       await settle(tester);
+      return driver;
     }
+
+    MapCamera camera(WidgetTester tester) => tester.widget<FlutterMap>(find.byType(FlutterMap)).mapController!.camera;
+
+    VehicleLiveUpdate jeepAt(double lat) =>
+        VehicleLiveUpdate(vehicleId: 'v1', status: 'en_route', location: LatLng(lat, 123.9), source: 'tracker');
 
     testWidgets('is there off shift, on the card and full screen', (tester) async {
       await pumpDashboard(tester, {'GET /drivers/me': dashboardJson()});
@@ -217,14 +228,46 @@ void main() {
       expect(find.byTooltip('Center on my location'), findsOneWidget);
     });
 
-    testWidgets('with no jeep position it shows where the phone is', (tester) async {
-      await pumpMapTab(tester, FakeLocationSource(result: const LatLng(10.3, 123.9)));
-      expect(find.byKey(const Key('driverMyLocation')), findsNothing);
+    testWidgets('with no jeep position the map opens on the phone and follows it', (tester) async {
+      final location = FakeLocationSource(result: const LatLng(10.3, 123.9));
+      await pumpMapTab(tester, location);
+
+      expect(find.byKey(const Key('driverMyLocation')), findsOneWidget);
+      expect(camera(tester).center.latitude, closeTo(10.3, 1e-4));
+      expect(camera(tester).zoom, greaterThanOrEqualTo(16));
+
+      location.positions.add(const LatLng(10.31, 123.9));
+      await settle(tester);
+      expect(camera(tester).center.latitude, closeTo(10.31, 1e-4));
+    });
+
+    testWidgets('the map follows the jeep once its position is known', (tester) async {
+      final driver = await pumpMapTab(tester, FakeLocationSource(result: const LatLng(10.3, 123.9)), shift: shiftJson());
+
+      driver.onLiveFrame(jeepAt(10.32));
+      await settle(tester);
+      expect(camera(tester).center.latitude, closeTo(10.32, 1e-4));
+
+      driver.onLiveFrame(jeepAt(10.33));
+      await settle(tester);
+      expect(camera(tester).center.latitude, closeTo(10.33, 1e-4));
+    });
+
+    testWidgets('dragging stops following; Center on my location starts it again', (tester) async {
+      final driver = await pumpMapTab(tester, FakeLocationSource(result: const LatLng(10.3, 123.9)), shift: shiftJson());
+      driver.onLiveFrame(jeepAt(10.32));
+      await settle(tester);
+
+      await tester.drag(find.byType(FlutterMap), const Offset(-120, 0));
+      await settle(tester);
+      final dragged = camera(tester).center;
+      driver.onLiveFrame(jeepAt(10.33));
+      await settle(tester);
+      expect(camera(tester).center, dragged, reason: 'looking around: the jeep moves on without the map');
 
       await tester.tap(find.byTooltip('Center on my location'));
       await settle(tester);
-
-      expect(find.byKey(const Key('driverMyLocation')), findsOneWidget);
+      expect(camera(tester).center.latitude, closeTo(10.33, 1e-4));
     });
 
     testWidgets('says why when location is not allowed', (tester) async {

@@ -1,13 +1,15 @@
 // lib/widgets/commuter/nearby_vehicle_card.dart
 //
-// One row in the Home tab's "Nearby Vehicles" list:
-// route code chip, "PUV <code>", route name and an optional ETA.
-// When [onTap] is set the row is selectable (draws the vehicle → you line
-// on the Live Map); [selected] highlights the vehicle being shown.
+// One row in the Home tab's "Nearby Vehicles" list: route code chip,
+// "PUV <code>", route name, how far it is from the commuter in km, and when
+// it reaches them ([etaCaption] says to what the ETA runs) or that it passed.
+// When [onTap] is set the row is selectable (shows how to catch it on the
+// Live Map); [selected] highlights the vehicle being shown.
 
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
+import '../../services/boarding_planner.dart' show formatKm;
 import 'route_code_chip.dart';
 
 class NearbyVehicleCard extends StatelessWidget {
@@ -16,6 +18,8 @@ class NearbyVehicleCard extends StatelessWidget {
     required this.routeCode,
     required this.routeName,
     this.etaMinutes,
+    this.etaCaption,
+    this.passed = false,
     this.distanceM,
     this.delayed = false,
     this.selected = false,
@@ -26,6 +30,12 @@ class NearbyVehicleCard extends StatelessWidget {
   final String routeName;
   final int? etaMinutes;
 
+  /// What [etaMinutes] runs to, e.g. "to reach you".
+  final String? etaCaption;
+
+  /// It has already driven past the commuter.
+  final bool passed;
+
   /// Straight-line distance from the commuter, when their location is known.
   final double? distanceM;
 
@@ -35,8 +45,7 @@ class NearbyVehicleCard extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
 
-  static String formatDistance(double metres) =>
-      metres < 1000 ? '${metres.round()} m away' : '${(metres / 1000).toStringAsFixed(1)} km away';
+  static String formatDistance(double metres) => '${formatKm(metres)} away';
 
   @override
   Widget build(BuildContext context) {
@@ -108,14 +117,23 @@ class NearbyVehicleCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (eta != null)
-                  Text(
-                    '~$eta min',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.brandTeal,
-                    ),
+                if (passed)
+                  const Text('Passed you', style: TextStyle(fontSize: 14, color: AppColors.navInactive))
+                else if (eta != null)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '~$eta min',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.brandTeal,
+                        ),
+                      ),
+                      if (etaCaption case final caption?)
+                        Text(caption, style: const TextStyle(fontSize: 12, color: AppColors.navInactive)),
+                    ],
                   ),
               ],
             ),

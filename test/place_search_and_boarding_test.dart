@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:smartcommute_app/models/transport_model.dart' show RouteStop;
 import 'package:smartcommute_app/services/boarding_planner.dart';
 import 'package:smartcommute_app/services/place_search.dart';
 
@@ -74,6 +75,77 @@ void main() {
       final plan = planBoarding(route: const [], user: user, jeep: jeep);
       expect(plan.onRoute, isFalse);
       expect(plan.boardAt, jeep);
+    });
+
+    test('knows how far the jeep is from the commuter', () {
+      const jeep = LatLng(10.30, 123.882);
+      final plan = planBoarding(route: route, user: user, jeep: jeep);
+      expect(plan.jeepStraightM, closeTo(925, 10));   // 876 m along the street, 300 m across
+    });
+
+    RouteStop stop(String name, double lng, {double lat = 10.30}) =>
+        RouteStop(id: name, name: name, sequence: 1, location: LatLng(lat, lng));
+
+    test('boards at the nearest stop when it is barely further', () {
+      const jeep = LatLng(10.30, 123.882);
+      final plan = planBoarding(route: route, user: user, jeep: jeep, stops: [stop('Near', 123.891), stop('Far', 123.899)]);
+      expect(plan.stopName, 'Near');
+      expect(plan.boardAt.longitude, closeTo(123.891, 1e-6));
+      expect(plan.walkStraightM, closeTo(316, 10));
+      expect(plan.jeepToBoardM, closeTo(986, 10));
+      expect(plan.jeepPath.last.longitude, closeTo(123.891, 1e-6));
+    });
+
+    test('a stop much further than the route is not worth the walk', () {
+      final plan = planBoarding(
+        route: route, user: user, jeep: const LatLng(10.30, 123.882), stops: [stop('Far', 123.899)],
+      );
+      expect(plan.stopName, isNull);
+      expect(plan.boardAt.longitude, closeTo(123.890, 1e-6));
+    });
+
+    test('skips stops the jeep has passed, and stops off the route', () {
+      const jeep = LatLng(10.30, 123.8895);
+      final plan = planBoarding(route: route, user: user, jeep: jeep, stops: [
+        stop('Behind the jeep', 123.889),
+        stop('Off the route', 123.890, lat: 10.3015),
+        stop('Ahead', 123.8915),
+      ]);
+      expect(plan.stopName, 'Ahead');
+    });
+
+    test('a jeep that has passed still leaves a stop to wait at for the next one', () {
+      final plan = planBoarding(route: route, user: user, jeep: const LatLng(10.30, 123.895), stops: [stop('Near', 123.891)]);
+      expect(plan.jeepPassed, isTrue);
+      expect(plan.stopName, 'Near');
+    });
+
+    test('a jeep driving back along the route is coming, not gone', () {
+      const jeep = LatLng(10.30, 123.895);   // east of the commuter, heading west
+      final line = lineAsDriven(route, jeep: jeep, user: user, heading: 270);
+      expect(line.first, route.last);
+      final plan = planBoarding(route: line, user: user, jeep: jeep);
+      expect(plan.jeepPassed, isFalse);
+      expect(plan.jeepToBoardM, closeTo(547, 10));
+    });
+
+    test('a jeep driving away along the route has passed', () {
+      const jeep = LatLng(10.30, 123.895);   // east of the commuter, heading east
+      final line = lineAsDriven(route, jeep: jeep, user: user, heading: 90);
+      expect(line.first, route.first);
+      expect(planBoarding(route: line, user: user, jeep: jeep).jeepPassed, isTrue);
+    });
+
+    test('a jeep that has not moved yet is taken to be coming', () {
+      const jeep = LatLng(10.30, 123.895);
+      final line = lineAsDriven(route, jeep: jeep, user: user);
+      expect(planBoarding(route: line, user: user, jeep: jeep).jeepPassed, isFalse);
+    });
+
+    test('distances read in km', () {
+      expect(formatKm(350), '0.35 km');
+      expect(formatKm(1250), '1.25 km');
+      expect(formatKm(12400), '12.4 km');
     });
 
     test('steps and jeep minutes', () {

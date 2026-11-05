@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:smartcommute_app/models/models.dart' show GeoJSONPoint, StopModel;
@@ -77,6 +78,23 @@ void main() {
     await tester.tap(find.text('0000'));
     await tester.pump(const Duration(seconds: 1));
     expect(find.textContaining('tap one to follow it'), findsOneWidget);
+  });
+
+  testWidgets('the map stays on the picked jeep as it moves', (tester) async {
+    const further = LatLng(10.3000, 123.8945);   // on along the route, past Stop B
+    LatLngBounds view() => tester.widget<FlutterMap>(find.byType(FlutterMap)).mapController!.camera.visibleBounds;
+    final socket = await open(tester);
+    socket.send(fix('jeep1', 123.8850));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.tap(find.text('0000'));
+    await tester.pumpAndSettle();
+    expect(view().contains(further), isFalse, reason: 'zoomed in on the jeep and Stop B');
+
+    socket.send({...fix('jeep1', further.longitude), 'ts': '2026-10-20 10:32:00.000000'});
+    await tester.pumpAndSettle();
+
+    expect(view().contains(further), isTrue);
+    expect(view().contains(const LatLng(10.3000, 123.8900)), isTrue, reason: 'Stop B too');
   });
 
   testWidgets('a jeep past the boarding stop says so', (tester) async {

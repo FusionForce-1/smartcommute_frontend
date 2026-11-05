@@ -3,8 +3,9 @@
 // Playback: replays where one of the operator's vehicles went, from its GPS
 // fixes (GET /vehicles/{id}/track). Raw GPS is kept for 24 hours, so a
 // window can start at most a day back. The shifts on the vehicle in the
-// window can be picked to replay just that shift. The Fleet Map's vehicle
-// popup opens this tab on its vehicle (PLAYBACK_VEHICLE_KEY).
+// window can be picked to replay just that shift. Stretches without GPS show
+// as breaks in the line, and playing jumps straight over them. The Fleet
+// Map's vehicle popup opens this tab on its vehicle (PLAYBACK_VEHICLE_KEY).
 
 const PLAYBACK_VEHICLE_KEY = 'sc_playback_vehicle';
 
@@ -17,12 +18,17 @@ OperatorRouter.register('playback', {
     const CEBU = [10.3157, 123.8854];
     const DAY_MS = 24 * 60 * 60 * 1000;
     const GAP_MS = 60 * 1000;        // no fix for this long: the line breaks (signal lost)
+    const MOVE_M = 8;                // less than this between fixes is GPS jitter, not driving
+    const GAP_NOTE_MS = 3000;        // how long the readout mentions a gap it just jumped
+    const LINE_REDRAW_MS = 100;      // the travelled line redraws at most this often while playing
+    const LONGEST_FRAME_MS = 250;    // back from a hidden tab: carry on, don't leap ahead
     const SPEEDS = [1, 5, 10, 30, 60];
     const PRESETS = [[1, 'Last hour'], [3, 'Last 3 h'], [6, 'Last 6 h'], [12, 'Last 12 h'], [24, 'Last 24 h']];
 
     let fleet = [];
-    let points = [];        // [{ t (ms), lat, lng, speed, heading, source }]
+    let points = [];        // [{ t (ms), lat, lng, speed, facing, source }]
     let segments = [];      // index ranges [from, to] without a gap
+    let segmentLines = [];  // each segment's [lat, lng] pairs
     let now = 0;            // playback time, ms
     let speed = 10;
     let playing = false;
@@ -86,16 +92,18 @@ OperatorRouter.register('playback', {
     const toLocalInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
     const clock = (ms, seconds = false) => new Date(ms).toLocaleTimeString('en-US',
       { hour: 'numeric', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) });
+    // The inputs have no seconds: rounding up keeps the last fixes in the window.
+    const nextMinute = (ms) => new Date(Math.ceil(ms / 60000) * 60000);
 
     function setWindow(start, end) {
-      const oldest = Date.now() - DAY_MS;
-      fromInput.value = toLocalInput(new Date(Math.max(start, oldest)));
-      toInput.value = toLocalInput(new Date(Math.min(end, Date.now())));
+      limitInputs();
+      fromInput.value = toLocalInput(new Date(Math.max(start, Date.now() - DAY_MS)));
+      toInput.value = toLocalInput(nextMinute(Math.min(end, Date.now())));
     }
 
     function limitInputs() {
       const min = toLocalInput(new Date(Date.now() - DAY_MS));
-      const max = toLocalInput(new Date());
+      const max = toLocalInput(nextMinute(Date.now()));
       [fromInput, toInput].forEach((input) => { input.min = min; input.max = max; });
     }
 
@@ -114,6 +122,10 @@ OperatorRouter.register('playback', {
     const pathLayer = map ? L.layerGroup().addTo(map) : null;
     const doneLayer = map ? L.layerGroup().addTo(map) : null;
     let doneLines = [];     // one polyline per segment, grown as the vehicle moves
+    let lineStates = [];    // per segment: 'done', 'current' or 'ahead'
+    let lastLineDraw = 0;
+    let gapNote = '';
+    let gapNoteUntil = 0;
     let marker = null;
 
     const puvIcon = () => L.divIcon({
@@ -171,10 +183,12 @@ OperatorRouter.register('playback', {
 
     function show(track) {
       points = track.points.map((p) => ({ ...p, t: OperatorUi.parseDate(p.t).getTime() }));
+      addFacing();
       renderShifts(track.shifts);
       pathLayer?.clearLayers();
       doneLayer?.clearLayers();
       doneLines = [];
+      lineStates = [];
       marker = null;
 
       if (!points.length) {
@@ -191,9 +205,10 @@ OperatorRouter.register('playback', {
           from = i;
         }
       }
+      segmentLines = segments.map(([a, b]) => points.slice(a, b + 1).map((p) => [p.lat, p.lng]));
       if (map) {
-        segments.forEach(([a, b]) => {
-          L.polyline(points.slice(a, b + 1).map((p) => [p.lat, p.lng]), { color: '#7D868E', weight: 4, opacity: 0.6 }).addTo(pathLayer);
+        segmentLines.forEach((line) => {
+          L.polyline(line, { color: '#7D868E', weight: 4, opacity: 0.6 }).addTo(pathLayer);
           doneLines.push(L.polyline([], { color: '#3B8A9E', weight: 5 }).addTo(doneLayer));
         });
         endDot('#27AE60').setLatLng([points[0].lat, points[0].lng]).bindTooltip(`Start ${clock(points[0].t)}`).addTo(pathLayer);
@@ -208,8 +223,31 @@ OperatorRouter.register('playback', {
       playerEl.hidden = false;
       const thinned = track.total_fixes > points.length ? ` (thinned from ${track.total_fixes})` : '';
       const gaps = segments.length > 1 ? ` · GPS was off ${segments.length - 1} time${segments.length === 2 ? '' : 's'}` : '';
-      statusEl.textContent = `${points.length} GPS fixes${thinned} for ${track.plate_number}${gaps}.`;
+      // A little slack: "Last 24 h" itself starts right at the limit.
+      const clipped = OperatorUi.parseDate(track.oldest_available) - new Date(fromInput.value) > 5 * 60 * 1000
+        ? ' GPS older than 24 hours is no longer kept.' : '';
+      statusEl.textContent = `${points.length} GPS fixes${thinned} for ${track.plate_number}${gaps}.${clipped}`;
       seek(points[0].t);
+    }
+
+    /** Which way the PUV faces at each fix: its last real movement, so GPS jitter doesn't spin it while parked. */
+    function addFacing() {
+      const metres = (a, b) => Math.hypot(
+        (b.lat - a.lat) * 110540,
+        (b.lng - a.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180),
+      );
+      let anchor = points[0];
+      let facing = null;
+      points.forEach((p) => {
+        if (metres(anchor, p) >= MOVE_M) {
+          facing = OperatorUi.bearing([anchor.lat, anchor.lng], [p.lat, p.lng]);
+          anchor = p;
+        }
+        p.facing = facing;
+      });
+      // Before its first move it already faces the way it sets off.
+      const first = points.find((p) => p.facing !== null)?.facing ?? null;
+      points.forEach((p) => { p.facing ??= first; });
     }
 
     function renderShifts(shifts) {
@@ -250,25 +288,49 @@ OperatorRouter.register('playback', {
       }
       if (marker) {
         marker.setLatLng([lat, lng]);
-        const heading = p.heading ?? (next ? OperatorUi.bearing([p.lat, p.lng], [next.lat, next.lng]) : null);
         const img = marker.getElement()?.querySelector('.op-puv__img');
-        if (img && heading != null) img.style.transform = `rotate(${heading}deg)`;
+        if (img && p.facing != null) img.style.transform = `rotate(${p.facing}deg)`;
       }
-      segments.forEach(([a, b], k) => {
-        const line = doneLines[k];
-        if (!line) return;
-        if (b <= i) line.setLatLngs(points.slice(a, b + 1).map((q) => [q.lat, q.lng]));
-        else if (a <= i) line.setLatLngs([...points.slice(a, i + 1).map((q) => [q.lat, q.lng]), [lat, lng]]);
-        else line.setLatLngs([]);
-      });
+      drawTravelled(i, [lat, lng]);
       const kmh = typeof p.speed === 'number' ? `${Math.round(p.speed)} km/h` : '— km/h';
       const source = p.source === 'phone' ? ' · from the driver’s phone' : '';
-      readout.textContent = `${clock(now, true)} · ${kmh}${source}`;
+      const note = performance.now() < gapNoteUntil ? gapNote : '';
+      readout.textContent = `${clock(now, true)} · ${kmh}${source}${note}`;
+    }
+
+    /** Grows the travelled line up to fix i: only the stretch in progress redraws. */
+    function drawTravelled(i, tip) {
+      const stamp = performance.now();
+      const throttled = playing && stamp - lastLineDraw < LINE_REDRAW_MS;
+      segments.forEach(([a, b], k) => {
+        const state = b <= i ? 'done' : a <= i ? 'current' : 'ahead';
+        if (state === 'current') {
+          if (throttled) return;
+          doneLines[k]?.setLatLngs([...segmentLines[k].slice(0, i - a + 1), tip]);
+          lastLineDraw = stamp;
+        } else if (state !== lineStates[k]) {
+          doneLines[k]?.setLatLngs(state === 'done' ? segmentLines[k] : []);
+        }
+        lineStates[k] = state;
+      });
+    }
+
+    /** t, or the end of the gap it falls in: nothing happens there to watch. */
+    function pastGap(t) {
+      const i = indexAt(t);
+      const next = points[i + 1];
+      if (!next || next.t - points[i].t <= GAP_MS) return t;
+      const seconds = Math.round((next.t - points[i].t) / 1000);
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      gapNote = ` · skipped ${hours ? `${hours} h ${minutes} min` : `${minutes} min ${seconds % 60} s`} with no GPS`;
+      gapNoteUntil = performance.now() + GAP_NOTE_MS;
+      return next.t;
     }
 
     function tick(stamp) {
       if (!playing) return;
-      if (lastTick !== null) seek(now + (stamp - lastTick) * speed);
+      if (lastTick !== null) seek(pastGap(now + Math.min(stamp - lastTick, LONGEST_FRAME_MS) * speed));
       lastTick = stamp;
       if (now >= points[points.length - 1].t) {
         pause();

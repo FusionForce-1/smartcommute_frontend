@@ -23,6 +23,7 @@
 // [expanded] draws it edge to edge (the Home tab's full-screen map) instead
 // of as a rounded card; [onToggleExpanded] adds the expand / collapse button.
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -44,6 +45,9 @@ class LiveMap extends StatelessWidget {
     required this.clock,
     required this.frame,
     required this.onMapReady,
+    this.onMapEvent,
+    this.onLocate,
+    this.following,
     this.currentLocation,
     this.selectedVehicleId,
     this.onClearSelection,
@@ -69,6 +73,14 @@ class LiveMap extends StatelessWidget {
   final ValueNotifier<int> frame;
 
   final VoidCallback onMapReady;
+
+  /// Every camera move, e.g. so dragging can stop the camera following.
+  final MapEventCallback? onMapEvent;
+
+  /// "Center on my location", and whether the camera is following.
+  final VoidCallback? onLocate;
+  final ValueListenable<bool>? following;
+
   final LatLng? currentLocation;
 
   /// Jeep to draw the "vehicle → you" line from; [onClearSelection] hides it.
@@ -138,6 +150,9 @@ class LiveMap extends StatelessWidget {
             flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
           onMapReady: onMapReady,
+          onMapEvent: onMapEvent,
+          // Stays alive scrolled out of the Home list: the camera still follows.
+          keepAlive: true,
         ),
         children: [
           TileLayer(
@@ -250,6 +265,8 @@ class LiveMap extends StatelessWidget {
                   controller: controller,
                   expanded: expanded,
                   onToggleExpanded: onToggleExpanded,
+                  onLocate: onLocate,
+                  following: following,
                 ),
               ),
             ),
@@ -451,7 +468,8 @@ class _ClearSelectionChip extends StatelessWidget {
 }
 
 /// The map's buttons, stacked on the right: expand / collapse (with
-/// [onToggleExpanded]), center on my location (with [onLocate]) and zoom.
+/// [onToggleExpanded]), center on my location (with [onLocate]; solid while
+/// the camera is [following]) and zoom.
 class MapControls extends StatelessWidget {
   const MapControls({
     super.key,
@@ -459,12 +477,14 @@ class MapControls extends StatelessWidget {
     this.expanded = false,
     this.onToggleExpanded,
     this.onLocate,
+    this.following,
   });
 
   final MapController controller;
   final bool expanded;
   final VoidCallback? onToggleExpanded;
   final VoidCallback? onLocate;
+  final ValueListenable<bool>? following;
 
   void _zoomBy(double delta) {
     final camera = controller.camera;
@@ -480,8 +500,16 @@ class MapControls extends StatelessWidget {
         child: child,
       );
 
+  Widget _locateButton({required bool on}) => IconButton(
+        tooltip: 'Center on my location',
+        icon: Icon(on ? Icons.my_location : Icons.location_searching),
+        color: AppColors.brandTeal,
+        onPressed: onLocate,
+      );
+
   @override
   Widget build(BuildContext context) {
+    final following = this.following;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -497,12 +525,12 @@ class MapControls extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
         ],
         if (onLocate != null) ...[
-          _card(IconButton(
-            tooltip: 'Center on my location',
-            icon: const Icon(Icons.my_location),
-            color: AppColors.brandTeal,
-            onPressed: onLocate,
-          )),
+          _card(following == null
+              ? _locateButton(on: true)
+              : ValueListenableBuilder<bool>(
+                  valueListenable: following,
+                  builder: (context, on, _) => _locateButton(on: on),
+                )),
           const SizedBox(height: AppSpacing.xs),
         ],
         _card(Column(

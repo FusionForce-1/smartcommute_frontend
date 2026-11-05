@@ -7,8 +7,11 @@
 // drags up, or down to just its handle. The same map moves between the two
 // layouts, keeping its camera. Back leaves full screen.
 //
-// "Centre on my location" is always there: it goes to the jeep when its
-// position is known, else asks the phone where the driver is (off shift).
+// The map opens on the jeep, or on the driver when its position isn't known
+// (off shift), and follows as they move (widgets/map_follower.dart).
+// Dragging the map stops that; "Centre on my location" starts it again.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -23,6 +26,7 @@ import '../../widgets/driver/driver_map.dart';
 import '../../widgets/driver/my_route_info.dart';
 import '../../widgets/driver/route_status_card.dart';
 import '../../widgets/driver/shift_card.dart';
+import '../../widgets/map_follower.dart';
 
 class DriverMapTab extends StatefulWidget {
   const DriverMapTab({super.key, required this.driver, this.locationSource});
@@ -36,8 +40,9 @@ class DriverMapTab extends StatefulWidget {
   State<DriverMapTab> createState() => _DriverMapTabState();
 }
 
-class _DriverMapTabState extends State<DriverMapTab> {
+class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMixin {
   final MapController _map = MapController();
+  late final MapFollower _follow = MapFollower(_map, this);
 
   /// Keeps the one map alive as it moves between the two layouts.
   final GlobalKey _mapKey = GlobalKey();
@@ -46,6 +51,7 @@ class _DriverMapTabState extends State<DriverMapTab> {
 
   /// Where the phone found the driver (shown while the jeep's isn't known).
   LatLng? _myLocation;
+  StreamSubscription<LatLng>? _phoneMoves;
   bool _locating = false;
   late final LocationSource _location = widget.locationSource ?? GeolocatorLocationSource();
   final DraggableScrollableController _sheet = DraggableScrollableController();
@@ -59,10 +65,53 @@ class _DriverMapTabState extends State<DriverMapTab> {
   static const double _sheetHandle = 30;
 
   @override
+  void initState() {
+    super.initState();
+    widget.driver.addListener(_followJeep);
+    _locateOnOpen();
+  }
+
+  @override
   void dispose() {
+    widget.driver.removeListener(_followJeep);
+    _phoneMoves?.cancel();
+    _follow.dispose();
     _sheet.dispose();
     _sheetExtent.dispose();
     super.dispose();
+  }
+
+  void _followJeep() {
+    final jeep = widget.driver.jeepPosition;
+    if (jeep != null) _follow.center(jeep);
+  }
+
+  void _onMapReady() {
+    _follow.mapReady();
+    final here = widget.driver.jeepPosition ?? _myLocation;
+    if (here != null) _follow.center(here);
+  }
+
+  /// Finds the driver as the tab opens, so the map is on them even before
+  /// the jeep's position is known. Quiet on failure: the locate button says why.
+  Future<void> _locateOnOpen() async {
+    try {
+      _showMyLocation(await _location.currentLocation());
+      _watchPhone();
+    } catch (_) {
+      // No location yet; the map stays on the route.
+    }
+  }
+
+  void _watchPhone() {
+    if (!mounted) return;
+    _phoneMoves ??= _location.positionStream(distanceFilterM: 5).listen(_showMyLocation, onError: (Object _) {});
+  }
+
+  void _showMyLocation(LatLng here) {
+    if (!mounted) return;
+    setState(() => _myLocation = here);
+    if (widget.driver.jeepPosition == null) _follow.center(here);
   }
 
   void _setExpanded(bool expanded) {
@@ -93,21 +142,20 @@ class _DriverMapTabState extends State<DriverMapTab> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// The jeep when we know where it is, else the phone's own location.
+  /// Back to following the jeep when we know where it is, else the phone.
   Future<void> _centreOnMe() async {
+    _follow.resume();
     final jeep = widget.driver.jeepPosition;
     if (jeep != null) {
-      _map.move(jeep, 16);
+      _follow.center(jeep);
       return;
     }
     if (_locating) return;
     _locating = true;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final here = await _location.currentLocation();
-      if (!mounted) return;
-      setState(() => _myLocation = here);
-      _map.move(here, 16);
+      _showMyLocation(await _location.currentLocation());
+      _watchPhone();
     } on LocationException catch (e) {
       messenger
         ..hideCurrentSnackBar()
@@ -136,6 +184,9 @@ class _DriverMapTabState extends State<DriverMapTab> {
         expanded: expanded,
         onToggleExpanded: () => _setExpanded(!_expanded),
         onLocate: _centreOnMe,
+        following: _follow.following,
+        onMapReady: _onMapReady,
+        onMapEvent: _follow.onMapEvent,
         myLocation: _myLocation,
         // Full screen: the buttons sit above the sheet, placed below.
         showControls: !expanded,
@@ -226,6 +277,7 @@ class _DriverMapTabState extends State<DriverMapTab> {
                 expanded: true,
                 onToggleExpanded: () => _setExpanded(false),
                 onLocate: _centreOnMe,
+                following: _follow.following,
               ),
             ),
             NotificationListener<DraggableScrollableNotification>(

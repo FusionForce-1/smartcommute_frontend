@@ -31,6 +31,7 @@ import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_page_header.dart';
 import '../../widgets/commuter/trip_route_layers.dart';
 import '../../widgets/commuter/vehicle_marker.dart';
+import '../../widgets/map_follower.dart';
 import '../../widgets/fare_breakdown_sheet.dart';
 
 /// Loads the fleet list (GET /vehicles): which route each jeep runs on.
@@ -74,8 +75,9 @@ typedef RouteJeep = ({
   BoardingPlan? plan,
 });
 
-class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProviderStateMixin {
+class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStateMixin {
   final MapController _map = MapController();
+  late final MapFollower _follow = MapFollower(_map, this);
   bool _mapReady = false;
 
   // Jeep id -> route id / plate, from /vehicles.
@@ -112,6 +114,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
   @override
   void dispose() {
     _socket?.disconnect();
+    _follow.dispose();
     _ticker.dispose();
     _frame.dispose();
     super.dispose();
@@ -174,6 +177,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
     if (!_ticker.isActive) _ticker.start();
     // The cards (distance, status) follow the latest fix.
     setState(() {});
+    if (update.vehicleId == _selectedId) _followSelected();
   }
 
   /// Live jeeps on the option's routes, those still coming to the boarding
@@ -214,15 +218,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
     return list;
   }
 
-  /// True when [heading] points more than 100° away from [line]'s direction at [at].
+  /// True when the jeep at [at] is clearly heading the other way along [line].
   static bool _drivingAgainst(List<LatLng> line, LatLng at, double? heading) {
-    if (heading == null || line.length < 2) return false;
     final pos = projectOnLine(line, at);
-    if (pos == null) return false;
-    final i = pos.segment.clamp(0, line.length - 2);
-    final along = const Distance().bearing(line[i], line[i + 1]);
-    final diff = ((heading - along + 540) % 360 - 180).abs();
-    return diff > 100;
+    return heading != null && pos != null && headingAgainstLine(line, pos, heading, limit: 100);
   }
 
   void _select(RouteJeep jeep) {
@@ -231,17 +230,21 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
       return;
     }
     setState(() => _selectedId = jeep.vehicleId);
-    final at = jeep.track.positionAt(_clock.elapsed) ?? jeep.track.latest.location;
-    if (!_mapReady || at == null) return;
-    final board = jeep.leg.boardStop.isPlaceholder ? null : _point(jeep.leg.boardStop);
-    if (board == null) {
-      _map.move(at, 16);
-    } else {
-      _map.fitCamera(CameraFit.coordinates(
-        coordinates: [at, board],
-        padding: const EdgeInsets.all(56),
-        maxZoom: 17,
-      ));
+    _follow.resume();
+    _followSelected();
+  }
+
+  /// Keeps the picked jeep on the map, with its boarding stop in view too.
+  void _followSelected() {
+    final id = _selectedId;
+    if (id == null || !_mapReady) return;
+    for (final jeep in _jeeps()) {
+      if (jeep.vehicleId != id) continue;
+      final at = jeep.track.latest.location;   // where the marker is gliding to
+      if (at == null) return;
+      final board = jeep.leg.boardStop.isPlaceholder ? null : _point(jeep.leg.boardStop);
+      board == null ? _follow.center(at) : _follow.frame([at, board]);
+      return;
     }
   }
 
@@ -295,7 +298,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> with SingleTickerProvid
                 minZoom: MapConfig.minZoom,
                 maxZoom: MapConfig.maxZoom,
                 cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
-                onMapReady: () => _mapReady = true,
+                onMapReady: () {
+                  _mapReady = true;
+                  _follow.mapReady();
+                },
+                onMapEvent: _follow.onMapEvent,
               ),
               children: [
                 TileLayer(

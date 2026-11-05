@@ -6,6 +6,7 @@
 // so the commuter always gets an answer.
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:latlong2/latlong.dart';
 
 import 'boarding_planner.dart';
@@ -30,7 +31,9 @@ class WalkingRouteService {
             Dio(BaseOptions(
               connectTimeout: const Duration(seconds: 8),
               receiveTimeout: const Duration(seconds: 8),
-              headers: {'User-Agent': 'SmartCommute/1.0 (commuter app)'},
+              // Not on web: browsers that honour it send a CORS preflight the
+              // service refuses, and every walk falls back to a straight line.
+              headers: kIsWeb ? null : {'User-Agent': 'SmartCommute/1.0 (commuter app)'},
             ));
 
   static const String _base = 'https://routing.openstreetmap.de/routed-foot/route/v1/driving';
