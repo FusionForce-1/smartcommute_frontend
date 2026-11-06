@@ -20,6 +20,7 @@ const AdminApp = (() => {
     ['Users', 'Filter accounts by role. Edit changes a user\'s name, role or status; Delete removes their access.'],
     ['Verification', 'Click Verify on an operator to review their company details, then Approve or Decline.'],
     ['System Health', 'Live status of the API, database, GPS and auth services, refreshed every 30 seconds.'],
+    ['Config', 'Change sign-in, GPS, plan, message and trip planner limits; saved changes apply right away. Server Setup shows what is set on the server, and Send test email checks that it can deliver mail.'],
   ];
 
   function redirectToLogin() {

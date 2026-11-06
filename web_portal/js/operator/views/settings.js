@@ -1,8 +1,9 @@
 // js/operator/views/settings.js
 //
-// Settings: email notifications, two-factor authentication and language
-// (GET/PATCH /users/me/settings). Turning two-factor on emails a code
-// that must be confirmed first, so a broken mailbox can't lock anyone out.
+// Settings: email notifications, password, two-factor authentication and
+// language (/users/me/settings, /users/me/security, /users/me/password).
+// Turning two-factor on emails a code that must be confirmed first, so a
+// broken mailbox can't lock anyone out.
 
 OperatorRouter.register('settings', {
   title: 'Settings',
@@ -11,7 +12,9 @@ OperatorRouter.register('settings', {
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const LANGUAGES = { 'en-PH': 'English (Philippines)' };
+    const MIN_PASSWORD_LENGTH = 6;
     let settings = null;
+    let security = null;
     let saving = false;
 
     el.innerHTML = `
@@ -30,23 +33,59 @@ OperatorRouter.register('settings', {
         </label>`;
     }
 
+    function passwordRow() {
+      if (!security.has_password) {
+        return `
+          <div class="op-setting">
+            <div>
+              <strong>Password</strong>
+              <span>You sign in with Google. To set a password, sign out and use Forgot Password on the sign-in page.</span>
+            </div>
+          </div>`;
+      }
+      return `
+        <div class="op-setting">
+          <div>
+            <strong>Password</strong>
+            <span>Change the password you sign in with</span>
+          </div>
+          <button type="button" class="op-btn op-btn--outline" id="set-password" ${saving ? 'disabled' : ''}>Change</button>
+        </div>`;
+    }
+
+    function twoFactorRow(s) {
+      // An account that already has it on can always turn it off.
+      if (security.two_factor_blocked && !s.two_factor_enabled) {
+        return `
+          <div class="op-setting">
+            <div>
+              <strong>Two-Factor Authentication</strong>
+              <span>${esc(security.two_factor_blocked)}</span>
+            </div>
+          </div>`;
+      }
+      return `
+        <div class="op-setting">
+          <div>
+            <strong>Two-Factor Authentication</strong>
+            <span>${s.two_factor_enabled ? 'On — a code is emailed when you sign in with your password' : 'Extra security for your account'}</span>
+          </div>
+          ${toggle('set-2fa', s.two_factor_enabled)}
+        </div>`;
+    }
+
     function render() {
       const s = settings;
       cardEl.innerHTML = `
         <div class="op-setting">
           <div>
             <strong>Email Notifications</strong>
-            <span>Receive alerts and updates via email</span>
+            <span>Emails about driver emergencies, suspended vehicles and your account</span>
           </div>
           ${toggle('set-email', s.email_notifications)}
         </div>
-        <div class="op-setting">
-          <div>
-            <strong>Two-Factor Authentication</strong>
-            <span>${s.two_factor_enabled ? 'On — a code is emailed each time you sign in' : 'Extra security for your account'}</span>
-          </div>
-          ${toggle('set-2fa', s.two_factor_enabled)}
-        </div>
+        ${passwordRow()}
+        ${twoFactorRow(s)}
         <div class="op-setting">
           <div>
             <strong>Language</strong>
@@ -71,6 +110,43 @@ OperatorRouter.register('settings', {
         saving = false;
         render();
       }
+    }
+
+    // ---------- Password ----------
+
+    function openChangePassword() {
+      const field = (id, label, autocomplete) => `
+        <div class="form-field">
+          <label for="${id}">${label}</label>
+          <input id="${id}" type="password" autocomplete="${autocomplete}" />
+        </div>`;
+      AdminModal.open({
+        title: 'Change password',
+        size: 'sm',
+        body: `
+          ${field('pw-current', 'Current password', 'current-password')}
+          ${field('pw-new', 'New password', 'new-password')}
+          ${field('pw-repeat', 'Repeat new password', 'new-password')}`,
+        actions: [
+          { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+          {
+            label: 'Change Password',
+            variant: 'primary',
+            onClick: async (m) => {
+              const current = m.querySelector('#pw-current').value;
+              const next = m.querySelector('#pw-new').value;
+              if (!current || !next) throw new Error('Fill in your current and new password.');
+              if (next.length < MIN_PASSWORD_LENGTH) {
+                throw new Error(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+              }
+              if (next !== m.querySelector('#pw-repeat').value) throw new Error('New passwords do not match.');
+              await OperatorApi.changePassword(current, next);
+              AdminModal.close();
+              AdminUi.toast('Your password was changed.');
+            },
+          },
+        ],
+      });
     }
 
     // ---------- Two-factor ----------
@@ -168,8 +244,14 @@ OperatorRouter.register('settings', {
       }
     });
 
-    AdminUi.loadInto(cardEl, OperatorApi.settings, (s) => {
+    cardEl.addEventListener('click', (e) => {
+      if (e.target.id === 'set-password') openChangePassword();
+    });
+
+    const load = () => Promise.all([OperatorApi.settings(), OperatorApi.security()]);
+    AdminUi.loadInto(cardEl, load, ([s, info]) => {
       settings = s;
+      security = info;
       render();
     });
   },

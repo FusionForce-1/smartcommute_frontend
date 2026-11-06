@@ -48,8 +48,9 @@ class HelpSupportScreen extends StatelessWidget {
     ),
     (
       'Why am I not getting alerts?',
-      'Check Profile → Notifications. Route Alerts and Schedule Updates must be turned on, '
-          'and notifications must be allowed for SmartCommute in your phone settings.',
+      'Alerts appear in the Alerts tab, not as phone notifications. You get them for routes '
+          'you saved or rode recently, as long as Route Alerts and Schedule Updates are turned '
+          'on in Profile → Notifications.',
     ),
     (
       'I forgot my password.',

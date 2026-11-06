@@ -17,6 +17,9 @@ const AdminApi = {
 
   // ---- System ----
   systemHealth: () => ApiClient.get('/system/health'),
+  systemConfig: () => ApiClient.get('/system/config'),
+  updateSystemConfig: (values) => ApiClient.patch('/system/config', { values }),
+  sendTestEmail: () => ApiClient.post('/system/config/test-email'),
   systemReport: () => ApiClient.get('/reports/system'),
   auditLog: ({ limit = 10 } = {}) => ApiClient.get('/audit-log', { limit }),
 };

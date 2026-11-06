@@ -168,12 +168,20 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                     'use "Forgot Password?" on the sign-in screen.',
                   ),
                 ),
-              SettingsSwitchRow(
-                title: 'Two-factor sign-in',
-                subtitle: 'Also ask for a code sent to your email when signing in.',
-                value: info.twoFactorEnabled,
-                onChanged: _setTwoFactor,
-              ),
+              // An account that already has it on can always turn it off.
+              if (info.twoFactorBlocked != null && !info.twoFactorEnabled)
+                ListTile(
+                  leading: const Icon(Icons.phonelink_lock_outlined, color: AppColors.brandTeal),
+                  title: const Text('Two-factor sign-in'),
+                  subtitle: Text(info.twoFactorBlocked!),
+                )
+              else
+                SettingsSwitchRow(
+                  title: 'Two-factor sign-in',
+                  subtitle: 'Also ask for a code sent to your email when signing in with your password.',
+                  value: info.twoFactorEnabled,
+                  onChanged: _setTwoFactor,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),

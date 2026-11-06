@@ -29,7 +29,7 @@ const OperatorApp = (() => {
     ['Announcements', 'Send service alerts, schedule changes and promotions to the commuters who ride your routes.'],
     ['Reports', 'Fleet and service figures, and revenue from the daily remittances you record for each vehicle.'],
     ['Subscription (top-right button)', 'Your first 3 months are free. After that the plan is ₱1,000 a year, paid with PayPal, for unlimited vehicles.'],
-    ['Profile & Settings', 'Update your company details, and turn two-factor authentication on or off.'],
+    ['Profile & Settings', 'Update your company details, change your password, choose whether to get emails, and turn two-factor authentication on or off.'],
   ];
 
   function redirectToLogin() {

@@ -204,6 +204,32 @@ void main() {
       await settle(tester);
     }
 
+    testWidgets('explains why two-factor is unavailable instead of offering a switch', (tester) async {
+      const reason = 'Your login email was made by your operator and cannot receive codes.';
+      await pumpProfileTab(tester, fakeBackend(loaded({
+        'GET /users/me/security': {...security(), 'two_factor_blocked': reason},
+      })));
+      await openPage(tester);
+
+      expect(find.text('Two-factor sign-in'), findsOneWidget);
+      expect(find.text(reason), findsOneWidget);
+      expect(find.byType(Switch), findsNothing);
+    });
+
+    testWidgets('an account with two-factor on can still turn it off when it is blocked', (tester) async {
+      await pumpProfileTab(tester, fakeBackend(loaded({
+        'GET /users/me/security': {
+          ...security(),
+          'two_factor_enabled': true,
+          'two_factor_blocked': 'Not available.',
+        },
+      })));
+      await openPage(tester);
+
+      expect(find.byType(Switch), findsOneWidget);
+      expect(find.text('Not available.'), findsNothing);
+    });
+
     testWidgets('shows sign-in options and when you agreed', (tester) async {
       await pumpProfileTab(tester, fakeBackend(loaded({'GET /users/me/security': security()})));
       await openPage(tester);

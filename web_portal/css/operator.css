@@ -788,6 +788,11 @@
   font-size: 13px;
 }
 
+.op-setting .op-btn {
+  flex: none;
+  width: auto;
+}
+
 .op-setting select,
 .op-date {
   padding: 8px 10px;

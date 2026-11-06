@@ -8,6 +8,7 @@ class SecurityInfo {
     required this.hasPassword,
     required this.termsCurrent,
     this.termsAcceptedAt,
+    this.twoFactorBlocked,
   });
 
   factory SecurityInfo.fromJson(Map<String, dynamic> json) {
@@ -17,10 +18,14 @@ class SecurityInfo {
       hasPassword: json['has_password'] as bool? ?? true,
       termsCurrent: json['terms_current'] as bool? ?? false,
       termsAcceptedAt: accepted == null ? null : DateTime.tryParse(accepted),
+      twoFactorBlocked: json['two_factor_blocked'] as String?,
     );
   }
 
   final bool twoFactorEnabled;
+
+  /// Why this account can't use two-factor sign-in, or null if it can.
+  final String? twoFactorBlocked;
 
   /// False for Google sign-ups that never set a password of their own.
   final bool hasPassword;
@@ -34,5 +39,6 @@ class SecurityInfo {
         hasPassword: hasPassword,
         termsCurrent: termsCurrent,
         termsAcceptedAt: termsAcceptedAt,
+        twoFactorBlocked: twoFactorBlocked,
       );
 }

@@ -10,6 +10,9 @@ const OperatorApi = {
     ApiClient.patch('/operators/me', { company_name, franchise_number, contact_number }),
   settings: () => ApiClient.get('/users/me/settings'),
   updateSettings: (changes) => ApiClient.patch('/users/me/settings', changes),
+  security: () => ApiClient.get('/users/me/security'),
+  changePassword: (currentPassword, newPassword) =>
+    ApiClient.post('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
   startTwoFactor: () => ApiClient.post('/users/me/two-factor/start'),
   confirmTwoFactor: (otp) => ApiClient.post('/users/me/two-factor/confirm', { otp }),
 
