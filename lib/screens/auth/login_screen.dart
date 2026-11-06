@@ -281,9 +281,9 @@ class _LoginScreenState extends State<LoginScreen> {
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(
         33 * scale,
-        20 * scale,
+        18 * scale,
         33 * scale,
-        22 * scale,
+        20 * scale,
       ),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -380,6 +380,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: _handleLogin,
                 child: const Text('Login'),
               ),
+              SizedBox(height: 8 * scale),
               OutlinedButton(
                 onPressed: widget.onGuestContinue,
                 child: const Text('Continue as Guest'),
@@ -388,7 +389,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const OrDivider(),
               SizedBox(height: 12 * scale),
               GoogleSignInButton(height: 35 * scale),
-              SizedBox(height: 14 * scale),
+              SizedBox(height: 12 * scale),
               Wrap(
                 alignment: WrapAlignment.center,
                 children: [
