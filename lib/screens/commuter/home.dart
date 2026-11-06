@@ -844,11 +844,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         ],
         const SizedBox(height: AppSpacing.md),
         CommuterActionTile(
-          icon: AppIcons.myLocation,
-          label: 'Center on my location',
-          onTap: _centerOnMyLocation,
-        ),
-        CommuterActionTile(
           icon: AppIcons.vehicle,
           label: 'Refresh vehicle markers',
           onTap: _refreshVehicles,

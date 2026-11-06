@@ -32,7 +32,10 @@ void main() {
   testWidgets('expands to full screen with a draggable Nearby Vehicles sheet', (tester) async {
     await pumpHome(tester);
     expect(sheet, findsNothing);
-    expect(find.text('Center on my location'), findsOneWidget); // card layout's tile
+    expect(find.text('Refresh vehicle markers'), findsOneWidget); // card layout's tile
+    // Locating lives on the map's own button: no tile for it under the map.
+    expect(find.text('Center on my location'), findsNothing);
+    expect(find.byTooltip('Center on my location'), findsOneWidget);
 
     await tester.tap(toggle);
     await tester.pumpAndSettle();
@@ -68,7 +71,7 @@ void main() {
     await tester.tap(toggle);
     await tester.pumpAndSettle();
     expect(sheet, findsNothing);
-    expect(find.text('Center on my location'), findsOneWidget);
+    expect(find.text('Refresh vehicle markers'), findsOneWidget);
 
     await tester.tap(toggle);
     await tester.pumpAndSettle();

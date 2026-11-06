@@ -1,7 +1,7 @@
 // lib/widgets/commuter/commuter_action_tile.dart
 //
 // Full-width white card with a teal icon and a label, used for the
-// dashboard's quick actions ("Center on my location", "Sign out", ...).
+// dashboard's quick actions ("Refresh vehicle markers", ...).
 
 import 'package:flutter/material.dart';
 
