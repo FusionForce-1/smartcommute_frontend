@@ -1,7 +1,7 @@
 // lib/widgets/commuter/preference_selector.dart
 //
-// Three equal-width toggles (Fastest / Cheapest / Few Transfers);
-// the chosen one is filled teal.
+// Equal-width toggles (Fastest / Few Transfers); the chosen one is
+// filled teal.
 
 import 'package:flutter/material.dart';
 

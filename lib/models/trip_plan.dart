@@ -12,7 +12,6 @@ import 'vehicle_live_update.dart' show parseServerTime;
 /// Unsa ang i-minimize sa trip planner (backend `preferences.minimize`).
 enum TripPreference {
   time('time', 'Fastest'),
-  fare('fare', 'Cheapest'),
   transfers('transfers', 'Few Transfers');
 
   const TripPreference(this.apiValue, this.label);

@@ -1,8 +1,8 @@
 // lib/screens/commuter/route.dart
 //
-// Route tab — "Plan Your Route": choose From / To, departure time and a
-// preference, then Find Routes opens the results page. State lives in
-// TripPlanProvider (owned by the dashboard), so results survive tab changes.
+// Route tab — "Plan Your Route": choose From / To and a preference, then
+// Find Routes opens the results page. State lives in TripPlanProvider
+// (owned by the dashboard), so results survive tab changes.
 
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -14,7 +14,6 @@ import '../../models/transport_model.dart';
 import '../../models/transport_stop.dart';
 import '../../providers/trip_plan_provider.dart';
 import '../../services/nearest_stop.dart';
-import '../../widgets/commuter/commuter_field_box.dart';
 import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/preference_selector.dart';
 import '../../widgets/commuter/recent_searches.dart';
@@ -119,13 +118,6 @@ class RouteTab extends StatelessWidget {
     return near == null ? 'Your location' : 'Your location · near ${near.stop.name}';
   }
 
-  void _changeDepartureTime(BuildContext context) {
-    // The backend plans for "now" only; scheduled trips need API support.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Scheduling a later departure is coming soon.')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final trip = context.watch<TripPlanProvider>();
@@ -160,25 +152,6 @@ class RouteTab extends StatelessWidget {
           onPickOnMap: () => _pickOnMap(context),
         ),
         const SizedBox(height: AppSpacing.md),
-        const _SectionTitle(icon: Icons.schedule, title: 'Departure Time'),
-        const SizedBox(height: AppSpacing.xs),
-        Row(
-          children: [
-            const Expanded(child: CommuterFieldBox(hint: 'Leave now', value: 'Leave now')),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton(
-              onPressed: () => _changeDepartureTime(context),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                foregroundColor: AppColors.textPrimary,
-                textStyle: const TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w400),
-                side: const BorderSide(color: AppColors.divider, width: 1.4),
-              ),
-              child: const Text('Change'),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
         const _SectionTitle(title: 'Preference'),
         const SizedBox(height: AppSpacing.xs),
         PreferenceSelector(selected: trip.preference, onSelected: trip.setPreference),
@@ -198,25 +171,15 @@ class RouteTab extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.icon});
+  const _SectionTitle({required this.title});
 
   final String title;
-  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
-    final icon = this.icon;
-    return Row(
-      children: [
-        if (icon != null) ...[
-          Icon(icon, size: 28, color: AppColors.textPrimary),
-          const SizedBox(width: AppSpacing.xs),
-        ],
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
-        ),
-      ],
+    return Text(
+      title,
+      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w500),
     );
   }
 }

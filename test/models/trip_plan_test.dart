@@ -61,7 +61,6 @@ void main() {
 
     test('TripPreference maps to backend minimize values', () {
       expect(TripPreference.time.apiValue, 'time');
-      expect(TripPreference.fare.apiValue, 'fare');
       expect(TripPreference.transfers.apiValue, 'transfers');
       expect(TripPreference.time.label, 'Fastest');
     });

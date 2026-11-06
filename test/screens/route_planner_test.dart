@@ -251,12 +251,14 @@ void main() {
     expect(find.textContaining('Search online for'), findsOneWidget);
   });
 
-  testWidgets('Change departure time explains it is not available yet', (tester) async {
+  testWidgets('offers Fastest and Few Transfers, with no Cheapest or departure time', (tester) async {
     await pumpRouteTab(tester);
 
-    await tester.tap(find.text('Change'));
-    await tester.pump();
-
-    expect(find.text('Scheduling a later departure is coming soon.'), findsOneWidget);
+    expect(find.text('Fastest'), findsOneWidget);
+    expect(find.text('Few Transfers'), findsOneWidget);
+    expect(find.text('Cheapest'), findsNothing);
+    expect(find.text('Departure Time'), findsNothing);
+    expect(find.text('Leave now'), findsNothing);
+    expect(find.text('Change'), findsNothing);
   });
 }

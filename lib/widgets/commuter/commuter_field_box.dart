@@ -2,7 +2,7 @@
 //
 // White, thin-bordered box that looks like a text field. Shows a value
 // (or a grey hint) and reacts to taps — used where a picker opens
-// instead of a keyboard (From / To / Departure time).
+// instead of a keyboard (From / To).
 
 import 'package:flutter/material.dart';
 

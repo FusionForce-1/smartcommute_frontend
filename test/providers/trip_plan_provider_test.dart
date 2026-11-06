@@ -152,11 +152,11 @@ void main() {
       final adapter = okAdapter();
       final provider = await readyProvider(adapter);
 
-      provider.setPreference(TripPreference.fare);
+      provider.setPreference(TripPreference.transfers);
       await provider.plan();
 
       final body = adapter.requests.single.data as Map<String, dynamic>;
-      expect((body['preferences'] as Map)['minimize'], 'fare');
+      expect((body['preferences'] as Map)['minimize'], 'transfers');
     });
 
     test('empty options sets empty status', () async {

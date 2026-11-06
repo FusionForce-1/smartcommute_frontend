@@ -21,9 +21,8 @@ class HelpSupportScreen extends StatelessWidget {
   static const commuterFaqs = [
     (
       'How do I plan a trip?',
-      'Open the Route tab, choose From and To (and a departure time if you like), then tap '
-          'Find Routes. Each suggested public utility vehicle (PUV) route shows the fare '
-          'estimate and travel time.',
+      'Open the Route tab, choose From and To, then tap Find Routes. Each suggested public '
+          'utility vehicle (PUV) route shows the fare estimate and travel time.',
     ),
     (
       'How do I see where the PUVs are right now?',
