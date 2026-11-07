@@ -34,7 +34,7 @@ class LoginScreen extends StatefulWidget {
     bool rememberMe,
   )? onLogin;
 
-  /// Browses as a guest: no account, nothing sent.
+  /// Browses as a guest: no account, nothing saved.
   final VoidCallback? onGuestContinue;
 
   final VoidCallback? onForgotPassword;

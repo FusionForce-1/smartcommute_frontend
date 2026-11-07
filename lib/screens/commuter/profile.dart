@@ -402,9 +402,9 @@ class _GuestProfile extends StatelessWidget {
   final VoidCallback onCreateAccount;
 
   static const _perks = [
-    (Icons.alt_route, 'Plan trips with fares and travel times'),
     (Icons.bookmark_border, 'Save the routes you ride often'),
     (Icons.history, 'Keep track of your trips'),
+    (Icons.star_border, 'Rate your rides'),
     (Icons.notifications_none, 'Choose which alerts you get'),
   ];
 
@@ -425,7 +425,7 @@ class _GuestProfile extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           const Text(
-            'You can view the live map and alerts as a guest. Sign in to:',
+            'You can view the live map and plan trips as a guest. Sign in to:',
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.sm),

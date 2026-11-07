@@ -25,6 +25,7 @@ class TripPlanProvider extends ChangeNotifier {
   TripPlanProvider({
     required TripPlanService service,
     required LocationSource locationSource,
+    this.isGuest = false,
     // Covers a precise GPS attempt plus the quicker fallback
     // (see GeolocatorLocationSource).
     Duration locateTimeout = const Duration(seconds: 25),
@@ -33,6 +34,9 @@ class TripPlanProvider extends ChangeNotifier {
         _locationSource = locationSource,
         _locateTimeout = locateTimeout,
         _refreshInterval = refreshInterval;
+
+  /// Guests can plan trips, but no search history is kept for them.
+  final bool isGuest;
 
   /// Re-plan once the commuter is this far from where the plan was made.
   static const double replanDistanceMeters = 100;
@@ -320,6 +324,7 @@ class TripPlanProvider extends ChangeNotifier {
   }
 
   void _rememberSearch(TripPlace place) {
+    if (isGuest) return;
     _recentSearches
       ..removeWhere((p) => p.label == place.label)
       ..insert(0, place);
@@ -340,9 +345,8 @@ class TripPlanProvider extends ChangeNotifier {
   }
 
   static String _messageFor(DioException e) {
-    final code = e.response?.statusCode;
-    if (code == 401 || code == 403) {
-      return 'Sign in as a commuter to plan trips.';
+    if (e.response?.statusCode == 429) {
+      return 'Too many route searches. Please wait a minute and try again.';
     }
     switch (e.type) {
       case DioExceptionType.connectionError:

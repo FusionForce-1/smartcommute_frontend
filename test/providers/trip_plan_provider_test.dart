@@ -170,25 +170,27 @@ void main() {
       expect(provider.options, isEmpty);
     });
 
-    test('401 maps to the sign-in message', () async {
-      final provider = await readyProvider(
-        FakeAdapter((_) async => jsonBody({'detail': 'no'}, status: 401)),
-      );
+    test('a refused request does not ask the person to sign in', () async {
+      for (final status in [401, 403]) {
+        final provider = await readyProvider(
+          FakeAdapter((_) async => jsonBody({'detail': 'no'}, status: status)),
+        );
 
-      await provider.plan();
+        await provider.plan();
 
-      expect(provider.status, TripPlanStatus.error);
-      expect(provider.errorMessage, 'Sign in as a commuter to plan trips.');
+        expect(provider.status, TripPlanStatus.error);
+        expect(provider.errorMessage, 'Something went wrong. Please try again.');
+      }
     });
 
-    test('403 maps to the sign-in message', () async {
+    test('429 asks the person to wait', () async {
       final provider = await readyProvider(
-        FakeAdapter((_) async => jsonBody({'detail': 'no'}, status: 403)),
+        FakeAdapter((_) async => jsonBody({'detail': 'no'}, status: 429)),
       );
 
       await provider.plan();
 
-      expect(provider.errorMessage, 'Sign in as a commuter to plan trips.');
+      expect(provider.errorMessage, 'Too many route searches. Please wait a minute and try again.');
     });
 
     test('connection error maps to the offline message', () async {
@@ -386,6 +388,21 @@ void main() {
 
       expect(provider.recentSearches, hasLength(TripPlanProvider.maxRecentSearches));
       expect(provider.recentSearches.first.label, 'Place ${TripPlanProvider.maxRecentSearches + 1}');
+    });
+
+    test('a guest keeps no recent searches', () async {
+      final provider = TripPlanProvider(
+        service: TripPlanService(fakeDio(okAdapter())),
+        locationSource: FakeLocationSource(result: origin),
+        isGuest: true,
+      );
+      await provider.locateOrigin();
+      provider.setDestination(destination, 'IT Park');
+
+      await provider.plan();
+
+      expect(provider.status, TripPlanStatus.success);
+      expect(provider.recentSearches, isEmpty);
     });
 
     test('is not recorded when already at the destination', () async {

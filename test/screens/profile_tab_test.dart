@@ -155,6 +155,15 @@ void main() {
     expect(calls.createdAccount, 1);
   });
 
+  testWidgets('guests can plan trips, but rating a ride needs an account', (tester) async {
+    await pumpProfileTab(tester, fakeBackend(loaded()), isGuest: true);
+
+    expect(find.text('You can view the live map and plan trips as a guest. Sign in to:'), findsOneWidget);
+    expect(find.text('Plan trips with fares and travel times'), findsNothing);
+    expect(find.text('Rate your rides'), findsOneWidget);
+    expect(find.text('Write a review'), findsNothing);
+  });
+
   testWidgets('Terms & Privacy Policy lets you read either document', (tester) async {
     await pumpProfileTab(tester, fakeBackend(loaded()), isGuest: true);
 

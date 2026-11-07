@@ -29,6 +29,7 @@ Future<TripPlanProvider> pumpRouteTab(
   FakeLocationSource? location,
   List<TransportStop> stops = const [],
   TripSelected? onRouteSelected,
+  bool isGuest = false,
 }) async {
   // Tall window so the whole Plan Your Route form is laid out.
   tester.view.physicalSize = const Size(430, 1600);
@@ -38,6 +39,7 @@ Future<TripPlanProvider> pumpRouteTab(
   final provider = TripPlanProvider(
     service: TripPlanService(fakeDio(FakeAdapter((_) async => jsonBody(sampleResponse())))),
     locationSource: location ?? FakeLocationSource(result: const LatLng(10.31, 123.89)),
+    isGuest: isGuest,
   );
   addTearDown(provider.dispose);
 
@@ -188,6 +190,23 @@ void main() {
     await tester.tap(find.text('IT Park'));
     await tester.pump();
     expect(provider.destinationLabel, 'IT Park');
+  });
+
+  testWidgets('a guest finds routes but gets no Recent Searches', (tester) async {
+    final provider = await pumpRouteTab(tester, isGuest: true);
+    provider.setDestination(itPark, 'IT Park');
+    await tester.pump();
+
+    await tester.tap(find.text('Find Routes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Route Options'), findsOneWidget);
+    expect(find.text('01K'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    provider.setDestination(const LatLng(10.29, 123.9), 'Colon');
+    await tester.pump();
+    expect(find.text('Recent Searches'), findsNothing);
   });
 
   testWidgets('swap is enabled once both ends are set', (tester) async {

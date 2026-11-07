@@ -3,7 +3,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/trip_plan.dart';
 
-// Tawag sa backend POST /trip-plan (commuter only).
+// Tawag sa backend POST /trip-plan (commuters ug guests).
 // I-pass ang Dio gikan sa buildDioClient() para ma-attach ang token.
 class TripPlanService {
   TripPlanService(this._dio);

@@ -45,7 +45,8 @@ import 'route.dart';
 class CommuterDashboard extends StatefulWidget {
   const CommuterDashboard({super.key, this.isGuest = false});
 
-  /// True when opened via "Continue as Guest" — no profile and no notifications.
+  /// True when opened via "Continue as Guest": they can plan trips, but get no
+  /// profile or notifications, can't rate rides, and nothing is saved for them.
   final bool isGuest;
 
   @override
@@ -66,12 +67,13 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
       ];
 
   // Signs requests with the commuter's token (and refreshes it);
-  // /trip-plan, /notices/inbox and /users/me reject anonymous calls.
+  // /notices/inbox and /users/me reject anonymous calls.
   final Dio _dio = buildDioClient();
 
   late final TripPlanProvider _trip = TripPlanProvider(
     service: TripPlanService(_dio),
     locationSource: GeolocatorLocationSource(),
+    isGuest: widget.isGuest,
   );
   late final NoticesProvider _notices =
       NoticesProvider(service: NoticesService(_dio), isGuest: widget.isGuest);

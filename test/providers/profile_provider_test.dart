@@ -138,6 +138,16 @@ void main() {
     expect(body['destination_name'], 'IT Park');
   });
 
+  test("a guest's trip is not recorded", () async {
+    final backend = fakeBackend(loaded({'POST /users/me/trips': {}}));
+    final profile = buildProvider(backend, isGuest: true);
+    final option = TripPlanResponse.fromJson(sampleResponse()).options.single;
+
+    await profile.recordTrip(option, from: 'Talamban', to: 'IT Park');
+
+    expect(backend.requests, isEmpty);
+  });
+
   test('a failed recordTrip is silent and leaves the count', () async {
     final profile = buildProvider(fakeBackend(loaded({'POST /users/me/trips': 500})));
     await profile.load();

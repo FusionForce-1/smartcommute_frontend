@@ -191,16 +191,10 @@ class ApiService {
   }
 
   // =================================================================
-  // TRIP PLANNING & FEEDBACK (2 methods) — require commuter login
+  // TRIP PLANNING (open to guests) & FEEDBACK (requires commuter login)
   // =================================================================
 
   Future<TripPlanResponse> planTrip(TripPlanRequest request) async {
-    // NOTE: this endpoint requires a logged-in commuter. If a guest
-    // reaches this method, the backend will return 401 — TripProvider
-    // (built in a later step) is responsible for checking
-    // AuthProvider.isGuest BEFORE calling this and redirecting to
-    // login instead, so the user gets a clear prompt rather than a
-    // confusing network error.
     final response = await _dio.post('/trip-plan', data: request.toJson());
     return TripPlanResponse.fromJson(response.data);
   }
