@@ -115,17 +115,25 @@ const UserActions = (() => {
 })();
 
 const OperatorReview = (() => {
+  const STATUS_LABELS = {
+    pending: 'Pending verification',
+    verified: 'Verified',
+    declined: 'Declined',
+  };
+
   function details(profile) {
-    // Not verified yet: show today, the date Approve will record.
-    const verifiedAt = profile.verified_at || new Date();
+    const status = profile.status
+      || (profile.declined_at ? 'declined' : profile.verified_at ? 'verified' : 'pending');
     const rows = [
       ['Full Name', profile.full_name],
       ['Email Address', profile.email],
       ['Contact Number', profile.contact_number],
       ['Company Name', profile.company_name],
       ['Franchise Number', profile.franchise_number],
-      ['Verified At', AdminUi.formatDate(verifiedAt)],
+      ['Status', STATUS_LABELS[status] || status],
     ];
+    // Only dates that really happened: a pending operator has neither yet.
+    if (profile.verified_at) rows.push(['Verified At', AdminUi.formatDate(profile.verified_at)]);
     if (profile.declined_at) rows.push(['Declined At', AdminUi.formatDate(profile.declined_at)]);
 
     return `

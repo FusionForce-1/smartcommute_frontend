@@ -1,158 +1,62 @@
-# Smart Commute — Web Portal Auth Screens (Emae's scope)
+# Smart Commute — Web Portal
 
-Plain HTML/CSS/JS implementation of the four auth screens — **no build
-step, no framework, no npm install required to run it.**
+Browser portal for **transport operators** and **system administrators**. It is
+plain HTML, CSS, and JavaScript with Leaflet maps: no framework, no build step,
+no `npm install`.
 
-## Where this goes in your project
-
-This folder is meant to sit **inside your existing `smartcommute_frontend`
-Flutter project**, as its own top-level folder next to `lib/`, `android/`,
-`web/`, etc. — not merged into Flutter's own `web/` folder (that one is
-reserved for Flutter's web-build output and is managed by Flutter tooling;
-mixing this vanilla HTML/CSS/JS portal into it will cause conflicts).
-
-```
-smartcommute_frontend/
-├── android/
-├── ios/
-├── lib/            ← Flutter app (screens, widgets, theme_config.dart)
-├── web/             ← Flutter's own web-build target, DO NOT touch
-├── web_portal/       ← put THIS folder here (Leaflet.js portal / auth screens)
-│   ├── index.html
-│   ├── css/
-│   ├── js/
-│   └── assets/
-├── windows/, macos/, linux/, test/
-├── pubspec.yaml
-└── ...
-```
-
-Just drag this `web_portal/` folder into the root of `smartcommute_frontend`
-alongside `lib/`. It's fully self-contained (its own `css/`, `js/`,
-`assets/`) and doesn't touch or depend on anything in `lib/` or Flutter's
-`web/` — open `web_portal/index.html` directly, same as before.
-
-**Scope covered:**
-- `css/theme.css` — color/spacing/radius/shadow tokens **pixel-sampled
-  directly from the mockup PNGs and the source logo file** (see "Colors"
-  below) — not the §E1 doc's values, which turned out not to match, and not
-  eyeballed guesses either
-- `css/components.css` — reusable component styles (buttons, inputs, cards,
-  error banner, dividers)
-- `css/layout.css` — the white/teal split background for Login/Register
-- `css/modal.css` + `js/modal.js` — the Forgot Password / Verify OTP popup
-  overlay (see "Forgot Password / Verify OTP is a popup" below)
-- `js/components.js` — param-only HTML builder functions (icons, fields,
-  buttons, banners) — no `fetch()` calls live inside any of them
-- `js/views/login.js`, `register.js` — full pages
-- `js/views/authPopup.js` — Forgot Password + Verify OTP as a single
-  two-step **popup** flow, launched from Login
-- `js/router.js` + `js/main.js` — mock router for Login/Register + bootstrap
-
-## Colors
-
-Pulled with a pixel sampler (not eyeballed) directly from `Web_Login.png`,
-`Web_Forgot_Password.png`, `Web_Enter_OTP.png`, `Web_Error.png`, and the
-source logo PNG:
-
-| Token | Value | Sampled from |
+| Page | Who | What |
 |---|---|---|
-| `--color-primary` | `#1A1E37` | "SMART" wordmark + card titles |
-| `--color-secondary` | `#3C889D` | Button fill / background / "COMMUTE" wordmark |
-| `--color-accent` | `#F7A327` | Logo pin icon |
-| `--color-error` | `#D72F33` | Error banner text |
-| `--color-error-bg` | `#FEE2E1` | Error banner background |
-| `--color-bg-page-gray` | `#CFCFCF` | Forgot Password / Verify OTP panel background |
-| `--color-text-primary` | `#1A1A1A` | "Login Now" / "Register Now" titles |
-| `--color-text-secondary` | `#666666` | Subtitle + tagline text |
+| `index.html` | everyone | Login, operator registration (email or Google), password recovery by OTP, sign-in codes |
+| `operator/operator.html` | transport operators | Fleet Map, Playback, Routes & Stops, Vehicles and GPS trackers, Drivers and shifts, Driver Reports, Announcements, Reports, Profile, Settings, Subscription |
+| `admin/admin.html` | system administrators | Dashboard, Users, Verification of operators, System Health, Reports (audit log), Config |
 
-These replace an earlier version of this file that used the written §E1 doc
-token values, which didn't actually match the finalized mockups.
+After login, the portal opens the page that matches the account's role.
 
-## Forgot Password / Verify OTP is a popup, not a page
+## Layout
 
-Both screens open as a **plain white card floating over a dimmed backdrop
-on top of the Login page** (`js/modal.js` + `js/views/authPopup.js`) — not
-a separate routed page, and not the gray/teal split-background "framed
-panel" treatment from an earlier version of this file (that turned out to
-just be how the original design file presented the screen in isolation for
-handoff, not the intended in-app look; the actual popup is just the plain
-card, same as the reference popup screenshots):
+```
+web_portal/
+├── index.html, operator/, admin/   pages
+├── js/
+│   ├── config.js                   backend address and Google client ID
+│   ├── services/                   API client, session, auth, Google sign-in
+│   ├── views/                      login, register, password-recovery pop-up
+│   ├── operator/  admin/           each portal's app, router, API calls and views
+│   └── constants/, legal.js        icons, User Agreement and Privacy Policy text
+├── css/, assets/                   styles, fonts, icons, images
+├── data/cebu_landmarks.json        landmark search list (tools/build_landmarks.py)
+└── firmware/                       GPS tracker firmware releases (tools/release_firmware.py)
+```
 
-- Login → "Forgot Password?" → popup opens (Login page stays visible,
-  dimmed, underneath)
-- "Send OTP" swaps the popup's content to the Verify OTP step, in place —
-  same popup, no page navigation
-- "← Back" on Verify OTP swaps back to the Forgot Password step
-- "Cancel", or clicking the dimmed backdrop, closes the popup back to plain
-  Login
+## Configuration
 
-Register is unaffected — it's still a full page (`#/register`), matching
-its own edge-to-edge mockup treatment.
+`js/config.js` picks the backend by itself: opened from `localhost` or
+`127.0.0.1`, the portal calls the local backend at `http://localhost:8000`;
+anywhere else (e.g. on Vercel), it calls `https://smart-commute-backend.onrender.com`.
+`GOOGLE_CLIENT_ID` there must match the backend's `GOOGLE_CLIENT_ID`.
 
+## Run locally
 
-**Not covered here** (out of scope per this request): the Operator/Admin
-dashboard shells, sidebar nav, fleet map panel, and the rest of §E4 — those
-are a different catalog for a different set of screens.
-
-## How to run
-
-**Just open `index.html` in your browser.** Double-click it, or drag it into
-a browser tab. There's no build step and no local server needed — every
-script is a plain `<script src="...">` (no ES modules, no bundler), and the
-font/logo/CSS are all local files, so it works straight off the filesystem
-(`file://`).
-
-If your browser or setup ever complains about loading local files (some
-strict configurations block certain `file://` requests), serve the folder
-instead — from *inside* this folder, either:
+Serve the folder over HTTP (opening the files directly breaks Google Sign-In and
+API calls), for example with the VS Code Live Server extension or:
 
 ```bash
-# Python (usually already installed)
-python3 -m http.server 8000
-# then open http://localhost:8000
-
-# or Node, if you have it
-npx serve .
+cd web_portal
+python -m http.server 5500
 ```
 
-## Click-through path
+Then open `http://127.0.0.1:5500`. The address must be listed in the backend's
+`ALLOWED_ORIGINS` and among the *Authorized JavaScript origins* of the Google
+OAuth client.
 
-- `#/login` (default) → click "Forgot Password?" → popup opens over Login →
-  "Send OTP" → popup content swaps to Verify OTP (same popup)
-- `#/login` → "Create an account" / "Register" → `#/register` (real page nav)
-- In the popup, typing the exact email `Test@account.com` and submitting
-  shows the "This email is not registered" error state from `Web_Error.png`
-  — anything else "succeeds" and advances to the Verify OTP step. This is a
-  preview-only demo shortcut (see the comment in `js/views/authPopup.js`),
-  not real validation.
+## Deploy
 
-## What's mocked vs. real
+The portal is deployed to Vercel as a static site (root directory `web_portal`,
+no build command): `https://smartcommutefrontend-webportal.vercel.app`. The same
+site serves `firmware/manifest.json`, which the *Install tracker firmware*
+button uses to flash trackers over USB from Chrome or Edge, and
+`firmware/latest.json`, which trackers check for over-the-air updates.
 
-Every view's `init()` wires its buttons to plain functions, and every place
-that should eventually hit the FastAPI backend is marked
-`// TODO(Francis): ...` with the exact F7 (`js/api_client.js` /
-`authModule`) method it should call instead, e.g.:
-
-```js
-// TODO(Francis): replace with:
-//   authModule.login(usernameOrEmail, password)
-//     .then(() => location.href = '/operator/' or '/admin/' per role)
-//     .catch(() => showError('login-error'));
-console.log('[preview] login submit', { usernameOrEmail, password, rememberMe });
-```
-
-To wire it up for real: build the real `js/api_client.js` / `js/auth.js`
-(F7), and swap each `console.log(...)` / `alert(...)` placeholder for the
-real `fetch()` call. Nothing in `js/components.js` or the CSS needs to
-change to do that.
-
-## Known deviations worth a quick gut-check
-
-The button radius in the mockups (~12px) is more rounded than a sharp
-rectangle but noticeably less rounded than the pill-shaped buttons in the
-Flutter mobile mockups — `--radius-button` in `theme.css` follows the web
-mockups specifically (the two are allowed to differ). `--color-success` is
-still the old §E1 doc value since no green UI element appears in these 4
-screens to sample it from — worth a real sample once a screen that uses it
-exists.
+To publish new tracker firmware, run `python tools/release_firmware.py` in the
+backend repository (it writes into `firmware/`), then commit and redeploy this
+portal.

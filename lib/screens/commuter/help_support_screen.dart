@@ -68,7 +68,7 @@ class HelpSupportScreen extends StatelessWidget {
     (
       'Who starts and ends my shift?',
       'Your operator does, from their portal. The Map tab shows "On Shift" with the time, '
-          'distance and passenger counter as soon as it starts, and the Updates tab tells you.',
+          'distance and passenger counter as soon as it starts, and "Not on shift" once it ends.',
     ),
     (
       'What does Route Status do?',
@@ -91,9 +91,9 @@ class HelpSupportScreen extends StatelessWidget {
           'and distance, or down to see more of the map. Tap collapse or Back to return.',
     ),
     (
-      'How do I find an older update?',
-      'On the Updates tab, tap Today, Yesterday, Last Month or Last Year, or pick a day with '
-          'the Calendar.',
+      'How do I find a report I sent earlier?',
+      'On the Reports tab, under Sent reports, tap Today, Yesterday, Last Month or Last Year, '
+          'or pick a day with the Calendar.',
     ),
   ];
 
