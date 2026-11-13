@@ -21,7 +21,7 @@ const OperatorApp = (() => {
 
   const HELP_TOPICS = [
     ['Fleet Map', 'Live vehicle positions on the map, plus your active vehicles, route alerts and recent commuter feedback.'],
-    ['Playback', 'Replay where a vehicle went in the last 24 hours, at up to 60× speed.'],
+    ['Playback', 'Replay where a vehicle went in the last 7 days, at up to 60× speed.'],
     ['Routes & Stops', 'Add and edit routes, fares and stops. New routes start inactive until you are ready to begin service.'],
     ['Vehicles', 'Register vehicles, assign them to routes and drivers, and manage their GPS trackers.'],
     ['Drivers', 'Add a driver by scanning both sides of their license, then hand them the app login shown once after saving. You also start and end each shift here; the driver app follows.'],

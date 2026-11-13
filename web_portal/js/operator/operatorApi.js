@@ -65,7 +65,7 @@ const OperatorApi = {
   setTrackerWifi: (vehicleId, networks) => ApiClient.put(`/vehicles/${vehicleId}/tracker-wifi`, { networks }),
   trackerFirmware: (vehicleId) => ApiClient.get(`/vehicles/${vehicleId}/tracker-firmware`),
   updateTrackerFirmware: (vehicleId) => ApiClient.post(`/vehicles/${vehicleId}/tracker-firmware/update`),
-  /** Where the vehicle went between start and end (ISO, UTC; last 24 h only), for Playback. */
+  /** Where the vehicle went between start and end (ISO, UTC; at most 24 h, in the last 7 days), for Playback. */
   vehicleTrack: (vehicleId, { start, end }) => ApiClient.get(`/vehicles/${vehicleId}/track`, { start, end }),
 
   // ---- Routes ----

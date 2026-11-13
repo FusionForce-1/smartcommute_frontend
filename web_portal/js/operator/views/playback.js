@@ -1,8 +1,9 @@
 // js/operator/views/playback.js
 //
 // Playback: replays where one of the operator's vehicles went, from its GPS
-// fixes (GET /vehicles/{id}/track). Raw GPS is kept for 24 hours, so a
-// window can start at most a day back. The shifts on the vehicle in the
+// fixes (GET /vehicles/{id}/track). Raw GPS is kept for 7 days, so a
+// window can start at most a week back, and one window covers at most a day
+// (the server thins longer ones too far to replay). The shifts on the vehicle in the
 // window can be picked to replay just that shift. Stretches without GPS show
 // as breaks in the line, and playing jumps straight over them. The Fleet
 // Map's vehicle popup opens this tab on its vehicle (PLAYBACK_VEHICLE_KEY).
@@ -17,7 +18,9 @@ OperatorRouter.register('playback', {
     const esc = AdminUi.escapeHtml;
     const CEBU = [10.3157, 123.8854];
     const DAY_MS = 24 * 60 * 60 * 1000;
-    const GAP_MS = 60 * 1000;        // no fix for this long: the line breaks (signal lost)
+    const KEPT_MS = 7 * DAY_MS;      // GPS_POSITION_TTL_SECONDS on the server
+    const MAX_WINDOW_MS = DAY_MS;    // MAX_TRACK_WINDOW on the server
+    const GAP_MS = 60 * 1000;       // no fix for this long: the line breaks (signal lost)
     const MOVE_M = 8;                // less than this between fixes is GPS jitter, not driving
     const GAP_NOTE_MS = 3000;        // how long the readout mentions a gap it just jumped
     const LINE_REDRAW_MS = 100;      // the travelled line redraws at most this often while playing
@@ -40,7 +43,7 @@ OperatorRouter.register('playback', {
       <div class="op-page-head">
         <div>
           <h2>Playback</h2>
-          <p>Replay where a vehicle went. GPS is kept for 24 hours.</p>
+          <p>Replay where a vehicle went, up to 24 hours at a time. GPS is kept for 7 days.</p>
         </div>
       </div>
       <section class="op-card">
@@ -97,12 +100,12 @@ OperatorRouter.register('playback', {
 
     function setWindow(start, end) {
       limitInputs();
-      fromInput.value = toLocalInput(new Date(Math.max(start, Date.now() - DAY_MS)));
+      fromInput.value = toLocalInput(new Date(Math.max(start, Date.now() - KEPT_MS)));
       toInput.value = toLocalInput(nextMinute(Math.min(end, Date.now())));
     }
 
     function limitInputs() {
-      const min = toLocalInput(new Date(Date.now() - DAY_MS));
+      const min = toLocalInput(new Date(Date.now() - KEPT_MS));
       const max = toLocalInput(nextMinute(Date.now()));
       [fromInput, toInput].forEach((input) => { input.min = min; input.max = max; });
     }
@@ -165,6 +168,10 @@ OperatorRouter.register('playback', {
         statusEl.textContent = 'Pick a "From" time before the "To" time.';
         return;
       }
+      if (end - start > MAX_WINDOW_MS) {
+        statusEl.textContent = 'Pick a window of 24 hours or less.';
+        return;
+      }
       pause();
       const mine = ++request;
       statusEl.textContent = 'Loading…';
@@ -223,9 +230,9 @@ OperatorRouter.register('playback', {
       playerEl.hidden = false;
       const thinned = track.total_fixes > points.length ? ` (thinned from ${track.total_fixes})` : '';
       const gaps = segments.length > 1 ? ` · GPS was off ${segments.length - 1} time${segments.length === 2 ? '' : 's'}` : '';
-      // A little slack: "Last 24 h" itself starts right at the limit.
+      // A little slack: a "From" right at the limit isn't worth a warning.
       const clipped = OperatorUi.parseDate(track.oldest_available) - new Date(fromInput.value) > 5 * 60 * 1000
-        ? ' GPS older than 24 hours is no longer kept.' : '';
+        ? ' GPS older than 7 days is no longer kept.' : '';
       statusEl.textContent = `${points.length} GPS fixes${thinned} for ${track.plate_number}${gaps}.${clipped}`;
       seek(points[0].t);
     }
