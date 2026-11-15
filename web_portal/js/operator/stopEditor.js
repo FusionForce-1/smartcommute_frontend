@@ -5,11 +5,26 @@
 // close), drag a stop to move it, rename or remove it in the list. Saving
 // (PUT /routes/{id}/stops) puts the stops in riding order along the line,
 // and the trip planner can then board and drop commuters off at them.
+//
+// The line was drawn when the route was made (the road path between its
+// terminals), so stops pinned where the jeepney really goes can end up far
+// from it, and commuters' trips are then drawn and timed along the line, not
+// past those stops. "Redraw line through stops" asks OSRM for the road path
+// through the stops in riding order; it's saved with them. Each stop is sent
+// with the direction of travel there (previous stop -> next stop): without
+// it OSRM snaps some stops to the far side of a divided road and loops back
+// (tried on 10H: 15 km of U-turn loops against 9.7 km with directions).
 
 const StopEditor = (() => {
   const esc = (s) => AdminUi.escapeHtml(String(s ?? ''));
   const OFF_ROUTE_WARN_M = 100;      // a stop this far from the line is probably misplaced
   const LANDMARK_NAME_M = 120;       // name a new stop after a landmark this close
+  const OSRM = 'https://router.project-osrm.org/route/v1/driving';   // as in RoutePicker
+  const MAX_LINE_POINTS = 5000;      // MAX_LINE_POINTS on the server
+  const END_KEEP_M = 50;             // keep the line's ends when they're this far past the end stops
+  // Tried in order: the road a stop snaps to must run within ±range° of the
+  // direction of travel and lie within radius m of the stop (null: any).
+  const REDRAW_TRIES = [{ range: 60, radius: 50 }, { range: 90, radius: null }];
 
   // ---------- Geometry (metres, local flat projection) ----------
 
@@ -40,11 +55,43 @@ const StopEditor = (() => {
     return Math.hypot((b.lng - a.lng) * kx, (b.lat - a.lat) * M_PER_DEG);
   }
 
+  /** Degrees from north going from a to b ({lat, lng}). */
+  function bearing(a, b) {
+    const dx = (b.lng - a.lng) * Math.cos((a.lat * Math.PI) / 180);
+    return ((Math.atan2(dx, b.lat - a.lat) * 180) / Math.PI + 360) % 360;
+  }
+
+  /** The road path through points ({lat, lng}, in riding order) as [[lng, lat], ...], or null. */
+  async function roadPathThrough(points) {
+    const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
+    const heads = points.map((p, i) => {
+      const from = points[Math.max(0, i - 1)];
+      const to = points[Math.min(points.length - 1, i + 1)];
+      return metresBetween(from, to) < 5 ? null : Math.round(bearing(from, to));
+    });
+    for (const { range, radius } of REDRAW_TRIES) {
+      const params = new URLSearchParams({ overview: 'full', geometries: 'geojson' });
+      params.set('bearings', heads.map((h) => (h == null ? '' : `${h},${range}`)).join(';'));
+      if (radius) params.set('radiuses', points.map(() => radius).join(';'));
+      try {
+        const res = await fetch(`${OSRM}/${coords}?${params}`);
+        const found = res.ok ? await res.json() : null;
+        const path = found?.routes?.[0]?.geometry?.coordinates;
+        if (path && path.length >= 2) return path;
+      } catch {
+        // try the next, looser settings
+      }
+    }
+    return null;
+  }
+
   // ---------- Editor ----------
 
   function open(route, { onSaved = () => {} } = {}) {
     let map = null;
     let line = [];           // [[lat, lng], ...]
+    let lineLayer = null;    // the line on the map
+    let lineChanged = false; // redrawn through the stops: saved with them
     let stops = [];          // { key, id?, name, landmark, lat, lng, marker }
     let nextKey = 1;
     let dirty = false;
@@ -62,8 +109,10 @@ const StopEditor = (() => {
         <div class="se-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;">
           <button type="button" class="btn-sm btn-sm--teal" id="se-usual">Add usual stops along the route</button>
           <button type="button" class="btn-sm" id="se-terminals">Add stops at both terminals</button>
+          <button type="button" class="btn-sm" id="se-redraw" title="Draw the road path through the stops in riding order">Redraw line through stops</button>
           <span id="se-count" class="op-card__sub" style="margin:auto 0;"></span>
         </div>
+        <p id="se-offhint" class="op-card__sub" style="margin:0 0 8px;color:#B7791F;" hidden></p>
         <div id="se-list">${AdminUi.stateMessage('Loading…')}</div>`,
       actions: [
         { label: 'Cancel', variant: 'ghost', onClick: () => AdminModal.close() },
@@ -74,6 +123,7 @@ const StopEditor = (() => {
 
     const listEl = modal.querySelector('#se-list');
     const countEl = modal.querySelector('#se-count');
+    const offHintEl = modal.querySelector('#se-offhint');
 
     if (window.L) {
       map = L.map(modal.querySelector('#se-map')).setView([10.3157, 123.8854], 13);
@@ -167,6 +217,11 @@ const StopEditor = (() => {
         }
       });
       countEl.textContent = `${stops.length} ${stops.length === 1 ? 'stop' : 'stops'}${dirty ? ' · not saved yet' : ''}`;
+      const off = rows.filter((r) => r.off != null && r.off > OFF_ROUTE_WARN_M).length;
+      offHintEl.hidden = !off;
+      offHintEl.textContent = off
+        ? `${off} ${off === 1 ? 'stop is' : 'stops are'} more than ${OFF_ROUTE_WARN_M} m from the route line, so commuters' trips are drawn and timed along the line, not past ${off === 1 ? 'it' : 'them'}. If the stops are where the jeepney really goes, click "Redraw line through stops".`
+        : '';
       if (!rows.length) {
         listEl.innerHTML = AdminUi.stateMessage('No stops yet. Click the map where jeepneys pick up and drop off passengers.');
         return;
@@ -262,6 +317,50 @@ const StopEditor = (() => {
       }
     });
 
+    // The road path through the stops in riding order (plus the line's ends
+    // when they run past the first and last stop), replacing the line.
+    modal.querySelector('#se-redraw').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const rows = ordered();
+      if (rows.length < 2) {
+        AdminUi.toast('Place at least two stops first.');
+        return;
+      }
+      const points = rows.map(({ s }) => ({ lat: s.lat, lng: s.lng }));
+      if (line.length >= 2) {
+        const start = { lat: line[0][0], lng: line[0][1] };
+        const end = { lat: line[line.length - 1][0], lng: line[line.length - 1][1] };
+        if (metresBetween(start, points[0]) > END_KEEP_M) points.unshift(start);
+        if (metresBetween(end, points[points.length - 1]) > END_KEEP_M) points.push(end);
+      }
+      btn.disabled = true;
+      btn.textContent = 'Drawing…';
+      try {
+        let path = await roadPathThrough(points);
+        if (!path) throw new Error('no road path');
+        if (path.length > MAX_LINE_POINTS) {
+          const step = Math.ceil(path.length / MAX_LINE_POINTS);
+          path = path.filter((_, i) => i % step === 0 || i === path.length - 1);
+        }
+        line = path.map(([lng, lat]) => [lat, lng]);
+        if (map) {
+          if (lineLayer) lineLayer.setLatLngs(line);
+          else lineLayer = L.polyline(line, { weight: 5, interactive: false }).addTo(map);
+          lineLayer.setStyle({ color: '#27AE60', opacity: 0.8 });   // green: not saved yet
+          map.fitBounds(lineLayer.getBounds(), { padding: [30, 30], maxZoom: 16 });
+        }
+        lineChanged = true;
+        dirty = true;
+        render();
+        AdminUi.toast(`Line redrawn through ${rows.length} stops. Check it follows the jeepney's streets, then save.`);
+      } catch {
+        AdminUi.toast('Could not find a road path through the stops. Move any stop that is off the road, then try again.', { error: true });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Redraw line through stops';
+      }
+    });
+
     async function save() {
       const rows = ordered();
       const empty = rows.findIndex((r) => !r.s.name.trim());
@@ -272,9 +371,11 @@ const StopEditor = (() => {
         landmark: s.landmark.trim() || null,
         location: { type: 'Point', coordinates: [s.lng, s.lat] },
       }));
-      const saved = await OperatorApi.setRouteStops(route.id, payload);   // errors show in the modal
-      AdminUi.toast(`${route.code}: ${saved.stops.length} ${saved.stops.length === 1 ? 'stop' : 'stops'} saved.`);
+      const geometry = lineChanged ? { type: 'LineString', coordinates: line.map(([lat, lng]) => [lng, lat]) } : null;
+      const saved = await OperatorApi.setRouteStops(route.id, payload, geometry);   // errors show in the modal
+      AdminUi.toast(`${route.code}: ${saved.stops.length} ${saved.stops.length === 1 ? 'stop' : 'stops'}${lineChanged ? ' and the new line' : ''} saved.`);
       dirty = false;
+      lineChanged = false;
       AdminModal.close();
       onSaved(saved);
     }
@@ -287,7 +388,7 @@ const StopEditor = (() => {
       line = (d.geometry?.coordinates || []).map(([lng, lat]) => [lat, lng]);
       const bounds = [];
       if (map && line.length >= 2) {
-        L.polyline(line, { color: '#2E86AB', weight: 5, opacity: 0.6, interactive: false }).addTo(map);
+        lineLayer = L.polyline(line, { color: '#2E86AB', weight: 5, opacity: 0.6, interactive: false }).addTo(map);
         bounds.push(...line);
       }
       const pins = [

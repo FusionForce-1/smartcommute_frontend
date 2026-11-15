@@ -86,7 +86,8 @@ const OperatorApi = {
     }),
   setRouteActive: (id, isActive) => ApiClient.patch(`/routes/${id}/active`, { is_active: isActive }),
   routeStops: (id) => ApiClient.get(`/routes/${id}/stops`),
-  setRouteStops: (id, stops) => ApiClient.put(`/routes/${id}/stops`, { stops }),
+  /** Saves the stops; `geometry` (a line redrawn through them) replaces the route line. */
+  setRouteStops: (id, stops, geometry = null) => ApiClient.put(`/routes/${id}/stops`, geometry ? { stops, geometry } : { stops }),
   stopSuggestions: (id) => ApiClient.get(`/routes/${id}/stops/suggestions`),
   deleteRoute: (id) => ApiClient.delete(`/routes/${id}`),
 
