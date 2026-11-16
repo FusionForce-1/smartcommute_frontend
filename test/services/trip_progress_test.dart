@@ -83,6 +83,23 @@ void main() {
     expect(sim.last!.phase, TripPhase.toBoard);
   });
 
+  test("matched to a jeep on the leg's route, they're riding at once", () {
+    final progress = TripProgress(option(), const {});
+    final sim = Sim(progress)..go(0, 5);
+    expect(sim.last!.phase, TripPhase.toBoard);
+    sim.lng += 0.002; // ~220 m past the boarding stop, at the line's start
+    final state = progress.boarded(LatLng(lat, sim.lng), at: sim.t);
+    expect(state.phase, TripPhase.riding);
+    expect(state.alongM, closeTo(219, 10));
+  });
+
+  test("a jeep match far from the leg's line doesn't count", () {
+    final progress = TripProgress(option(), const {});
+    Sim(progress).go(0, 5);
+    final state = progress.boarded(LatLng(lat + 500 / 111320, startLng + 0.005), at: DateTime.utc(2026, 10, 21, 8, 1));
+    expect(state.phase, TripPhase.toBoard);
+  });
+
   test('the travelled part of the line splits off', () {
     final progress = TripProgress(option(), const {});
     final sim = Sim(progress)..go(25, 60);

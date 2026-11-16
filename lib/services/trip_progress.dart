@@ -157,6 +157,24 @@ class TripProgress {
     return _set(kmh);
   }
 
+  /// The commuter's phone has been matched to a live jeep on this leg's route
+  /// (services/ride_matcher.dart): they're riding from [here], even before
+  /// their own speed on the line shows it. Ignored far from the leg's line.
+  TripProgressState boarded(LatLng here, {required DateTime at}) {
+    final kmh = _state?.speedKmh;
+    if (_arrived || _riding || _legs.isEmpty) return _state ?? _set(kmh);
+    final leg = _legs[_leg];
+    final pos = leg.line.length >= 2 ? projectOnLine(leg.line, here) : null;
+    if (pos == null || pos.offsetM > offLineM) return _state ?? _set(kmh);
+    _riding = true;
+    _offSince = null;
+    _along = pos.alongM;
+    return _set(kmh);
+  }
+
+  /// [legIndex]'s line, in riding order.
+  List<LatLng> lineOf(int legIndex) => _legs[legIndex].line;
+
   TripProgressState _set(double? kmh) {
     final leg = _legs.isEmpty ? null : _legs[_leg];
     final remaining = leg == null ? 0.0 : (leg.alightAlong - _along).clamp(0.0, double.infinity);

@@ -44,6 +44,7 @@ import '../../models/vehicles.dart';
 import '../../services/boarding_planner.dart';
 import '../../services/place_search.dart';
 import '../../services/ride_matcher.dart';
+import '../../services/trip_eta.dart';
 import '../../services/trip_progress.dart';
 import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
@@ -204,6 +205,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.selectedTrip, widget.selectedTrip)) {
       _arrivedClear?.cancel();
+      _boardedNoticeLeg = null;
       _progress = _progressFor(widget.selectedTrip);
       if (_currentLocation case final here?) _progress?.update(here, at: DateTime.now());
       _tripLayers = _layersFor(widget.selectedTrip, _progress);
@@ -537,14 +539,76 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           ? const SizedBox(width: double.infinity)
           : Padding(
               padding: padding,
-              child: SelectedTripCard(
-                trip: trip,
-                progress: _progress?.state,
-                onOpen: _openSelectedTrip,
-                onCancel: widget.onCancelTrip ?? () {},
+              // Rebuilt per jeep update too, so the next jeep's wait stays current.
+              child: ValueListenableBuilder<int>(
+                valueListenable: _fleetVersion,
+                builder: (context, _, __) => SelectedTripCard(
+                  trip: trip,
+                  progress: _progress?.state,
+                  eta: _tripEta(trip),
+                  boardedPlate: _boardedVehicle()?.plateNumber,
+                  onOpen: _openSelectedTrip,
+                  onCancel: widget.onCancelTrip ?? () {},
+                ),
               ),
             ),
     );
+  }
+
+  /// Every live jeep that can be boarded: where it is now and which way it's driving.
+  List<LiveJeep> _liveJeeps() {
+    final now = _clock.elapsed;
+    final routeOf = {for (final v in widget.vehicles) v.id: v.routeId};
+    return [
+      for (final MapEntry(key: id, value: track) in _tracks.entries)
+        if (!track.latest.isSignalLost && !track.latest.isUnavailable)
+          if (routeOf[id] case final routeId?)
+            if (track.positionAt(now) ?? track.latest.location case final at?)
+              (id: id, routeId: routeId, at: at, heading: track.headingAt(now) ?? track.latest.heading),
+    ];
+  }
+
+  /// The selected trip's time to the destination from where the commuter is now.
+  TripEta? _tripEta(SelectedTrip trip) {
+    final state = _progress?.state;
+    final here = _currentLocation;
+    if (state == null || here == null) return null;
+    return tripEta(
+      option: trip.option,
+      progress: state,
+      here: here,
+      now: DateTime.now(),
+      routesById: {for (final r in widget.routes) r.id: r, ...trip.routesById},
+      jeeps: _liveJeeps(),
+    );
+  }
+
+  /// The jeep the commuter is riding (services/ride_matcher.dart), when it
+  /// runs the trip leg they're on and drives it the way the trip goes.
+  Vehicle? _boardedVehicle() {
+    final id = _ridingVehicleId;
+    final progress = _progress;
+    final state = progress?.state;
+    final trip = widget.selectedTrip;
+    if (id == null || progress == null || state == null || trip == null || state.phase == TripPhase.arrived) {
+      return null;
+    }
+    final leg = trip.option.legs[state.legIndex];
+    Vehicle? vehicle;
+    for (final v in widget.vehicles) {
+      if (v.id == id) vehicle = v;
+    }
+    if (vehicle == null || vehicle.routeId != leg.routeId) return null;
+    // Same route the other way isn't the jeep they were waiting for.
+    final track = _tracks[id];
+    final heading = track?.headingAt(_clock.elapsed) ?? track?.latest.heading;
+    final at = track?.latest.location;
+    final line = progress.lineOf(state.legIndex);
+    if (heading != null && at != null && line.length >= 2) {
+      final pos = projectOnLine(line, at);
+      if (pos != null && headingAgainstLine(line, pos, heading)) return null;
+    }
+    return vehicle;
   }
 
   void _fitToStops() {
@@ -661,8 +725,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     };
     setState(() {
       _currentLocation = here;
-      _trackTrip(here, speedMps);
       _ridingVehicleId = _ride.update(here, DateTime.now(), jeeps, reportedSpeedMps: speedMps);
+      _trackTrip(here, speedMps);
     });
     if (_selectedVehicleId != null) _updateBoarding();
     _followCamera();
@@ -694,18 +758,34 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     final trip = widget.selectedTrip;
     if (progress == null || trip == null) return;
     final before = progress.state;
-    final now = progress.update(here, at: DateTime.now(), reportedSpeedMps: speedMps);
+    var now = progress.update(here, at: DateTime.now(), reportedSpeedMps: speedMps);
+    // On a jeep of this leg's route (its GPS moves with the phone): riding,
+    // even if the phone's own speed on the line hasn't shown it yet.
+    final boarded = _boardedVehicle();
+    if (boarded != null && !now.isRiding) now = progress.boarded(here, at: DateTime.now());
     _tripLayers = _layersFor(trip, progress);
-    if (before?.phase == now.phase && before?.legIndex == now.legIndex) return;
     final leg = trip.option.legs[now.legIndex];
+    final name = leg.routeCode ?? leg.routeName;
+
+    // Once per leg: the jeep they're on is the one they were waiting for.
+    String? boardedMessage;
+    if (boarded != null && now.phase == TripPhase.riding && _boardedNoticeLeg != now.legIndex) {
+      _boardedNoticeLeg = now.legIndex;
+      final plate = boarded.plateNumber.isEmpty ? '' : ' (${boarded.plateNumber})';
+      boardedMessage = "You're on the $name you were waiting for$plate. We'll tell you when to get off.";
+    }
+    if (before?.phase == now.phase && before?.legIndex == now.legIndex) {
+      if (boardedMessage != null) _postMessage(boardedMessage, replace: true);
+      return;
+    }
     final message = switch (now.phase) {
-      TripPhase.riding when before?.isRiding != true => "You're on the ${leg.routeCode ?? leg.routeName}. We'll tell you when to get off.",
+      TripPhase.riding when before?.isRiding != true => boardedMessage ?? "You're on the $name. We'll tell you when to get off.",
       TripPhase.alightSoon => 'Get off soon at ${leg.alightLabel}.',
       TripPhase.arrived => "You've arrived at ${trip.option.legs.last.alightLabel}.",
-      TripPhase.toBoard when (before?.legIndex ?? 0) < now.legIndex => 'Transfer: walk to ${leg.boardLabel} for the ${leg.routeCode ?? leg.routeName}.',
-      _ => null,
+      TripPhase.toBoard when (before?.legIndex ?? 0) < now.legIndex => 'Transfer: walk to ${leg.boardLabel} for the $name.',
+      _ => boardedMessage,
     };
-    if (message != null) WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(message));
+    if (message != null) _postMessage(message, replace: message == boardedMessage);
     // Trip done: clear it after a moment, so the map goes back to every stop and jeep.
     if (now.phase == TripPhase.arrived) {
       _arrivedClear?.cancel();
@@ -719,14 +799,23 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   final RideMatcher _ride = RideMatcher();
   String? _ridingVehicleId;
 
+  /// The leg whose "you're on the jeep you were waiting for" was shown.
+  int? _boardedNoticeLeg;
+
   /// How long the finished trip stays on the map after "You've arrived".
   static const Duration clearAfterArrival = Duration(seconds: 15);
   Timer? _arrivedClear;
 
-  void _showMessage(String text) {
+  void _showMessage(String text, {bool replace = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    final messenger = ScaffoldMessenger.of(context);
+    if (replace) messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(content: Text(text)));
   }
+
+  /// [_showMessage] after this frame (called from inside setState).
+  void _postMessage(String text, {bool replace = false}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(text, replace: replace));
 
   // ---------- UI ----------
 

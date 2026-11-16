@@ -291,5 +291,47 @@ void main() {
       expectCenteredOn(tester, moved);
       expect(camera(tester).zoom, greaterThanOrEqualTo(16));
     });
+
+    // Boards half way along 17C, at 123.885.
+    final midTrip = SelectedTrip(
+      option: RouteOption(rank: 1, totalEtaMin: 20, totalFare: 13, transfers: 0, legs: [
+        RouteLeg(
+          routeId: 'r', routeName: '17C', boardStop: stop('Board', 123.885), alightStop: stop('Alight', 123.900),
+          etaMin: 20, fare: 13, path: const [LatLng(10.300, 123.885), LatLng(10.300, 123.900)],
+        ),
+      ]),
+      routesById: const {'r': route},
+      from: 'Your location',
+      to: 'Carbon',
+    );
+
+    testWidgets('waiting at the stop, the card says when the next jeep gets there', (tester) async {
+      final h = await pumpHome(tester, trip: midTrip);
+      h.socket.send(frame(123.881, heading: 90));               // ~440 m before the stop, coming
+      await move(tester, h, const LatLng(10.300, 123.885));
+      expect(find.text('At Board · wait for the 17C'), findsOneWidget);
+      expect(find.text('Next 17C reaches the stop in 2 min'), findsOneWidget);   // at 15 km/h
+      expect(find.textContaining('Arrive '), findsOneWidget);
+    });
+
+    testWidgets("riding off with the jeep says it's the one they were waiting for", (tester) async {
+      final h = await pumpHome(tester, trip: midTrip);
+      // The phone and the jeep's tracker move east together, ~10 m a second.
+      // RideMatcher and TripProgress time it by the real clock: ~9 s.
+      for (var i = 0; i < 9; i++) {
+        final lng = 123.885 + i * 0.00009;
+        h.socket.send(frame(lng, second: i, heading: 90));
+        h.positions.add(at(10.300, lng, speed: 10));
+        await tester.pump();
+        await tester.runAsync(() => Future<void>.delayed(const Duration(seconds: 1)));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));   // the message slides in
+
+      expect(find.byKey(const Key('onBoardBanner')), findsOneWidget);
+      expect(find.text("You're on the 17C you were waiting for · 0000", findRichText: true), findsOneWidget);
+      expect(find.text("You're on the 17C you were waiting for (0000). We'll tell you when to get off."), findsOneWidget);
+      expect(find.textContaining('On the jeep · '), findsOneWidget);
+    });
   });
 }
