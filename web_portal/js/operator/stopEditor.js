@@ -14,6 +14,16 @@
 // with the direction of travel there (previous stop -> next stop): without
 // it OSRM snaps some stops to the far side of a divided road and loops back
 // (tried on 10H: 15 km of U-turn loops against 9.7 km with directions).
+//
+// A stop the line would loop round the block for is left out of the redraw:
+// the stop for the other direction across the road (10M had two "Lorega"
+// and two "G Mall" stops) or one out of riding order. It stays a stop,
+// marked in the list, and the new line passes within PASS_BY_M of it; if it
+// doesn't, the jeep really goes there and the line is routed through it after
+// all (07B round Carbon). Only a stop with no road going the direction of
+// travel loses that check, not every stop as before. Saving puts every stop
+// in riding order along the new line. On 10M: 11.6 km with every stop within
+// 36 m, against 16.9 km of loops; 07B and 10H kept every stop within 40 m.
 
 const StopEditor = (() => {
   const esc = (s) => AdminUi.escapeHtml(String(s ?? ''));
@@ -22,9 +32,21 @@ const StopEditor = (() => {
   const OSRM = 'https://router.project-osrm.org/route/v1/driving';   // as in RoutePicker
   const MAX_LINE_POINTS = 5000;      // MAX_LINE_POINTS on the server
   const END_KEEP_M = 50;             // keep the line's ends when they're this far past the end stops
-  // Tried in order: the road a stop snaps to must run within ±range° of the
-  // direction of travel and lie within radius m of the stop (null: any).
-  const REDRAW_TRIES = [{ range: 60, radius: 50 }, { range: 90, radius: null }];
+  // The road a stop snaps to must run within ±60° of the direction of travel
+  // and lie within 50 m of it; the loose settings are a last resort.
+  const STRICT = { range: 60, radius: 50 };
+  const LOOSE = { range: 90, radius: null };
+  // A leg between two stops this much longer than the straight hop, and this
+  // many times it, loops back to reach a stop.
+  const LOOP_EXTRA_M = 300;
+  const LOOP_RATIO = 2.5;
+  const DIRECT_GUESS = 1.3;          // a direct hop by road is about this much longer than straight
+  // A left-out stop the new line passes this close is still served; further
+  // away, the jeep really goes there (e.g. round Carbon's one-way streets on
+  // 07B), so it's routed through after all.
+  const PASS_BY_M = 60;
+  const MAX_REDRAW_ROUNDS = 8;
+  const MAX_REDRAW_CALLS = 16;       // OSRM requests per redraw (the public server is shared)
 
   // ---------- Geometry (metres, local flat projection) ----------
 
@@ -61,28 +83,107 @@ const StopEditor = (() => {
     return ((Math.atan2(dx, b.lat - a.lat) * 180) / Math.PI + 360) % 360;
   }
 
-  /** The road path through points ({lat, lng}, in riding order) as [[lng, lat], ...], or null. */
-  async function roadPathThrough(points) {
+  /**
+   * One OSRM route through points ({lat, lng}) with the direction of travel
+   * at each (none where noDirection[i]): { route } (OSRM's, with legs),
+   * { noSegment: i } when point i has no road going that way close by, or null.
+   */
+  async function osrmRoute(points, { range, radius }, noDirection = []) {
     const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
     const heads = points.map((p, i) => {
       const from = points[Math.max(0, i - 1)];
       const to = points[Math.min(points.length - 1, i + 1)];
-      return metresBetween(from, to) < 5 ? null : Math.round(bearing(from, to));
+      return noDirection[i] || metresBetween(from, to) < 5 ? null : Math.round(bearing(from, to));
     });
-    for (const { range, radius } of REDRAW_TRIES) {
-      const params = new URLSearchParams({ overview: 'full', geometries: 'geojson' });
-      params.set('bearings', heads.map((h) => (h == null ? '' : `${h},${range}`)).join(';'));
-      if (radius) params.set('radiuses', points.map(() => radius).join(';'));
-      try {
-        const res = await fetch(`${OSRM}/${coords}?${params}`);
-        const found = res.ok ? await res.json() : null;
-        const path = found?.routes?.[0]?.geometry?.coordinates;
-        if (path && path.length >= 2) return path;
-      } catch {
-        // try the next, looser settings
-      }
+    const params = new URLSearchParams({ overview: 'full', geometries: 'geojson' });
+    params.set('bearings', heads.map((h) => (h == null ? '' : `${h},${range}`)).join(';'));
+    if (radius) params.set('radiuses', points.map(() => radius).join(';'));
+    try {
+      const res = await fetch(`${OSRM}/${coords}?${params}`);
+      const body = await res.json().catch(() => null);
+      const route = body?.routes?.[0];
+      if (res.ok && route?.geometry?.coordinates?.length >= 2) return { route };
+      const at = body?.code === 'NoSegment' && /coordinate (\d+)/.exec(body.message || '');
+      return at ? { noSegment: Number(at[1]) } : null;
+    } catch {
+      return null;
     }
-    return null;
+  }
+
+  /**
+   * The road path through points ({lat, lng}, in riding order), as
+   * { path: [[lng, lat], ...], skipped: [indexes into points] }, or null.
+   *
+   * A point with no road going the direction of travel within 50 m is passed
+   * either way; with no road there at all it's left out. A point the line
+   * loops back for is left out too, unless the new line then doesn't pass
+   * within PASS_BY_M of it: then it's routed through for good. The first
+   * and last points are never left out.
+   */
+  async function roadPathThrough(points) {
+    let keep = points.map((_, i) => i);
+    const anyWay = new Set();    // no road going the direction of travel close by
+    const looped = new Set();    // left out: the line looped back for them
+    const offRoad = new Set();   // left out: no road within 50 m at all
+    const needed = new Set();    // the line has to go to them
+    let best = null;
+    let calls = 0;
+    let rounds = 0;
+    const done = (route) => {
+      best = { path: route.geometry.coordinates, skipped: [...looped, ...offRoad] };
+    };
+    while (calls < MAX_REDRAW_CALLS) {
+      const at = keep.map((i) => points[i]);
+      calls++;
+      let found = await osrmRoute(at, STRICT, keep.map((i) => anyWay.has(i)));
+      const k = found?.noSegment;
+      if (k != null && !anyWay.has(keep[k])) {
+        anyWay.add(keep[k]);
+        continue;
+      }
+      if (k != null && k > 0 && k < keep.length - 1) {
+        offRoad.add(keep[k]);                  // one point fewer each time, so this ends
+        keep = keep.filter((_, j) => j !== k);
+        continue;
+      }
+      if (!found?.route) {
+        found = await osrmRoute(at, LOOSE);    // last resort: every stop, any nearby road
+        if (found?.route) done(found.route);
+        break;
+      }
+
+      const line = found.route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+      const far = [...looped].filter((i) => project(line, points[i]).off > PASS_BY_M);
+      if (far.length) {
+        far.forEach((i) => { looped.delete(i); needed.add(i); });
+        keep = [...keep, ...far].sort((a, b) => a - b);
+        continue;
+      }
+      done(found.route);
+
+      // Legs that loop back: leave out whichever end saves the most.
+      const hop = (a, b) => metresBetween(points[keep[a]], points[keep[b]]);
+      const legs = found.route.legs.map((l) => l.distance);
+      const extra = (j) => {
+        const straight = hop(j, j + 1);
+        const more = legs[j] - straight;
+        return more > LOOP_EXTRA_M && legs[j] > LOOP_RATIO * straight ? more : 0;
+      };
+      const saving = (c) => legs[c - 1] + legs[c] - DIRECT_GUESS * hop(c - 1, c + 1);
+      const loops = legs.map((_, j) => j).filter((j) => extra(j) > 0).sort((a, b) => extra(b) - extra(a));
+      const drop = new Set();
+      for (const j of loops) {
+        const ends = [j + 1, j].filter((c) => c > 0 && c < keep.length - 1 && !needed.has(keep[c])
+          && !drop.has(c - 1) && !drop.has(c) && !drop.has(c + 1));
+        if (!ends.length) continue;
+        const c = ends.reduce((a, b) => (saving(b) > saving(a) ? b : a));
+        if (saving(c) >= LOOP_EXTRA_M) drop.add(c);
+      }
+      if (!drop.size || ++rounds >= MAX_REDRAW_ROUNDS) break;
+      drop.forEach((c) => looped.add(keep[c]));
+      keep = keep.filter((_, j) => !drop.has(j));
+    }
+    return best;
   }
 
   // ---------- Editor ----------
@@ -92,6 +193,7 @@ const StopEditor = (() => {
     let line = [];           // [[lat, lng], ...]
     let lineLayer = null;    // the line on the map
     let lineChanged = false; // redrawn through the stops: saved with them
+    let leftOut = new Set(); // keys of stops the last redraw didn't route through
     let stops = [];          // { key, id?, name, landmark, lat, lng, marker }
     let nextKey = 1;
     let dirty = false;
@@ -238,7 +340,7 @@ const StopEditor = (() => {
                     <td>${n + 1}</td>
                     <td><input class="se-name" data-key="${r.s.key}" maxlength="80" value="${esc(r.s.name)}" aria-label="Stop ${n + 1} name" style="width:100%;" ${r.s.shared ? 'readonly' : ''}></td>
                     <td><input class="se-landmark" data-key="${r.s.key}" maxlength="120" value="${esc(r.s.landmark)}" placeholder="e.g. across the church" aria-label="Stop ${n + 1} landmark" style="width:100%;" ${r.s.shared ? 'readonly' : ''}></td>
-                    <td>${r.s.shared ? OperatorUi.chip('Shared with other routes', 'blue') : ''}${warn ? OperatorUi.chip(`${Math.round(r.off)} m off the route`, 'amber') : ''}</td>
+                    <td>${r.s.shared ? OperatorUi.chip('Shared with other routes', 'blue') : ''}${warn ? OperatorUi.chip(`${Math.round(r.off)} m off the route`, 'amber') : ''}${leftOut.has(r.s.key) ? `<span title="The line would have looped back to pass this stop going this way. It may be the stop for the other direction across the road, or out of order. Remove it if the jeep doesn't stop here.">${OperatorUi.chip('Left out of the line', 'amber')}</span>` : ''}</td>
                     <td style="white-space:nowrap;">
                       <button type="button" class="btn-sm" data-se="focus" data-key="${r.s.key}">Show</button>
                       <button type="button" class="btn-sm" data-se="remove" data-key="${r.s.key}" aria-label="Remove stop ${n + 1}">Remove</button>
@@ -327,17 +429,21 @@ const StopEditor = (() => {
         return;
       }
       const points = rows.map(({ s }) => ({ lat: s.lat, lng: s.lng }));
+      const pointStop = rows.map(({ s }) => s);    // which stop each point is (null: a line end)
       if (line.length >= 2) {
         const start = { lat: line[0][0], lng: line[0][1] };
         const end = { lat: line[line.length - 1][0], lng: line[line.length - 1][1] };
-        if (metresBetween(start, points[0]) > END_KEEP_M) points.unshift(start);
-        if (metresBetween(end, points[points.length - 1]) > END_KEEP_M) points.push(end);
+        if (metresBetween(start, points[0]) > END_KEEP_M) { points.unshift(start); pointStop.unshift(null); }
+        if (metresBetween(end, points[points.length - 1]) > END_KEEP_M) { points.push(end); pointStop.push(null); }
       }
       btn.disabled = true;
       btn.textContent = 'Drawing…';
       try {
-        let path = await roadPathThrough(points);
-        if (!path) throw new Error('no road path');
+        const drawn = await roadPathThrough(points);
+        if (!drawn) throw new Error('no road path');
+        let { path } = drawn;
+        const skippedStops = drawn.skipped.map((i) => pointStop[i]).filter(Boolean);
+        leftOut = new Set(skippedStops.map((s) => s.key));
         if (path.length > MAX_LINE_POINTS) {
           const step = Math.ceil(path.length / MAX_LINE_POINTS);
           path = path.filter((_, i) => i % step === 0 || i === path.length - 1);
@@ -352,7 +458,9 @@ const StopEditor = (() => {
         lineChanged = true;
         dirty = true;
         render();
-        AdminUi.toast(`Line redrawn through ${rows.length} stops. Check it follows the jeepney's streets, then save.`);
+        AdminUi.toast(skippedStops.length
+          ? `Line redrawn. ${skippedStops.length} ${skippedStops.length === 1 ? 'stop' : 'stops'} left out so it doesn't loop back for them (marked below). Check the line, then save.`
+          : `Line redrawn through ${rows.length} stops. Check it follows the jeepney's streets, then save.`);
       } catch {
         AdminUi.toast('Could not find a road path through the stops. Move any stop that is off the road, then try again.', { error: true });
       } finally {
