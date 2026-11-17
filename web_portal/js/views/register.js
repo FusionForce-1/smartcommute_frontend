@@ -123,7 +123,12 @@ function validateRegistration({ name, email, password, repeatPassword, profile }
   }
   if (name.length < 2) return 'Full name must be at least 2 characters.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
+  // Same order as the fields on the form: Contact Number sits above Franchise Number.
+  const contactProblem = OperatorProfileRules.contactProblem(profile.contact_number);
+  if (contactProblem) return contactProblem;
   if (profile.company_name.length < 2) return 'Company name must be at least 2 characters.';
+  const franchiseProblem = OperatorProfileRules.franchiseProblem(profile.franchise_number);
+  if (franchiseProblem) return franchiseProblem;
   if (password.length < 6) return 'Password must be at least 6 characters.';
   if (password !== repeatPassword) return 'Passwords do not match.';
   return '';
@@ -191,6 +196,12 @@ const OperatorProfilePopup = {
           }
           if (profile.company_name.length < 2) {
             showProfileError('Company name must be at least 2 characters.');
+            return;
+          }
+          const formatProblem = OperatorProfileRules.franchiseProblem(profile.franchise_number)
+            || OperatorProfileRules.contactProblem(profile.contact_number);
+          if (formatProblem) {
+            showProfileError(formatProblem);
             return;
           }
           if (!document.getElementById('profile-consent').checked) {

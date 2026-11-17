@@ -90,9 +90,9 @@ OperatorRouter.register('profile', {
                 contact_number: m.querySelector('#pe-contact').value.trim(),
               };
               if (changes.company_name.length < 2) throw new Error('Company name must be at least 2 characters.');
-              if (changes.contact_number && !/^[0-9+\-\s]{7,20}$/.test(changes.contact_number)) {
-                throw new Error('Enter a valid contact number.');
-              }
+              const formatProblem = OperatorProfileRules.franchiseProblem(changes.franchise_number)
+                || OperatorProfileRules.contactProblem(changes.contact_number);
+              if (formatProblem) throw new Error(formatProblem);
               await OperatorApi.updateProfile(changes);
               profile = { ...profile, ...changes };
               AdminModal.close();
