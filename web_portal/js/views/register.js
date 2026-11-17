@@ -118,8 +118,8 @@ Router.register('register', {
 
 /** Returns the first problem with the form, or '' if it is valid. */
 function validateRegistration({ name, email, password, repeatPassword, profile }) {
-  if (!name || !email || !password || !profile.company_name) {
-    return 'Please fill in your name, email, company name and password.';
+  if (!name || !email || !profile.contact_number || !profile.company_name || !profile.franchise_number || !password) {
+    return 'Please fill in your name, email, contact number, company name, franchise number and password.';
   }
   if (name.length < 2) return 'Full name must be at least 2 characters.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
