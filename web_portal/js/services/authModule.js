@@ -1,20 +1,8 @@
-// js/services/authModule.js
-//
-// FRANCIS B. VELEZ — web portal auth module + mock adapter (F7).
-// Emae's Login / Operator Register / Forgot-Password / OTP views call
-// these methods. Swap the mock bodies for real fetch() calls to FastAPI
-// when the backend is live. Do not move this logic into index.html,
-// js/main.js, or js/router.js.
-//
-// Demo accounts:
-//   operator@gmail.com / password123
-//   admin@gmail.com    / password123
-// Forgot-password error fixture (Web_Error.png):
-//   test@account.com → "This email is not registered"
-// OTP fixture: 123456
-
+// Services auth module
+// Auth module
 const AuthModule = (() => {
-  const USE_MOCKS = false; // true = offline demo accounts below; false = live FastAPI
+  const USE_MOCKS = false;
+  // Auth module delay
   const delay = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const users = {
@@ -24,12 +12,14 @@ const AuthModule = (() => {
   };
   const otps = {};
 
+  // Auth module request
   async function request(method, path, body) {
     if (!USE_MOCKS) return ApiClient.request(method, path, body, { auth: false });
     await delay();
     return mockDispatch(method, path, body);
   }
 
+  // Mock dispatch
   function mockDispatch(method, path, body = {}) {
     if (method === 'POST' && path === '/auth/login') {
       const id = String(body.email || '').trim().toLowerCase();
@@ -100,19 +90,13 @@ const AuthModule = (() => {
     throw err;
   }
 
-  /** Saves company details for the signed-in operator (POST /operators). */
+  // Create operator profile
   function createOperatorProfile({ company_name, franchise_number, contact_number }) {
-    // user_id is required by the schema but the server overwrites it with
-    // the id from the token, so any placeholder works.
     return ApiClient.post('/operators', { user_id: 'self', company_name, franchise_number, contact_number });
   }
 
   return {
-    /**
-     * Resolves with the token response, or with { two_factor_required: true,
-     * email } when the account has two-factor on — then finish with
-     * verifyLoginCode() using the code that was emailed.
-     */
+    // Login auth module
     login: async (email, password, rememberMe) => {
       const result = await request('POST', '/auth/login', { email, password });
       if (result?.two_factor_required) return result;
@@ -120,28 +104,23 @@ const AuthModule = (() => {
       return result;
     },
 
-    /** Second step of a two-factor login (POST /auth/login/verify). */
+    // Verify login code
     verifyLoginCode: async (email, otp, rememberMe) => {
       const result = await request('POST', '/auth/login/verify', { email, otp });
       Session.save({ ...result, email }, rememberMe);
       return result;
     },
 
+    // Logout auth module
     logout: async () => {
       try {
         await ApiClient.post('/auth/logout');
       } catch {
-        // JWTs are stateless — clearing the local session is what logs out.
       }
       Session.clear();
     },
 
-    /**
-     * Email/password operator sign-up: creates the account, signs in once to
-     * save the company profile (that endpoint needs a token), then signs out
-     * so the operator logs in normally afterwards. `acceptedTerms` is the
-     * User Agreement / Privacy Policy box — the backend requires and records it.
-     */
+    // Register operator
     registerOperator: async ({ name, email, password, profile, acceptedTerms }) => {
       await request('POST', '/auth/register', {
         name, email, password, role: 'operator', accepted_terms: acceptedTerms === true,
@@ -155,17 +134,14 @@ const AuthModule = (() => {
       }
     },
 
-    /**
-     * Signs in with a Google ID token. `role` only applies when the Google
-     * account is brand new (the backend never changes an existing role).
-     */
+    // Login with Google
     loginWithGoogle: async (idToken, { role, email, rememberMe = false } = {}) => {
       const result = await request('POST', '/auth/google', { id_token: idToken, role });
       Session.save({ ...result, email }, rememberMe);
       return result;
     },
 
-    /** The signed-in operator's company profile, or null if not created yet. */
+    // Get my operator profile
     getMyOperatorProfile: async () => {
       try {
         return await ApiClient.get('/operators/me');
@@ -177,12 +153,14 @@ const AuthModule = (() => {
 
     createOperatorProfile,
 
-    /** Records the signed-in user's agreement to the User Agreement / Privacy Policy. */
+    // Accept terms
     acceptTerms: () => ApiClient.post('/users/me/accept-terms'),
 
+    // Forgot password
     forgotPassword: (email) =>
       request('POST', '/auth/forgot-password', { email }),
 
+    // Reset password
     resetPassword: (email, otp, newPassword) =>
       request('POST', '/auth/reset-password', {
         email,

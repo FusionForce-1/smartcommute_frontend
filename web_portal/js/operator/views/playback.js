@@ -1,43 +1,35 @@
-// js/operator/views/playback.js
-//
-// Playback: replays where one of the operator's vehicles went, from its GPS
-// fixes (GET /vehicles/{id}/track). Raw GPS is kept for 7 days, so a
-// window can start at most a week back, and one window covers at most a day
-// (the server thins longer ones too far to replay). The shifts on the vehicle in the
-// window can be picked to replay just that shift. Stretches without GPS show
-// as breaks in the line, and playing jumps straight over them. The Fleet
-// Map's vehicle popup opens this tab on its vehicle (PLAYBACK_VEHICLE_KEY).
-
+// Operator playback view
 const PLAYBACK_VEHICLE_KEY = 'sc_playback_vehicle';
 
 OperatorRouter.register('playback', {
   title: 'Playback',
   heading: 'Vehicle Playback',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const CEBU = [10.3157, 123.8854];
     const DAY_MS = 24 * 60 * 60 * 1000;
-    const KEPT_MS = 7 * DAY_MS;      // GPS_POSITION_TTL_SECONDS on the server
-    const MAX_WINDOW_MS = DAY_MS;    // MAX_TRACK_WINDOW on the server
-    const GAP_MS = 60 * 1000;       // no fix for this long: the line breaks (signal lost)
-    const MOVE_M = 8;                // less than this between fixes is GPS jitter, not driving
-    const GAP_NOTE_MS = 3000;        // how long the readout mentions a gap it just jumped
-    const LINE_REDRAW_MS = 100;      // the travelled line redraws at most this often while playing
-    const LONGEST_FRAME_MS = 250;    // back from a hidden tab: carry on, don't leap ahead
+    const KEPT_MS = 7 * DAY_MS;
+    const MAX_WINDOW_MS = DAY_MS;
+    const GAP_MS = 60 * 1000;
+    const MOVE_M = 8;
+    const GAP_NOTE_MS = 3000;
+    const LINE_REDRAW_MS = 100;
+    const LONGEST_FRAME_MS = 250;
     const SPEEDS = [1, 5, 10, 30, 60];
     const PRESETS = [[1, 'Last hour'], [3, 'Last 3 h'], [6, 'Last 6 h'], [12, 'Last 12 h'], [24, 'Last 24 h']];
 
     let fleet = [];
-    let points = [];        // [{ t (ms), lat, lng, speed, facing, source }]
-    let segments = [];      // index ranges [from, to] without a gap
-    let segmentLines = [];  // each segment's [lat, lng] pairs
-    let now = 0;            // playback time, ms
+    let points = [];
+    let segments = [];
+    let segmentLines = [];
+    let now = 0;
     let speed = 10;
     let playing = false;
     let frame = null;
     let lastTick = null;
-    let request = 0;        // ignores answers to older loads
+    let request = 0;
 
     el.innerHTML = `
       <div class="op-page-head">
@@ -89,28 +81,31 @@ OperatorRouter.register('playback', {
     const readout = $('#pb-readout');
     const statusEl = $('#pb-status');
 
-    // ---------- Time inputs (local time, as datetime-local shows it) ----------
 
+    // Pad playback
     const pad = (n) => String(n).padStart(2, '0');
+    // To local input
     const toLocalInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    // Playback clock
     const clock = (ms, seconds = false) => new Date(ms).toLocaleTimeString('en-US',
       { hour: 'numeric', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) });
-    // The inputs have no seconds: rounding up keeps the last fixes in the window.
+    // Next minute
     const nextMinute = (ms) => new Date(Math.ceil(ms / 60000) * 60000);
 
+    // Set window
     function setWindow(start, end) {
       limitInputs();
       fromInput.value = toLocalInput(new Date(Math.max(start, Date.now() - KEPT_MS)));
       toInput.value = toLocalInput(nextMinute(Math.min(end, Date.now())));
     }
 
+    // Limit inputs
     function limitInputs() {
       const min = toLocalInput(new Date(Date.now() - KEPT_MS));
       const max = toLocalInput(nextMinute(Date.now()));
       [fromInput, toInput].forEach((input) => { input.min = min; input.max = max; });
     }
 
-    // ---------- Map ----------
 
     const map = window.L ? L.map($('#pb-map')).setView(CEBU, 13) : null;
     if (map) {
@@ -124,21 +119,24 @@ OperatorRouter.register('playback', {
     const routeLayer = map ? L.layerGroup().addTo(map) : null;
     const pathLayer = map ? L.layerGroup().addTo(map) : null;
     const doneLayer = map ? L.layerGroup().addTo(map) : null;
-    let doneLines = [];     // one polyline per segment, grown as the vehicle moves
-    let lineStates = [];    // per segment: 'done', 'current' or 'ahead'
+    let doneLines = [];
+    let lineStates = [];
     let lastLineDraw = 0;
     let gapNote = '';
     let gapNoteUntil = 0;
     let marker = null;
 
+    // PUV icon
     const puvIcon = () => L.divIcon({
       className: '',
       html: '<div class="op-puv"><img class="op-puv__img" src="../assets/icons/puv.svg" alt="" draggable="false" /></div>',
       iconSize: [36, 36],
       iconAnchor: [18, 18],
     });
+    // End dot
     const endDot = (color) => L.circleMarker([0, 0], { radius: 6, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 });
 
+    // Draw route
     async function drawRoute(routeId) {
       routeLayer?.clearLayers();
       if (!map || !routeId) return;
@@ -149,16 +147,16 @@ OperatorRouter.register('playback', {
           L.polyline(coords.map(([lng, lat]) => [lat, lng]), { color: '#3B8A9E', weight: 6, opacity: 0.25 }).addTo(routeLayer);
         }
       } catch {
-        // No map line for this route: the GPS path alone is still shown.
       }
     }
 
-    // ---------- Loading a window ----------
 
+    // Selected vehicle
     function selectedVehicle() {
       return fleet.find((v) => v.vehicle_id === vehicleSelect.value);
     }
 
+    // Load playback
     async function load() {
       const vehicle = selectedVehicle();
       if (!vehicle) return;
@@ -188,6 +186,7 @@ OperatorRouter.register('playback', {
       }
     }
 
+    // Show playback
     function show(track) {
       points = track.points.map((p) => ({ ...p, t: OperatorUi.parseDate(p.t).getTime() }));
       addFacing();
@@ -230,15 +229,15 @@ OperatorRouter.register('playback', {
       playerEl.hidden = false;
       const thinned = track.total_fixes > points.length ? ` (thinned from ${track.total_fixes})` : '';
       const gaps = segments.length > 1 ? ` · GPS was off ${segments.length - 1} time${segments.length === 2 ? '' : 's'}` : '';
-      // A little slack: a "From" right at the limit isn't worth a warning.
       const clipped = OperatorUi.parseDate(track.oldest_available) - new Date(fromInput.value) > 5 * 60 * 1000
         ? ' GPS older than 7 days is no longer kept.' : '';
       statusEl.textContent = `${points.length} GPS fixes${thinned} for ${track.plate_number}${gaps}.${clipped}`;
       seek(points[0].t);
     }
 
-    /** Which way the PUV faces at each fix: its last real movement, so GPS jitter doesn't spin it while parked. */
+    // Add facing
     function addFacing() {
+      // Playback metres
       const metres = (a, b) => Math.hypot(
         (b.lat - a.lat) * 110540,
         (b.lng - a.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180),
@@ -252,11 +251,11 @@ OperatorRouter.register('playback', {
         }
         p.facing = facing;
       });
-      // Before its first move it already faces the way it sets off.
       const first = points.find((p) => p.facing !== null)?.facing ?? null;
       points.forEach((p) => { p.facing ??= first; });
     }
 
+    // Render shifts
     function renderShifts(shifts) {
       shiftsEl.innerHTML = shifts.length
         ? `<span class="op-card__sub" style="align-self:center;">Shifts:</span>${shifts.map((s) => `
@@ -266,9 +265,8 @@ OperatorRouter.register('playback', {
         : '';
     }
 
-    // ---------- Playing ----------
 
-    /** Index of the last fix at or before time t. */
+    // Index at
     function indexAt(t) {
       let lo = 0;
       let hi = points.length - 1;
@@ -279,6 +277,7 @@ OperatorRouter.register('playback', {
       return lo;
     }
 
+    // Seek playback
     function seek(t) {
       now = Math.min(Math.max(t, points[0].t), points[points.length - 1].t);
       slider.value = String(now);
@@ -287,7 +286,6 @@ OperatorRouter.register('playback', {
       const next = points[i + 1];
       let lat = p.lat;
       let lng = p.lng;
-      // Glide between fixes, but not across a gap (the vehicle wasn't seen there).
       if (next && next.t - p.t <= GAP_MS && next.t > p.t) {
         const f = (now - p.t) / (next.t - p.t);
         lat += (next.lat - p.lat) * f;
@@ -305,7 +303,7 @@ OperatorRouter.register('playback', {
       readout.textContent = `${clock(now, true)} · ${kmh}${source}${note}`;
     }
 
-    /** Grows the travelled line up to fix i: only the stretch in progress redraws. */
+    // Draw travelled
     function drawTravelled(i, tip) {
       const stamp = performance.now();
       const throttled = playing && stamp - lastLineDraw < LINE_REDRAW_MS;
@@ -322,7 +320,7 @@ OperatorRouter.register('playback', {
       });
     }
 
-    /** t, or the end of the gap it falls in: nothing happens there to watch. */
+    // Past gap
     function pastGap(t) {
       const i = indexAt(t);
       const next = points[i + 1];
@@ -335,6 +333,7 @@ OperatorRouter.register('playback', {
       return next.t;
     }
 
+    // Tick playback
     function tick(stamp) {
       if (!playing) return;
       if (lastTick !== null) seek(pastGap(now + Math.min(stamp - lastTick, LONGEST_FRAME_MS) * speed));
@@ -346,9 +345,10 @@ OperatorRouter.register('playback', {
       frame = requestAnimationFrame(tick);
     }
 
+    // Play playback
     function play() {
       if (!points.length) return;
-      if (now >= points[points.length - 1].t) seek(points[0].t);   // replay from the start
+      if (now >= points[points.length - 1].t) seek(points[0].t);
       playing = true;
       lastTick = null;
       playBtn.textContent = '❚❚';
@@ -356,6 +356,7 @@ OperatorRouter.register('playback', {
       frame = requestAnimationFrame(tick);
     }
 
+    // Pause playback
     function pause() {
       playing = false;
       if (frame) cancelAnimationFrame(frame);
@@ -364,7 +365,6 @@ OperatorRouter.register('playback', {
       playBtn.setAttribute('aria-label', 'Play');
     }
 
-    // ---------- Events ----------
 
     playBtn.addEventListener('click', () => (playing ? pause() : play()));
     slider.addEventListener('input', () => { if (points.length) seek(Number(slider.value)); });
@@ -387,7 +387,6 @@ OperatorRouter.register('playback', {
       load();
     });
 
-    // ---------- Start ----------
 
     limitInputs();
     setWindow(Date.now() - 60 * 60 * 1000, Date.now());
@@ -403,7 +402,7 @@ OperatorRouter.register('playback', {
       try {
         wanted = sessionStorage.getItem(PLAYBACK_VEHICLE_KEY);
         sessionStorage.removeItem(PLAYBACK_VEHICLE_KEY);
-      } catch { /* private mode */ }
+      } catch {  }
       if (wanted && fleet.some((v) => v.vehicle_id === wanted)) vehicleSelect.value = wanted;
       load();
     }).catch((err) => {

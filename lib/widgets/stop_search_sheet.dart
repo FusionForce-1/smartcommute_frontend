@@ -1,7 +1,4 @@
-// lib/widgets/stop_search_sheet.dart
-//
-// Searchable list sa stops para pilian sa commuter ang destination.
-
+// Stop search sheet
 import 'package:flutter/material.dart';
 
 import '../config/theme_config.dart';
@@ -9,7 +6,7 @@ import '../constants/app_icons.dart';
 import '../models/transport_stop.dart';
 import 'stop_image.dart';
 
-/// Filter by name or landmark, case-insensitive. Blank query → tanan.
+/// Filter stops
 List<TransportStop> filterStops(List<TransportStop> stops, String query) {
   final q = query.trim().toLowerCase();
   if (q.isEmpty) return stops;
@@ -20,6 +17,7 @@ List<TransportStop> filterStops(List<TransportStop> stops, String query) {
       .toList();
 }
 
+/// Show stop search sheet
 Future<TransportStop?> showStopSearchSheet(
   BuildContext context,
   List<TransportStop> stops,
@@ -33,18 +31,23 @@ Future<TransportStop?> showStopSearchSheet(
   );
 }
 
+/// Stop search sheet
 class _StopSearchSheet extends StatefulWidget {
+  /// Create stop search sheet
   const _StopSearchSheet({required this.stops});
 
   final List<TransportStop> stops;
 
+  /// Create widget state
   @override
   State<_StopSearchSheet> createState() => _StopSearchSheetState();
 }
 
+/// Stop search sheet state
 class _StopSearchSheetState extends State<_StopSearchSheet> {
   String _query = '';
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final results = filterStops(widget.stops, _query);

@@ -1,9 +1,4 @@
-// lib/screens/commuter/profile.dart
-//
-// Profile tab: header with stats, "Rate Your Ride" (review the jeep and
-// driver), saved routes, notification choices and account links. State lives in ProfileProvider (owned by the dashboard);
-// guests get a sign-in prompt instead.
-
+// Profile screen
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -26,7 +21,9 @@ import '../../widgets/commuter/settings_group.dart';
 import 'help_support_screen.dart';
 import 'privacy_security_screen.dart';
 
+/// Profile tab
 class ProfileTab extends StatelessWidget {
+  /// Create profile tab
   const ProfileTab({
     super.key,
     required this.isGuest,
@@ -42,19 +39,15 @@ class ProfileTab extends StatelessWidget {
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
-  /// Jeeps by plate, for "Rate Your Ride".
   final List<Vehicle> vehicles;
 
-  /// Plans the saved route on the Route tab (handled by the dashboard).
   final ValueChanged<SavedRoute> onOpenSavedRoute;
 
-  /// Logs out and returns to the login screen (handled by the dashboard).
-  /// Guests use it as "Sign in".
   final VoidCallback onSignOut;
 
-  /// Guests only: leaves guest mode and opens Register.
   final VoidCallback onCreateAccount;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     if (isGuest) {
@@ -151,6 +144,7 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
+  /// Edit name
   Future<void> _editName(BuildContext context, String current) async {
     final profile = context.read<ProfileProvider>();
     final name = await showDialog<String>(
@@ -161,6 +155,7 @@ class ProfileTab extends StatelessWidget {
     await _report(context, profile.rename(name));
   }
 
+  /// Write review
   Future<void> _writeReview(BuildContext context, ProfileProvider profile) async {
     if (routes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -176,6 +171,7 @@ class ProfileTab extends StatelessWidget {
     }
   }
 
+  /// Confirm remove
   Future<void> _confirmRemove(BuildContext context, SavedRoute route) async {
     final profile = context.read<ProfileProvider>();
     final remove = await showDialog<bool>(
@@ -196,7 +192,7 @@ class ProfileTab extends StatelessWidget {
     if (remove == true && context.mounted) await _report(context, profile.removeSavedRoute(route));
   }
 
-  /// Shows the error from a profile change, if it failed.
+  /// Report profile tab
   Future<void> _report(BuildContext context, Future<String?> change) async {
     final error = await change;
     if (error != null && context.mounted) {
@@ -206,7 +202,7 @@ class ProfileTab extends StatelessWidget {
 
 }
 
-/// Help and legal links — shown to guests and signed-in commuters alike.
+/// Info links
 List<Widget> _infoLinks(BuildContext context) => [
       SettingsLinkRow(
         icon: Icons.help_outline,
@@ -222,15 +218,18 @@ List<Widget> _infoLinks(BuildContext context) => [
       ),
     ];
 
-/// "Rate Your Ride": a button to review a ride, and the latest reviews sent.
+/// Rate your ride widget
 class _RateYourRide extends StatelessWidget {
+  /// Create rate your ride
   const _RateYourRide({required this.reviews, required this.onWrite});
 
   final List<RideReview> reviews;
   final VoidCallback onWrite;
 
+  /// Rate your stars
   static String _stars(int n) => '${'★' * n}${'☆' * (5 - n)}';
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -300,12 +299,15 @@ class _RateYourRide extends StatelessWidget {
   }
 }
 
+/// Section title widget
 class _SectionTitle extends StatelessWidget {
+  /// Create section title
   const _SectionTitle(this.title, {this.action});
 
   final String title;
   final Widget? action;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final action = this.action;
@@ -326,24 +328,30 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+/// Edit name dialog
 class _EditNameDialog extends StatefulWidget {
+  /// Create edit name dialog
   const _EditNameDialog({required this.initial});
 
   final String initial;
 
+  /// Create widget state
   @override
   State<_EditNameDialog> createState() => _EditNameDialogState();
 }
 
+/// Edit name dialog state
 class _EditNameDialogState extends State<_EditNameDialog> {
   late final _controller = TextEditingController(text: widget.initial);
 
+  /// Clean up resources
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -364,12 +372,15 @@ class _EditNameDialogState extends State<_EditNameDialog> {
   }
 }
 
+/// Load error widget
 class _LoadError extends StatelessWidget {
+  /// Create load error
   const _LoadError({required this.message, required this.onRetry});
 
   final String? message;
   final VoidCallback onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -393,9 +404,9 @@ class _LoadError extends StatelessWidget {
   }
 }
 
-/// Guests have no account data, so the tab offers a way in (sign in or
-/// register), what an account unlocks, and the help/legal links.
+/// Guest profile widget
 class _GuestProfile extends StatelessWidget {
+  /// Create guest profile
   const _GuestProfile({required this.onSignIn, required this.onCreateAccount});
 
   final VoidCallback onSignIn;
@@ -408,6 +419,7 @@ class _GuestProfile extends StatelessWidget {
     (Icons.notifications_none, 'Choose which alerts you get'),
   ];
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return SafeArea(

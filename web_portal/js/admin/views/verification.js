@@ -1,10 +1,8 @@
-// js/admin/views/verification.js
-//
-// Verification: every operator registration, filterable by decision.
-
+// Admin verification view
 AdminRouter.register('verification', {
   title: 'Verification',
 
+  // Mount the view
   mount(el) {
     const STATUS_FILTERS = [
       { value: '', label: 'All' },
@@ -36,10 +34,12 @@ AdminRouter.register('verification', {
     const tableEl = el.querySelector('#verif-table');
     const esc = AdminUi.escapeHtml;
 
+    // Count by
     function countBy(status) {
       return profiles.filter((p) => p.status === status).length;
     }
 
+    // Render stats
     function renderStats() {
       statsEl.innerHTML = AdminUi.statGrid([
         ['Pending', countBy('pending')],
@@ -49,6 +49,7 @@ AdminRouter.register('verification', {
       ]);
     }
 
+    // Render table
     function renderTable() {
       const visible = filter ? profiles.filter((p) => p.status === filter) : profiles;
       const rows = visible.length
@@ -79,10 +80,12 @@ AdminRouter.register('verification', {
         </div>`;
     }
 
+    // Render filters
     function renderFilters() {
       filtersEl.innerHTML = AdminUi.filterChips(STATUS_FILTERS, filter);
     }
 
+    // Load verification
     function load() {
       AdminUi.loadInto(tableEl, () => AdminApi.listOperators(), (list) => {
         profiles = list;
@@ -100,6 +103,7 @@ AdminRouter.register('verification', {
     });
 
     OperatorReview.bind(tableEl, {
+      // Find profile
       findProfile: (id) => profiles.find((p) => p.id === id),
       onDone: load,
     });

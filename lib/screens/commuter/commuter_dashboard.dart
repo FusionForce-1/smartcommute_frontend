@@ -1,13 +1,4 @@
-// lib/screens/commuter/commuter_dashboard.dart
-//
-// Commuter dashboard shell: logo header, the four tabs (Home, Route,
-// Alerts, Profile) and the bottom navigation. Loads stops, routes and
-// vehicles once and hands them to the tabs that need them, and owns the
-// trip, notification and profile state so it survives switching tabs —
-// including the route picked with "Select this route", shown on Home until
-// cancelled. New notifications are checked for every minute while the app
-// is in front, when it comes back, and when the Alerts tab is opened.
-
+// Commuter dashboard
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,17 +33,19 @@ import 'notifications_tab.dart';
 import 'profile.dart';
 import 'route.dart';
 
+/// Commuter dashboard widget
 class CommuterDashboard extends StatefulWidget {
+  /// Create commuter dashboard
   const CommuterDashboard({super.key, this.isGuest = false});
 
-  /// True when opened via "Continue as Guest": they can plan trips, but get no
-  /// profile or notifications, can't rate rides, and nothing is saved for them.
   final bool isGuest;
 
+  /// Create widget state
   @override
   State<CommuterDashboard> createState() => _CommuterDashboardState();
 }
 
+/// Commuter dashboard state
 class _CommuterDashboardState extends State<CommuterDashboard> {
   static const _homeTab = 0;
   static const _routeTab = 1;
@@ -66,8 +59,6 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
         const CommuterNavItem(icon: AppIcons.navProfile, label: 'Profile'),
       ];
 
-  // Signs requests with the commuter's token (and refreshes it);
-  // /notices/inbox and /users/me reject anonymous calls.
   final Dio _dio = buildDioClient();
 
   late final TripPlanProvider _trip = TripPlanProvider(
@@ -86,13 +77,12 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
   List<TransportRoute> _routes = const [];
   List<Vehicle> _vehicles = const [];
 
-  /// The route chosen with "Select this route", drawn on the Home map.
   SelectedTrip? _selectedTrip;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
-    // Metro Cebu landmarks for From / To search: load now so it's instant later.
     PlaceIndex.landmarks();
     _loadFleet();
     _notices.load();
@@ -107,6 +97,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     _profile.load();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _trip.dispose();
@@ -116,9 +107,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     super.dispose();
   }
 
-  /// Stops, routes and vehicles. Each list loads on its own, so one failing
-  /// doesn't hide the others. Only stops a route serves: a stop no jeepney
-  /// uses can't be boarded, so it would just clutter the map and search.
+  /// Load fleet
   void _loadFleet() {
     _lastFleetLoad = DateTime.now();
     _load('stops', StopsService(_dio).getStops,
@@ -129,15 +118,13 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
 
   DateTime _lastFleetLoad = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// The lists are loaded once at start, so a jeep or route an operator adds
-  /// (or activates) while the app is open was unknown and left out of Nearby
-  /// Vehicles. Home calls this when a live jeep doesn't match the lists; at
-  /// most every 30 s unless [force] (the Refresh button).
+  /// Reload fleet
   void _reloadFleet({bool force = false}) {
     if (!force && DateTime.now().difference(_lastFleetLoad) < const Duration(seconds: 30)) return;
     _loadFleet();
   }
 
+  /// Load commuter dashboard
   Future<void> _load<T>(
     String what,
     Future<List<T>> Function() fetch,
@@ -151,8 +138,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     }
   }
 
-  /// Ends the session (or guest visit) and returns to Login — opening
-  /// Register on top of it when [createAccount] is set.
+  /// Sign out
   Future<void> _signOut({bool createAccount = false}) async {
     await context.read<AuthProvider>().logout();
     if (!mounted) return;
@@ -166,12 +152,13 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     }
   }
 
+  /// Select tab
   void _selectTab(int index) {
     if (index == _alertsTab && index != _currentIndex) _notices.checkForNew();
     setState(() => _currentIndex = index);
   }
 
-  /// Fills From / To on the Route tab with a saved route, then shows it.
+  /// Open saved route
   void _openSavedRoute(SavedRoute route) {
     final origin = route.origin;
     final destination = route.destination;
@@ -180,11 +167,12 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     setState(() => _currentIndex = _routeTab);
   }
 
+  /// On trip started
   void _onTripStarted(RouteOption option, String from, String to) {
     _profile.recordTrip(option, from: from, to: to);
   }
 
-  /// "Select this route": close the route pages and show it on Home.
+  /// Select trip
   void _selectTrip(SelectedTrip trip) {
     final dashboard = ModalRoute.of(context);
     Navigator.of(context).popUntil((route) => route == dashboard);
@@ -194,7 +182,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
     });
   }
 
-  /// Clears the selected route, with a moment to undo it.
+  /// Cancel trip
   void _cancelTrip() {
     final cancelled = _selectedTrip;
     if (cancelled == null) return;
@@ -212,6 +200,7 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
       ));
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -221,16 +210,13 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
         ChangeNotifierProvider.value(value: _profile),
       ],
       child: AnnotatedRegion<SystemUiOverlayStyle>(
-        value: SystemUiOverlayStyle.dark, // dark status-bar icons on the sky header
+        value: SystemUiOverlayStyle.dark,
         child: Scaffold(
           backgroundColor: AppColors.backgroundIceBlue,
           body: Column(
             children: [
-              // The Profile tab has its own teal header.
               if (_currentIndex != _profileTab) const CommuterHeader(),
               Expanded(
-                // IndexedStack keeps every tab alive, so the Home tab's live
-                // vehicle socket stays open while browsing other tabs.
                 child: IndexedStack(
                   index: _currentIndex,
                   children: [
@@ -248,8 +234,6 @@ class _CommuterDashboardState extends State<CommuterDashboard> {
                       routes: _routes,
                       onTripStarted: _onTripStarted,
                       onRouteSelected: _selectTrip,
-                      // Fresh each time a route is opened on the map, so a jeep
-                      // added since the app started shows up there too.
                       loadVehicles: VehiclesService(_dio).getVehicles,
                     ),
                     NotificationsTab(onCreateAccount: () => _signOut(createAccount: true)),

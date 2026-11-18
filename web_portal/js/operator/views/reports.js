@@ -1,14 +1,9 @@
-// js/operator/views/reports.js
-//
-// Reports: revenue, fleet performance (GET /reports/fleet), a per-route
-// summary, and Driver Reviews — what commuters said about the drivers of
-// this operator's jeeps (GET /reviews/operator; commuters stay anonymous),
-// by driver, for a period (last 3 months by default) and in an order.
-
+// Operator reports view
 OperatorRouter.register('reports', {
   title: 'Reports',
   heading: 'Operator Reports',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     let routes = [];
@@ -62,9 +57,10 @@ OperatorRouter.register('reports', {
     const daysSelect = el.querySelector('#rep-review-days');
     const sortSelect = el.querySelector('#rep-review-sort');
 
-    // ---------- Fleet performance ----------
 
+    // Render stats
     function renderStats(report) {
+      // Reports pct
       const pct = (n) => (typeof n === 'number' ? `${n}%` : undefined);
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Vehicles', report?.total_vehicles],
@@ -74,6 +70,7 @@ OperatorRouter.register('reports', {
       ]);
     }
 
+    // Load stats
     function loadStats() {
       renderStats(null);
       OperatorApi.fleetReport().then(renderStats).catch(() => {
@@ -83,8 +80,8 @@ OperatorRouter.register('reports', {
       });
     }
 
-    // ---------- Routes ----------
 
+    // Render routes
     function renderRoutes() {
       const rows = routes.length
         ? routes.map((r) => `
@@ -109,6 +106,7 @@ OperatorRouter.register('reports', {
         </div>`;
     }
 
+    // Load routes
     function loadRoutes() {
       AdminUi.loadInto(routesEl, OperatorApi.myRoutes, (r) => {
         routes = r;
@@ -116,7 +114,6 @@ OperatorRouter.register('reports', {
       });
     }
 
-    // ---------- Driver reviews ----------
 
     const TAGS = {
       safe_driving: ['Safe driving', true], friendly: ['Friendly', true], clean: ['Clean PUV', true],
@@ -124,20 +121,21 @@ OperatorRouter.register('reports', {
       reckless_driving: ['Reckless driving', false], rude: ['Rude', false], overcharging: ['Overcharging', false],
       overloading: ['Overloading', false], late: ['Long wait / late', false], dirty: ['Dirty PUV', false],
     };
+    // Tag chip
     const tagChip = (key, count) => {
       const [label, good] = TAGS[key] || [key.replace(/_/g, ' '), true];
       return OperatorUi.chip(count ? `${label} ×${count}` : label, good ? 'green' : 'red');
     };
+    // Reports stars
     const stars = (n) => `<span style="color:#F5A623;letter-spacing:1px;" aria-label="${n} of 5 stars">${'★'.repeat(Math.round(n))}${'☆'.repeat(5 - Math.round(n))}</span>`;
     const PERIOD = { 7: 'in the last 7 days', 30: 'in the last 30 days', 90: 'in the last 3 months', 180: 'in the last 6 months', 365: 'in the last 12 months' };
 
+    // Render review summary
     function renderReviewSummary(data) {
       if (!data.total) {
         reviewSummaryEl.innerHTML = '';
         return;
       }
-      // The API always sends every driver's summary (it also fills the
-      // dropdown), so narrow the cards and the headline to the pick here.
       const picked = driverSelect.value;
       const shown = picked ? data.summary.filter((s) => (s.driver_id || 'none') === picked) : data.summary;
       const headline = picked
@@ -162,7 +160,7 @@ OperatorRouter.register('reports', {
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px;">${cards}</div>`;
     }
 
-    /** The drivers reviewed in the period, keeping the current pick even if it has none now. */
+    // Render driver options
     function renderDriverOptions(summary) {
       const picked = driverSelect.value;
       const options = summary.map((s) =>
@@ -173,6 +171,7 @@ OperatorRouter.register('reports', {
       driverSelect.value = picked;
     }
 
+    // Render reviews
     function renderReviews(data) {
       renderDriverOptions(data.summary);
       renderReviewSummary(data);
@@ -199,6 +198,7 @@ OperatorRouter.register('reports', {
         </div>`;
     }
 
+    // Load reviews
     function loadReviews() {
       const query = { driverId: driverSelect.value, days: daysSelect.value, sort: sortSelect.value };
       AdminUi.loadInto(reviewsEl, () => OperatorApi.driverReviews(query), renderReviews);

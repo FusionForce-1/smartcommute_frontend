@@ -1,21 +1,15 @@
-// js/operator/views/driverReports.js
-//
-// Driver Reports: what this operator's drivers sent from the app (an
-// emergency, a breakdown, a delay, ...), newest first, with the shift's
-// plate, route and location the backend attached. The operator marks them
-// read here; drivers never see that, and can't be replied to this way.
-// New reports also toast on every page (js/operator/driverReportAlerts.js).
-
+// Operator driver reports view
 OperatorRouter.register('driver-reports', {
   title: 'Driver Reports',
   heading: 'Driver Reports',
 
+  // Mount the view
   mount(el) {
     const PAGE = 50;
     const esc = AdminUi.escapeHtml;
     const SHOW = [{ value: 'all', label: 'All' }, { value: 'unread', label: 'Unread' }];
 
-    let reports;         // undefined = loading
+    let reports;
     let show = 'all';
     let category = '';
     let hasMore = false;
@@ -49,13 +43,17 @@ OperatorRouter.register('driver-reports', {
     const readAllBtn = el.querySelector('#dr-read-all');
     const moreBtn = el.querySelector('#dr-more');
 
+    // Driver reports query
     const query = (skip = 0) => ({ unreadOnly: show === 'unread', category, skip, limit: PAGE });
+    // Sync badge
     const syncBadge = () => DriverReportAlerts.refresh().catch(() => {});
 
+    // Render show
     function renderShow() {
       showEl.innerHTML = AdminUi.filterChips(SHOW, show, 'show');
     }
 
+    // Context line
     function contextLine(c) {
       if (!c) return OperatorUi.chip('Off shift');
       const parts = [OperatorUi.chip(c.plate_number)];
@@ -67,6 +65,7 @@ OperatorRouter.register('driver-reports', {
       return parts.join(' ');
     }
 
+    // Report card
     function reportCard(r) {
       const cat = OperatorUi.REPORT_CATEGORY[r.category] || OperatorUi.REPORT_CATEGORY.other;
       const tone = cat.tone || 'blue';
@@ -94,6 +93,7 @@ OperatorRouter.register('driver-reports', {
         </article>`;
     }
 
+    // Render list
     function renderList() {
       const unread = reports.filter((r) => !r.is_read).length;
       countEl.textContent = show === 'unread'
@@ -108,6 +108,7 @@ OperatorRouter.register('driver-reports', {
           : 'No reports yet. When a driver sends one from the app, it shows up here.')}</div>`;
     }
 
+    // Load driver reports
     function load() {
       reports = undefined;
       readAllBtn.hidden = true;
@@ -122,6 +123,7 @@ OperatorRouter.register('driver-reports', {
       });
     }
 
+    // Load more
     async function loadMore() {
       moreBtn.disabled = true;
       try {
@@ -137,6 +139,7 @@ OperatorRouter.register('driver-reports', {
       }
     }
 
+    // Mark read
     async function markRead(report) {
       busy.add(report.id);
       renderList();
@@ -154,6 +157,7 @@ OperatorRouter.register('driver-reports', {
       }
     }
 
+    // Mark all read
     async function markAllRead() {
       readAllBtn.disabled = true;
       try {
@@ -191,7 +195,7 @@ OperatorRouter.register('driver-reports', {
     readAllBtn.addEventListener('click', markAllRead);
     moreBtn.addEventListener('click', loadMore);
 
-    // The poller found new reports while this page is open.
+    // On new
     const onNew = () => { if (Array.isArray(reports)) load(); };
     window.addEventListener('driver-reports:changed', onNew);
 

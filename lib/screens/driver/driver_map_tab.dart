@@ -1,16 +1,4 @@
-// lib/screens/driver/driver_map_tab.dart
-//
-// The driver's Map tab. As a dashboard: the map card, the shift (started
-// and ended by the operator), Route Status and the crowd estimate. Full
-// screen (expand button on the map): the map fills the tab, its buttons on
-// the right, and "My Route" (GPS, next stop, ETA, distance) in a sheet that
-// drags up, or down to just its handle. The same map moves between the two
-// layouts, keeping its camera. Back leaves full screen.
-//
-// The map opens on the jeep, or on the driver when its position isn't known
-// (off shift), and follows as they move (widgets/map_follower.dart).
-// Dragging the map stops that; "Centre on my location" starts it again.
-
+// Driver map tab
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -28,42 +16,42 @@ import '../../widgets/driver/route_status_card.dart';
 import '../../widgets/driver/shift_card.dart';
 import '../../widgets/map_follower.dart';
 
+/// Driver map tab
 class DriverMapTab extends StatefulWidget {
+  /// Create driver map tab
   const DriverMapTab({super.key, required this.driver, this.locationSource});
 
   final DriverProvider driver;
 
-  /// The phone's location for "Centre on my location"; tests pass a fake.
   final LocationSource? locationSource;
 
+  /// Create widget state
   @override
   State<DriverMapTab> createState() => _DriverMapTabState();
 }
 
+/// Driver map tab state
 class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMixin {
   final MapController _map = MapController();
   late final MapFollower _follow = MapFollower(_map, this);
 
-  /// Keeps the one map alive as it moves between the two layouts.
   final GlobalKey _mapKey = GlobalKey();
 
   bool _expanded = false;
 
-  /// Where the phone found the driver (shown while the jeep's isn't known).
   LatLng? _myLocation;
   StreamSubscription<LatLng>? _phoneMoves;
   bool _locating = false;
   late final LocationSource _location = widget.locationSource ?? GeolocatorLocationSource();
   final DraggableScrollableController _sheet = DraggableScrollableController();
 
-  /// How much of the full-screen height the sheet covers; the map buttons
-  /// ride just above it.
   final ValueNotifier<double> _sheetExtent = ValueNotifier(0);
 
   static const double _sheetOpen = 0.36;
   static const double _sheetMax = 0.7;
   static const double _sheetHandle = 30;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
@@ -71,6 +59,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     _locateOnOpen();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     widget.driver.removeListener(_followJeep);
@@ -81,44 +70,46 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     super.dispose();
   }
 
+  /// Follow jeep
   void _followJeep() {
     final jeep = widget.driver.jeepPosition;
     if (jeep != null) _follow.center(jeep);
   }
 
+  /// On map ready
   void _onMapReady() {
     _follow.mapReady();
     final here = widget.driver.jeepPosition ?? _myLocation;
     if (here != null) _follow.center(here);
   }
 
-  /// Finds the driver as the tab opens, so the map is on them even before
-  /// the jeep's position is known. Quiet on failure: the locate button says why.
+  /// Locate on open
   Future<void> _locateOnOpen() async {
     try {
       _showMyLocation(await _location.currentLocation());
       _watchPhone();
     } catch (_) {
-      // No location yet; the map stays on the route.
     }
   }
 
+  /// Watch phone
   void _watchPhone() {
     if (!mounted) return;
     _phoneMoves ??= _location.positionStream(distanceFilterM: 5).listen(_showMyLocation, onError: (Object _) {});
   }
 
+  /// Show my location
   void _showMyLocation(LatLng here) {
     if (!mounted) return;
     setState(() => _myLocation = here);
     if (widget.driver.jeepPosition == null) _follow.center(here);
   }
 
+  /// Set expanded
   void _setExpanded(bool expanded) {
     if (expanded == _expanded) return;
     setState(() => _expanded = expanded);
     if (!expanded) return;
-    // The sheet starts at its handle and slides up into view.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_expanded && _sheet.isAttached) {
         _sheet.animateTo(_sheetOpen, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
@@ -126,13 +117,14 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     });
   }
 
+  /// Toggle sheet
   void _toggleSheet(double minSize) {
     if (!_sheet.isAttached) return;
     final open = _sheet.size > minSize + 0.02;
     _sheet.animateTo(open ? minSize : _sheetOpen, duration: const Duration(milliseconds: 250), curve: Curves.easeOutCubic);
   }
 
-  /// Runs a provider action and shows the message it returns, if any.
+  /// Report driver map
   Future<void> _report(Future<String?> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);
     final message = await action();
@@ -142,7 +134,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// Back to following the jeep when we know where it is, else the phone.
+  /// Centre on me
   Future<void> _centreOnMe() async {
     _follow.resume();
     final jeep = widget.driver.jeepPosition;
@@ -169,7 +161,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     }
   }
 
-  /// The planner's location messages talk about trips; these are for drivers.
+  /// Location problem
   static String _locationProblem(LocationFailure reason) => switch (reason) {
         LocationFailure.servicesOff => "Turn on your phone's location to see where you are.",
         LocationFailure.denied => 'Allow location for SmartCommute to see where you are on the map.',
@@ -177,6 +169,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
         LocationFailure.timeout => 'Finding your location took too long. Try again.',
       };
 
+  /// Driver map
   Widget _driverMap({required bool expanded}) => DriverMap(
         key: _mapKey,
         driver: widget.driver,
@@ -188,10 +181,10 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
         onMapReady: _onMapReady,
         onMapEvent: _follow.onMapEvent,
         myLocation: _myLocation,
-        // Full screen: the buttons sit above the sheet, placed below.
         showControls: !expanded,
       );
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -203,6 +196,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     );
   }
 
+  /// Build dashboard
   Widget _buildDashboard() {
     final driver = widget.driver;
     final shift = driver.shift;
@@ -244,6 +238,7 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
     );
   }
 
+  /// Build full screen
   Widget _buildFullScreen() {
     final driver = widget.driver;
     return LayoutBuilder(
@@ -257,7 +252,6 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
               valueListenable: _sheetExtent,
               builder: (context, extent, controls) {
                 final bottom = extent.clamp(minSize, 1.0) * height + AppSpacing.xs;
-                // Fade the buttons out once the sheet climbs into their way.
                 final hidden = bottom > height * 0.6;
                 return Positioned(
                   right: AppSpacing.sm,
@@ -302,7 +296,6 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
                     controller: scroll,
                     padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
                     children: [
-                      // Drag here, or tap to open / minimize.
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _toggleSheet(minSize),

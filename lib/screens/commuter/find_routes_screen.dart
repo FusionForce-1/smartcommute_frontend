@@ -1,11 +1,4 @@
-// lib/screens/commuter/find_routes_screen.dart
-//
-// "Find Routes" page, opened from Plan Your Route: shows the trip-plan
-// request's progress, then the ranked route options. The best option
-// starts selected; tap another to select it, then view it on the map.
-// While open, the plan follows the commuter's GPS (TripPlanProvider live
-// updates): the closest stop and the next jeep refresh as they move.
-
+// Find routes screen
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,10 +13,11 @@ import '../../widgets/commuter/commuter_primary_button.dart';
 import '../../widgets/commuter/route_option_card.dart';
 import 'route_map_screen.dart';
 
-/// A route option the commuter chose to follow, between two place names.
 typedef TripStarted = void Function(RouteOption option, String from, String to);
 
+/// Find routes screen
 class FindRoutesScreen extends StatefulWidget {
+  /// Create find routes
   const FindRoutesScreen({
     super.key,
     required this.routes,
@@ -32,44 +26,43 @@ class FindRoutesScreen extends StatefulWidget {
     this.loadVehicles,
   });
 
-  /// Routes from /routes, for route codes, stop counts and map lines.
   final List<TransportRoute> routes;
 
-  /// Called when the selected route is opened on the map (records a trip).
   final TripStarted? onTripStarted;
 
-  /// "Select this route" on the map page: show it on the Home map.
   final TripSelected? onRouteSelected;
 
-  /// Fleet list, so the map can show the PUVs live on the chosen route.
   final VehiclesLoader? loadVehicles;
 
+  /// Create widget state
   @override
   State<FindRoutesScreen> createState() => _FindRoutesScreenState();
 }
 
+/// Find routes state
 class _FindRoutesScreenState extends State<FindRoutesScreen> {
-  // Held so dispose() doesn't need a context.
   TripPlanProvider? _trip;
 
+  /// React to dependency changes
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_trip == null) {
       _trip = context.read<TripPlanProvider>();
-      // After this frame: starting notifies listeners, which can't happen mid-build.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _trip?.startLiveUpdates();
       });
     }
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _trip?.stopLiveUpdates();
     super.dispose();
   }
 
+  /// View on map
   void _viewOnMap(BuildContext context, RouteOption option, Map<String, TransportRoute> routesById) {
     final trip = context.read<TripPlanProvider>();
     final from = trip.originLabel ?? 'Your location';
@@ -92,6 +85,7 @@ class _FindRoutesScreenState extends State<FindRoutesScreen> {
     );
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final trip = context.watch<TripPlanProvider>();
@@ -166,11 +160,14 @@ class _FindRoutesScreenState extends State<FindRoutesScreen> {
   }
 }
 
+/// Live status widget
 class _LiveStatus extends StatelessWidget {
+  /// Create live status
   const _LiveStatus({required this.trip});
 
   final TripPlanProvider trip;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final updated = trip.lastUpdated;
@@ -196,12 +193,15 @@ class _LiveStatus extends StatelessWidget {
   }
 }
 
+/// Update notice widget
 class _UpdateNotice extends StatelessWidget {
+  /// Create update notice
   const _UpdateNotice({required this.text, required this.onDismiss});
 
   final String text;
   final VoidCallback onDismiss;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -228,7 +228,9 @@ class _UpdateNotice extends StatelessWidget {
   }
 }
 
+/// Status message widget
 class _StatusMessage extends StatelessWidget {
+  /// Create status message
   const _StatusMessage({
     required this.icon,
     required this.text,
@@ -241,6 +243,7 @@ class _StatusMessage extends StatelessWidget {
   final Color color;
   final VoidCallback? onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final onRetry = this.onRetry;

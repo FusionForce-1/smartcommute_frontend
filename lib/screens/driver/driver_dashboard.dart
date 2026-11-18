@@ -1,10 +1,4 @@
-// lib/screens/driver/driver_dashboard.dart
-//
-// Driver dashboard shell: owns the driver's state (shift, backup phone GPS,
-// live feed) for as long as the dashboard is open, checks for shift
-// changes from the operator, and handles sign-out. The screen itself is
-// DriverDashboardView (Map, Updates and Profile tabs).
-
+// Driver dashboard
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,13 +12,17 @@ import '../../services/profile_service.dart';
 import '../../services/websocket_service.dart';
 import 'driver_dashboard_view.dart';
 
+/// Driver dashboard widget
 class DriverDashboard extends StatefulWidget {
+  /// Create driver dashboard
   const DriverDashboard({super.key});
 
+  /// Create widget state
   @override
   State<DriverDashboard> createState() => _DriverDashboardState();
 }
 
+/// Driver dashboard state
 class _DriverDashboardState extends State<DriverDashboard> {
   final Dio _dio = buildDioClient();
 
@@ -33,9 +31,9 @@ class _DriverDashboardState extends State<DriverDashboard> {
     liveFeed: WebSocketService(),
   );
 
-  /// Privacy & Security on the Profile tab (/users/me/*).
   late final ProfileService _profileService = ProfileService(_dio);
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
@@ -43,12 +41,14 @@ class _DriverDashboardState extends State<DriverDashboard> {
     _driver.startAutoRefresh();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
-    _driver.dispose(); // also stops the phone's GPS
+    _driver.dispose();
     super.dispose();
   }
 
+  /// Sign out
   Future<void> _signOut() async {
     await _driver.gps.stop();
     if (!mounted) return;
@@ -60,6 +60,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
     );
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(

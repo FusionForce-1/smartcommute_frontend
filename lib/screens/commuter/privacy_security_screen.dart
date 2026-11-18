@@ -1,9 +1,4 @@
-// lib/screens/commuter/privacy_security_screen.dart
-//
-// Privacy & Security (Profile → Account): change password, two-factor
-// sign-in, when the commuter agreed to the User Agreement / Privacy
-// Policy, and their data rights.
-
+// Privacy security screen
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -15,26 +10,32 @@ import '../../services/profile_service.dart';
 import '../../widgets/auth/consent_checkbox.dart';
 import '../../widgets/commuter/settings_group.dart';
 
+/// Privacy security screen
 class PrivacySecurityScreen extends StatefulWidget {
+  /// Create privacy security
   const PrivacySecurityScreen({super.key, required this.service});
 
   final ProfileService service;
 
+  /// Create widget state
   @override
   State<PrivacySecurityScreen> createState() => _PrivacySecurityScreenState();
 }
 
+/// Privacy security state
 class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
   SecurityInfo? _info;
   String? _loadError;
   bool _busy = false;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  /// Load privacy security
   Future<void> _load() async {
     setState(() => _loadError = null);
     try {
@@ -45,10 +46,11 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     }
   }
 
+  /// Privacy security toast
   void _toast(String message) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
-  /// Runs [action] with the page marked busy; shows its error, if any.
+  /// Run privacy security
   Future<bool> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
     try {
@@ -62,6 +64,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     }
   }
 
+  /// Change password
   Future<void> _changePassword() async {
     final changed = await showDialog<bool>(
       context: context,
@@ -70,6 +73,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     if (changed == true && mounted) _toast('Your password was changed.');
   }
 
+  /// Set two factor
   Future<void> _setTwoFactor(bool on) async {
     final info = _info!;
     if (on) {
@@ -107,6 +111,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     }
   }
 
+  /// Privacy security agree
   Future<void> _agree() async {
     SecurityInfo? updated;
     if (await _run(() async => updated = await widget.service.acceptTerms()) && mounted) {
@@ -114,6 +119,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -127,6 +133,7 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
     );
   }
 
+  /// Privacy security body
   Widget _body() {
     final info = _info;
     if (info == null) {
@@ -168,7 +175,6 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
                     'use "Forgot Password?" on the sign-in screen.',
                   ),
                 ),
-              // An account that already has it on can always turn it off.
               if (info.twoFactorBlocked != null && !info.twoFactorEnabled)
                 ListTile(
                   leading: const Icon(Icons.phonelink_lock_outlined, color: AppColors.brandTeal),
@@ -257,18 +263,21 @@ const _months = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/// "October 20, 2026" in the phone's time zone.
+/// Format date
 String _formatDate(DateTime? date) {
   if (date == null) return 'an earlier date';
   final local = date.toLocal();
   return '${_months[local.month - 1]} ${local.day}, ${local.year}';
 }
 
+/// Heading widget
 class _Heading extends StatelessWidget {
+  /// Create heading
   const _Heading(this.text);
 
   final String text;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -281,15 +290,19 @@ class _Heading extends StatelessWidget {
   }
 }
 
+/// Change password dialog
 class _ChangePasswordDialog extends StatefulWidget {
+  /// Create change password dialog
   const _ChangePasswordDialog({required this.service});
 
   final ProfileService service;
 
+  /// Create widget state
   @override
   State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
 }
 
+/// Change password dialog state
 class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   final _current = TextEditingController();
   final _next = TextEditingController();
@@ -297,6 +310,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   String? _error;
   bool _saving = false;
 
+  /// Clean up resources
   @override
   void dispose() {
     _current.dispose();
@@ -305,6 +319,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     super.dispose();
   }
 
+  /// Save change password
   Future<void> _save() async {
     String? problem;
     if (_current.text.isEmpty || _next.text.isEmpty) {
@@ -335,6 +350,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     }
   }
 
+  /// Change password field
   Widget _field(String label, TextEditingController controller) => Padding(
         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
         child: TextField(
@@ -344,6 +360,7 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
         ),
       );
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -372,27 +389,33 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
   }
 }
 
+/// Two factor code dialog
 class _TwoFactorCodeDialog extends StatefulWidget {
+  /// Create two factor code
   const _TwoFactorCodeDialog({required this.service, required this.sentTo});
 
   final ProfileService service;
   final String sentTo;
 
+  /// Create widget state
   @override
   State<_TwoFactorCodeDialog> createState() => _TwoFactorCodeDialogState();
 }
 
+/// Two factor code state
 class _TwoFactorCodeDialogState extends State<_TwoFactorCodeDialog> {
   final _code = TextEditingController();
   String? _error;
   bool _saving = false;
 
+  /// Clean up resources
   @override
   void dispose() {
     _code.dispose();
     super.dispose();
   }
 
+  /// Confirm two factor
   Future<void> _confirm() async {
     final code = _code.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
@@ -416,6 +439,7 @@ class _TwoFactorCodeDialogState extends State<_TwoFactorCodeDialog> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return AlertDialog(

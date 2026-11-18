@@ -1,15 +1,4 @@
-// lib/screens/commuter/route_map_screen.dart
-//
-// "View Selected Route on Map": draws each leg's route line with its
-// board / alight stops (widgets/commuter/trip_route_layers.dart), framed to
-// fit, above the fare breakdown. With [onSelect], a "Select this route"
-// button below sends the route to the Home map until it's cancelled.
-//
-// It also follows the jeeps live on those routes (WSS /ws/live): each one
-// is a marker on the map and a card under it. Picking a jeep shows how far
-// it still is from the commuter's boarding stop, along its route, or that
-// it has already passed it (services/boarding_planner.dart).
-
+// Route map screen
 import 'dart:async';
 import 'dart:convert';
 
@@ -34,10 +23,11 @@ import '../../widgets/commuter/vehicle_marker.dart';
 import '../../widgets/map_follower.dart';
 import '../../widgets/fare_breakdown_sheet.dart';
 
-/// Loads the fleet list (GET /vehicles): which route each jeep runs on.
 typedef VehiclesLoader = Future<List<Vehicle>> Function();
 
+/// Route map screen
 class RouteMapScreen extends StatefulWidget {
+  /// Create route map
   const RouteMapScreen({
     super.key,
     required this.option,
@@ -50,22 +40,17 @@ class RouteMapScreen extends StatefulWidget {
   final RouteOption option;
   final Map<String, TransportRoute> routesById;
 
-  /// Without it, no live jeeps are shown (just the route).
   final VehiclesLoader? loadVehicles;
 
-  /// For tests; defaults to a live connection to /ws/live.
   final WebSocketService? socket;
 
-  /// "Select this route"; null hides the button (e.g. opened from Home,
-  /// where this route is already the selected one).
   final VoidCallback? onSelect;
 
+  /// Create widget state
   @override
   State<RouteMapScreen> createState() => _RouteMapScreenState();
 }
 
-/// A live jeep on one of the option's legs, and how it relates to that
-/// leg's boarding stop.
 typedef RouteJeep = ({
   String vehicleId,
   String plate,
@@ -75,12 +60,12 @@ typedef RouteJeep = ({
   BoardingPlan? plan,
 });
 
+/// Route map state
 class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStateMixin {
   final MapController _map = MapController();
   late final MapFollower _follow = MapFollower(_map, this);
   bool _mapReady = false;
 
-  // Jeep id -> route id / plate, from /vehicles.
   Map<String, Vehicle> _fleet = const {};
   bool _fleetLoaded = false;
   DateTime _lastFleetLoad = DateTime.fromMillisecondsSinceEpoch(0);
@@ -96,6 +81,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
   RouteOption get _option => widget.option;
   Set<String> get _legRouteIds => {for (final leg in _option.legs) leg.routeId};
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
@@ -103,7 +89,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
       _frame.value++;
       if (!_tracks.values.any((t) => t.isAnimating(_clock.elapsed))) _ticker.stop();
     });
-    // Without the fleet list a jeep can't be placed on a route: no socket.
     if (widget.loadVehicles == null) return;
     _loadFleet();
     _socket = (widget.socket ?? WebSocketService())
@@ -111,6 +96,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
       ..listenForMessages(_onMessage);
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _socket?.disconnect();
@@ -120,6 +106,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     super.dispose();
   }
 
+  /// Load fleet
   Future<void> _loadFleet() async {
     final load = widget.loadVehicles;
     if (load == null) return;
@@ -137,6 +124,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     }
   }
 
+  /// On message
   void _onMessage(dynamic message) {
     if (!mounted) return;
     final Map<String, dynamic> json;
@@ -145,16 +133,15 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     } catch (_) {
       return;
     }
-    if (json['vehicle_id'] is! String) return; // e.g. transit alerts
+    if (json['vehicle_id'] is! String) return;
     final update = VehicleLiveUpdate.fromJson(json);
 
     final vehicle = _fleet[update.vehicleId];
     if (vehicle == null) {
-      // Added after we loaded the list: look again (at most every 30 s).
       if (DateTime.now().difference(_lastFleetLoad) > const Duration(seconds: 30)) _loadFleet();
       return;
     }
-    if (!_legRouteIds.contains(vehicle.routeId)) return; // a jeep on another route
+    if (!_legRouteIds.contains(vehicle.routeId)) return;
 
     if (update.shiftEnded) {
       if (_tracks.remove(update.vehicleId) != null) {
@@ -175,13 +162,11 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     }
     _frame.value++;
     if (!_ticker.isActive) _ticker.start();
-    // The cards (distance, status) follow the latest fix.
     setState(() {});
     if (update.vehicleId == _selectedId) _followSelected();
   }
 
-  /// Live jeeps on the option's routes, those still coming to the boarding
-  /// stop first (nearest first), then those that passed it.
+  /// Route map jeeps
   List<RouteJeep> _jeeps() {
     final list = <RouteJeep>[];
     for (final entry in _tracks.entries) {
@@ -192,9 +177,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
       final leg = _option.legs[legIndex];
       final at = entry.value.latest.location;
       final drawn = widget.routesById[leg.routeId]?.geometry ?? const <LatLng>[];
-      // A return trip rides the route's line backwards (Terminal B -> A).
       final line = leg.isReturn ? drawn.reversed.toList() : drawn;
-      // A jeep driving the other way along the same streets isn't this ride.
       if (at != null && _drivingAgainst(line, at, entry.value.headingAt(_clock.elapsed))) continue;
       final plan = at == null || leg.boardStop.isPlaceholder
           ? null
@@ -212,18 +195,19 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
       if (j.track.latest.isSignalLost || j.track.latest.isUnavailable) return 1e12;
       final m = j.plan?.jeepToBoardM;
       if (m != null) return m;
-      return j.plan?.onRoute == false ? j.plan!.walkStraightM : 1e9; // passed it
+      return j.plan?.onRoute == false ? j.plan!.walkStraightM : 1e9;
     }
     list.sort((a, b) => a.legIndex != b.legIndex ? a.legIndex - b.legIndex : rank(a).compareTo(rank(b)));
     return list;
   }
 
-  /// True when the jeep at [at] is clearly heading the other way along [line].
+  /// Driving against
   static bool _drivingAgainst(List<LatLng> line, LatLng at, double? heading) {
     final pos = projectOnLine(line, at);
     return heading != null && pos != null && headingAgainstLine(line, pos, heading, limit: 100);
   }
 
+  /// Select route map
   void _select(RouteJeep jeep) {
     if (_selectedId == jeep.vehicleId) {
       setState(() => _selectedId = null);
@@ -234,13 +218,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     _followSelected();
   }
 
-  /// Keeps the picked jeep on the map, with its boarding stop in view too.
+  /// Follow selected
   void _followSelected() {
     final id = _selectedId;
     if (id == null || !_mapReady) return;
     for (final jeep in _jeeps()) {
       if (jeep.vehicleId != id) continue;
-      final at = jeep.track.latest.location;   // where the marker is gliding to
+      final at = jeep.track.latest.location;
       if (at == null) return;
       final board = jeep.leg.boardStop.isPlaceholder ? null : _point(jeep.leg.boardStop);
       board == null ? _follow.center(at) : _follow.frame([at, board]);
@@ -248,8 +232,10 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     }
   }
 
+  /// Route map point
   static LatLng _point(StopModel stop) => LatLng(stop.location.lat, stop.location.lng);
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final layers = TripRouteLayers.of(_option, widget.routesById);
@@ -261,7 +247,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     for (final j in jeeps) {
       if (j.vehicleId == _selectedId) selected = j;
     }
-    // The selected jeep's way to the boarding stop, dashed.
     final approach = selected?.plan?.jeepPath ?? const <LatLng>[];
     if (approach.length > 1) {
       polylines.add(Polyline(
@@ -311,7 +296,6 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
                 ),
                 PolylineLayer(polylines: polylines),
                 MarkerLayer(markers: markers),
-                // Only this layer repaints per animation frame.
                 ValueListenableBuilder<int>(
                   valueListenable: _frame,
                   builder: (context, _, __) {
@@ -351,8 +335,9 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
   }
 }
 
-/// "PUVs on this route": one card per live PUV; tap to follow it.
+/// Live jeeps panel
 class _LiveJeepsPanel extends StatelessWidget {
+  /// Create live jeeps panel
   const _LiveJeepsPanel({
     required this.jeeps,
     required this.selectedId,
@@ -369,9 +354,10 @@ class _LiveJeepsPanel extends StatelessWidget {
   final bool showRouteCode;
   final ValueChanged<RouteJeep> onSelected;
 
+  /// Live jeeps metres
   static String _metres(double m) => m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
 
-  /// "1.2 km before your stop · about 5 min" / "Already passed your stop".
+  /// Live jeeps describe
   static String describe(RouteJeep j) {
     final live = j.track.latest;
     if (live.isSignalLost) return 'Signal lost — showing its last known position';
@@ -386,6 +372,7 @@ class _LiveJeepsPanel extends StatelessWidget {
     return '${_metres(m)} before $stop · about ${jeepMinutes(m, live.speed)} min';
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     if (!liveEnabled) return const SizedBox.shrink();
@@ -473,14 +460,15 @@ class _LiveJeepsPanel extends StatelessWidget {
   }
 }
 
-/// Fare breakdown under the map (scrollable on short screens), with the
-/// "Select this route" button pinned below it.
+/// fare panel
 class _FarePanel extends StatelessWidget {
+  /// Create fare panel
   const _FarePanel({required this.option, this.onSelect});
 
   final RouteOption option;
   final VoidCallback? onSelect;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final onSelect = this.onSelect;

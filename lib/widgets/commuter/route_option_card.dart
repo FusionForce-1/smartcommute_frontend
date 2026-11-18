@@ -1,9 +1,4 @@
-// lib/widgets/commuter/route_option_card.dart
-//
-// One result on the Find Routes page: route code chips (with arrows for
-// transfers), fare badge, route names, ETA, stops and transfers.
-// The selected option gets a tinted background, a border and a badge.
-
+// Route option card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -11,7 +6,9 @@ import '../../models/transport_model.dart';
 import '../../models/trip_plan.dart';
 import 'route_code_chip.dart';
 
+/// Route option card
 class RouteOptionCard extends StatelessWidget {
+  /// Create route option card
   const RouteOptionCard({
     super.key,
     required this.option,
@@ -22,7 +19,6 @@ class RouteOptionCard extends StatelessWidget {
 
   final RouteOption option;
 
-  /// Routes from /routes, to show codes and count stops.
   final Map<String, TransportRoute> routesById;
   final bool selected;
   final VoidCallback onTap;
@@ -33,6 +29,7 @@ class RouteOptionCard extends StatelessWidget {
     return stops == null ? transfers : '$stops ${stops == 1 ? 'stop' : 'stops'}  •  $transfers';
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -137,6 +134,7 @@ class RouteOptionCard extends StatelessWidget {
   }
 }
 
+/// Traffic color
 Color _trafficColor(RouteOption option) {
   final levels = option.legs.map((l) => l.traffic);
   if (levels.contains('heavy')) return AppColors.error;
@@ -144,12 +142,15 @@ Color _trafficColor(RouteOption option) {
   return AppColors.success;
 }
 
+/// Leg codes widget
 class _LegCodes extends StatelessWidget {
+  /// Create leg codes
   const _LegCodes({required this.option, required this.routesById});
 
   final RouteOption option;
   final Map<String, TransportRoute> routesById;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final codes = [
@@ -170,9 +171,12 @@ class _LegCodes extends StatelessWidget {
   }
 }
 
+/// Selected badge
 class _SelectedBadge extends StatelessWidget {
+  /// Create selected badge
   const _SelectedBadge();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -186,11 +190,14 @@ class _SelectedBadge extends StatelessWidget {
   }
 }
 
+/// fare badge
 class _FareBadge extends StatelessWidget {
+  /// Create fare badge
   const _FareBadge({required this.fare});
 
   final double fare;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(

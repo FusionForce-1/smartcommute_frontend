@@ -1,18 +1,18 @@
-// lib/widgets/commuter/notice_filter_bar.dart
-//
-// Scrollable row of filter pills (All / Service alerts / Schedule / Promotions).
-
+// Notice filter bar
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/commuter_notice.dart';
 
+/// Notice filter bar
 class NoticeFilterBar extends StatelessWidget {
+  /// Create notice filter bar
   const NoticeFilterBar({super.key, required this.selected, required this.onSelected});
 
   final NoticeFilter selected;
   final ValueChanged<NoticeFilter> onSelected;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -34,13 +34,16 @@ class NoticeFilterBar extends StatelessWidget {
   }
 }
 
+/// Filter pill
 class _FilterPill extends StatelessWidget {
+  /// Create filter pill
   const _FilterPill({required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(

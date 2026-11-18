@@ -1,14 +1,4 @@
-// js/legal.js
-//
-// User Agreement + Privacy Policy: the text, the popup that shows it, and
-// the "I confirm that I have read..." checkbox used on both registration
-// forms. The popup has its own layer so it can open on top of the Google
-// "Complete your Profile" popup without replacing it.
-//
-// This is the OPERATOR version (the web portal only registers operators).
-// The commuter version lives in lib/constants/legal_text.dart (mobile app);
-// shared sections (account, acceptable use, rights...) should stay alike.
-
+// Legal pages
 const LEGAL_DOCS = {
   userAgreement: {
     title: 'User Agreement',
@@ -87,13 +77,16 @@ const LEGAL_DOCS = {
   },
 };
 
+// Legal popup
 const LegalPopup = (() => {
   let backdropEl = null;
 
+  // On keydown
   function onKeydown(e) {
     if (e.key === 'Escape') close();
   }
 
+  // Render the view
   function render({ title, updated, intro, sections }) {
     return `
       <button type="button" class="modal-close" data-legal-close aria-label="Close">
@@ -110,7 +103,7 @@ const LegalPopup = (() => {
       ${Components.button({ id: 'legal-done', label: 'Close', variant: 'primary', type: 'button' })}`;
   }
 
-  /** @param {'userAgreement'|'privacyPolicy'} key */
+  // Open legal
   function open(key) {
     close();
     backdropEl = document.createElement('div');
@@ -125,11 +118,10 @@ const LegalPopup = (() => {
     backdropEl.addEventListener('click', (e) => {
       if (e.target === backdropEl || e.target.closest('[data-legal-close], #legal-done')) close();
     });
-    // Focus the dialog (for Escape / screen readers) without scrolling it
-    // down to a button — readers should start at the top.
     backdropEl.querySelector('.legal-doc').focus({ preventScroll: true });
   }
 
+  // Close legal
   function close() {
     if (!backdropEl) return;
     backdropEl.remove();
@@ -141,7 +133,7 @@ const LegalPopup = (() => {
 })();
 
 const Consent = {
-  /** The "I confirm that I have read..." checkbox, as on the registration mockups. */
+  // Legal checkbox
   checkbox(id) {
     return `
       <div class="consent-row">
@@ -155,12 +147,12 @@ const Consent = {
       </div>`;
   },
 
-  /** Opens the matching document when a link inside `root` is clicked. */
+  // Wire legal
   wire(root) {
     root.addEventListener('click', (e) => {
       const link = e.target.closest('[data-legal]');
       if (!link) return;
-      e.preventDefault(); // don't toggle the checkbox the link sits in
+      e.preventDefault();
       LegalPopup.open(link.dataset.legal);
     });
   },

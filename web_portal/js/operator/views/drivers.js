@@ -1,24 +1,15 @@
-// js/operator/views/drivers.js
-//
-// Drivers: the operator's driver roster. New drivers are added by scanning
-// both sides of their LTO license (POST /drivers/scan-license), reviewing
-// what was read, and saving (POST /drivers) — which also generates their
-// app login, shown once. Profiles can be viewed, edited, and removed.
-// The operator starts and ends each driver's shift here (the driver app
-// follows); ending one shows its summary. Tapping a driver's row opens
-// their activity log and live location (js/operator/driverActivity.js).
-
+// Operator drivers view
 OperatorRouter.register('drivers', {
   title: 'Drivers',
   heading: 'Driver Management',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const LICENSE_PATTERN = /^[A-Z]\d{2}-\d{2}-\d{6}$/;
     const MAX_IMAGE_MB = 10;
     const EXPIRING_DAYS = 60;
 
-    // Every editable license field: [key, label, input type, options]
     const FIELDS = [
       ['last_name', 'Last Name', 'text', { required: true }],
       ['first_name', 'First Name', 'text', { required: true }],
@@ -39,9 +30,9 @@ OperatorRouter.register('drivers', {
       ['address', 'Address', 'text', { full: true }],
     ];
 
-    let drivers;          // undefined = loading
+    let drivers;
     let fleet = [];
-    let routes = [];      // to warn when a vehicle's route is inactive
+    let routes = [];
 
     el.innerHTML = `
       <div class="op-page-head">
@@ -64,13 +55,17 @@ OperatorRouter.register('drivers', {
     const tableEl = el.querySelector('#drv-table');
     const countEl = el.querySelector('#drv-count');
 
-    // ---------- Helpers ----------
 
+    // Drivers today
     const today = () => new Date(new Date().toDateString());
+    // Parse day
     const parseDay = (iso) => (iso ? new Date(`${iso}T00:00:00`) : null);
+    // Days until
     const daysUntil = (iso) => Math.round((parseDay(iso) - today()) / 86400000);
+    // Format day
     const formatDay = (iso) => (iso ? parseDay(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) : '—');
 
+    // License state
     function licenseState(driver) {
       const days = daysUntil(driver.expiration_date);
       if (days < 0) return { label: 'Expired', tone: 'red' };
@@ -78,24 +73,29 @@ OperatorRouter.register('drivers', {
       return { label: 'Valid', tone: 'green' };
     }
 
+    // Vehicle for
     function vehicleFor(driverId) {
       return fleet.find((v) => v.driver_id === driverId);
     }
 
+    // Vehicles of
     const vehiclesOf = (driverId) => fleet.filter((v) => v.driver_id === driverId);
 
+    // Drivers clock
     const clock = (iso) => OperatorUi.parseDate(iso)?.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) || '';
 
+    // Shift cell
     function shiftCell(d) {
       if (!d.shift) return OperatorUi.chip('Off shift');
       return `${OperatorUi.chip('On shift', 'green')}
         <div style="color:var(--op-muted);font-size:0.8rem;margin-top:2px;">${esc(d.shift.plate_number)} · since ${esc(clock(d.shift.started_at))}</div>`;
     }
 
-    // ---------- Roster ----------
 
+    // Render stats
     function renderStats() {
       const loaded = Array.isArray(drivers);
+      // Count drivers
       const count = (fn) => (loaded ? drivers.filter(fn).length : undefined);
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Drivers', loaded ? drivers.length : undefined],
@@ -105,10 +105,10 @@ OperatorRouter.register('drivers', {
       ]);
     }
 
+    // Drivers row
     function row(d) {
       const lic = licenseState(d);
       const vehicle = vehicleFor(d.id);
-      // Tapping the row (outside the action buttons) opens driver monitoring.
       return `
         <tr class="op-row--clickable" data-driver-id="${d.id}" tabindex="0" title="View activity and location">
           <td>
@@ -138,6 +138,7 @@ OperatorRouter.register('drivers', {
         </tr>`;
     }
 
+    // Render table
     function renderTable() {
       countEl.textContent = `${drivers.length} registered ${drivers.length === 1 ? 'driver' : 'drivers'}`;
       const rows = drivers.length
@@ -154,6 +155,7 @@ OperatorRouter.register('drivers', {
         </div>`;
     }
 
+    // Load drivers
     function load() {
       drivers = undefined;
       countEl.textContent = 'Loading drivers…';
@@ -177,9 +179,8 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- Shared driver form ----------
 
-    /** Value as it goes into an <input>. */
+    // Input value
     function inputValue(key, values) {
       const v = values[key];
       if (v === null || v === undefined) return '';
@@ -187,6 +188,7 @@ OperatorRouter.register('drivers', {
       return v;
     }
 
+    // Fields HTML
     function fieldsHtml(values = {}, missing = []) {
       return `
         <div class="op-form__grid">
@@ -210,7 +212,7 @@ OperatorRouter.register('drivers', {
         </div>`;
     }
 
-    /** Reads the form back into an API body; throws a readable error if invalid. */
+    // Read form
     function readForm(modal, { forCreate }) {
       const get = (key) => modal.querySelector(`#df-${key}`).value.trim();
       const body = {};
@@ -231,11 +233,12 @@ OperatorRouter.register('drivers', {
       return body;
     }
 
-    // ---------- Add driver: 1. scan ----------
 
+    // Open scan
     function openScan() {
       const files = { front: null, back: null };
 
+      // Drivers slot
       const slot = (side, label) => `
         <label class="op-upload" id="up-${side}">
           <input type="file" accept="image/png,image/jpeg" data-side="${side}" />
@@ -300,8 +303,8 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- Add driver: 2. review ----------
 
+    // Open review
     function openReview(values, missing) {
       AdminModal.open({
         title: missing.length || Object.keys(values).length ? 'Review License Details' : 'Add Driver — Enter Details',
@@ -328,10 +331,11 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- Add driver: 3. credentials ----------
 
+    // Open credentials
     function openCredentials(created) {
       const { email, password } = created.account;
+      // Copy drivers
       const copy = (text, what) => async () => {
         await navigator.clipboard.writeText(text);
         AdminUi.toast(`${what} copied.`);
@@ -352,8 +356,8 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- View / edit / login / remove ----------
 
+    // Open view
     function openView(d) {
       const lic = licenseState(d);
       const rows = [
@@ -395,6 +399,7 @@ OperatorRouter.register('drivers', {
       });
     }
 
+    // Open edit
     function openEdit(d) {
       AdminModal.open({
         title: `Edit ${OperatorUi.driverName(d)}`,
@@ -419,6 +424,7 @@ OperatorRouter.register('drivers', {
       });
     }
 
+    // Open login
     function openLogin(d) {
       const modal = AdminModal.open({
         title: 'Edit App Login',
@@ -465,6 +471,7 @@ OperatorRouter.register('drivers', {
       modal.querySelector('#dl-email').focus();
     }
 
+    // Confirm remove
     function confirmRemove(d) {
       const vehicle = vehicleFor(d.id);
       AdminModal.confirm({
@@ -479,9 +486,8 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- Shifts (the driver app follows these) ----------
 
-    /** Why commuters wouldn't see this vehicle even on shift, if they wouldn't. */
+    // Visibility warnings
     function visibilityWarnings(v) {
       const warnings = [];
       const route = routes.find((r) => r.id === v.route_id);
@@ -494,9 +500,11 @@ OperatorRouter.register('drivers', {
       return warnings;
     }
 
+    // Warnings HTML
     const warningsHtml = (v) => visibilityWarnings(v)
       .map((w) => `<p class="modal-text" style="color:var(--op-amber);margin-top:8px;">${esc(w)}</p>`).join('');
 
+    // Open start shift
     function openStartShift(d) {
       const name = OperatorUi.driverName(d);
       const vehicles = vehiclesOf(d.id);
@@ -549,9 +557,9 @@ OperatorRouter.register('drivers', {
       });
     }
 
+    // Confirm end shift
     function confirmEndShift(d) {
       const name = OperatorUi.driverName(d);
-      // Not AdminModal.confirm: it closes itself after the action, which would close the summary too.
       AdminModal.open({
         title: `End ${name}'s shift?`,
         size: 'sm',
@@ -572,6 +580,7 @@ OperatorRouter.register('drivers', {
       });
     }
 
+    // Show summary
     function showSummary(name, s) {
       const minutes = Math.round(s.duration_seconds / 60);
       const duration = minutes >= 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes} min`;
@@ -597,9 +606,8 @@ OperatorRouter.register('drivers', {
       });
     }
 
-    // ---------- Events ----------
 
-    /** Driver monitoring: fetches their activity log and focuses the map on them. */
+    // Open activity
     function openActivity(d) {
       DriverActivity.open(d.id, { title: `${OperatorUi.driverName(d)} — Activity` });
     }
@@ -612,6 +620,7 @@ OperatorRouter.register('drivers', {
         const driver = drivers.find((d) => d.id === btn.dataset.id);
         if (!driver) return;
         const actions = {
+          // Start drivers
           start: (x) => OperatorUi.whenVerified(() => openStartShift(x)),
           end: confirmEndShift,
           view: openView,

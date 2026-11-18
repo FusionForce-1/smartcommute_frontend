@@ -1,21 +1,14 @@
-// lib/config/theme_config.dart
-//
-// Emae Emehhhh — E1. Visual Style Guide
-// Source: SmartCommute_System_Layout.docx §E1 (config/theme_config.dart + css/main.css)
-//
-// This file is the single source of truth for color, type, radius, spacing and
-// elevation across the Flutter app. Screens and widgets should reference
-// AppColors / AppRadius / AppSpacing / AppTheme rather than hard-coding values.
-
+// Theme config
 import 'package:flutter/material.dart';
 
-/// E1 color tokens.
+/// App colors
 class AppColors {
+  /// Create app colors
   AppColors._();
 
-  static const Color primary = Color(0xFF1A3C6E); // Deep Navy
-  static const Color secondary = Color(0xFF2E86AB); // Teal Blue
-  static const Color accent = Color(0xFFF5A623); // Amber
+  static const Color primary = Color(0xFF1A3C6E);
+  static const Color secondary = Color(0xFF2E86AB);
+  static const Color accent = Color(0xFFF5A623);
   static const Color success = Color(0xFF27AE60);
   static const Color error = Color(0xFFE74C3C);
 
@@ -25,54 +18,41 @@ class AppColors {
   static const Color textPrimary = Color(0xFF1A1A2E);
   static const Color textSecondary = Color(0xFF555555);
 
-  // Convenience derived tones used across the auth screens (banner + card shadow).
   static const Color bannerTeal = secondary;
   static const Color inputBorder = secondary;
   static const Color errorBackground = Color(0xFFFCE4E4);
 
-  // Commuter dashboard (same palette as the web portal's admin/operator UI).
   static const Color brandTeal = Color(0xFF3B8A9E);
   static const Color headerSky = Color(0xFFD3EDFB);
   static const Color divider = Color(0xFFDCE2E8);
   static const Color navInactive = Color(0xFF8A8F98);
-  static const Color infoBlue = Color(0xFF1E63C6); // "Info" transit alerts
+  static const Color infoBlue = Color(0xFF1E63C6);
 
-  // Driver dashboard.
-  static const Color shiftGreen = Color(0xFF0E7C4F); // On Shift, On-Route
-  static const Color shiftGreenTint = Color(0xFFEEF7F1); // On Shift card
-  static const Color panelGrey = Color(0xFFF2F1EE); // Crowd slider track and badge
+  static const Color shiftGreen = Color(0xFF0E7C4F);
+  static const Color shiftGreenTint = Color(0xFFEEF7F1);
+  static const Color panelGrey = Color(0xFFF2F1EE);
 }
 
-/// E1 corner-radius tokens.
-///
-/// NOTE: the documented spec lists 12px (cards) / 8px (buttons) / 24px (chips).
-/// The finalized Login/Register/Forgot-Password/OTP mockups actually render
-/// buttons and pill-style text fields with a much larger, stadium-style radius.
-/// This file follows the mockups (source of truth per the latest design hand-off)
-/// and keeps [button] at a larger value than the original doc — flag this to the
-/// team so §E1 in the system layout doc can be updated to match, or the mockups
-/// revised, whichever is intended to be canonical.
+/// App radius
 class AppRadius {
+  /// Create app radius
   AppRadius._();
 
   static const double card = 12;
   static const double chip = 24;
 
-  /// Stadium/pill radius used by primary + secondary buttons in the mockups.
   static const double button = 28;
 
-  /// Pill radius used by the Forgot Password / Verify OTP text fields.
   static const double inputPill = 28;
 
-  /// Slightly less rounded radius used by the Login / Register text fields.
   static const double inputField = 14;
 
-  /// Radius of the curved bottom edge on the teal header banner.
   static const double bannerCurve = 32;
 }
 
-/// E1 spacing tokens — 8px grid system.
+/// App spacing
 class AppSpacing {
+  /// Create app spacing
   AppSpacing._();
 
   static const double xs = 8;
@@ -81,8 +61,9 @@ class AppSpacing {
   static const double lg = 32;
 }
 
-/// E1 elevation / shadow token: `0 2px 8px rgba(0,0,0,0.12)`.
+/// App shadows
 class AppShadows {
+  /// Create app shadows
   AppShadows._();
 
   static List<BoxShadow> card = [
@@ -94,17 +75,15 @@ class AppShadows {
   ];
 }
 
+/// App theme
 class AppTheme {
+  /// Create app theme
   AppTheme._();
 
   static const String _fontFamily = 'Poppins';
 
   static ThemeData get lightTheme {
     final base = ThemeData.light(useMaterial3: true);
-    // Poppins is bundled locally (assets/fonts/) and declared under
-    // flutter.fonts in pubspec.yaml — no google_fonts package/runtime
-    // download involved. `.apply(fontFamily: ...)` stamps every default
-    // Material text style with our font while keeping their sizes/weights.
     final textTheme = base.textTheme.apply(fontFamily: _fontFamily).copyWith(
       headlineLarge: const TextStyle(
         fontFamily: _fontFamily,

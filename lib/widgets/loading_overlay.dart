@@ -1,13 +1,10 @@
-// lib/widgets/loading_overlay.dart
-//
-// E3. Flutter Reusable Widgets — LoadingOverlay
-// Props: isLoading, child
-// Wraps any screen during async operations (e.g. provider calls).
-
+// Loading overlay
 import 'package:flutter/material.dart';
 import '../config/theme_config.dart';
 
+/// Loading overlay
 class LoadingOverlay extends StatelessWidget {
+  /// Create loading overlay
   const LoadingOverlay({
     super.key,
     required this.isLoading,
@@ -17,6 +14,7 @@ class LoadingOverlay extends StatelessWidget {
   final bool isLoading;
   final Widget child;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Stack(

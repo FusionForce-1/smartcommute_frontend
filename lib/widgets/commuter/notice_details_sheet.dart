@@ -1,7 +1,4 @@
-// lib/widgets/commuter/notice_details_sheet.dart
-//
-// Full text of an operator notice, opened by tapping its card.
-
+// Notice details sheet
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -10,6 +7,7 @@ import '../../utils/time_ago.dart';
 import 'notice_style.dart';
 import 'route_code_chip.dart';
 
+/// Show notice details sheet
 Future<void> showNoticeDetailsSheet(BuildContext context, CommuterNotice notice) {
   return showModalBottomSheet<void>(
     context: context,
@@ -20,11 +18,14 @@ Future<void> showNoticeDetailsSheet(BuildContext context, CommuterNotice notice)
   );
 }
 
+/// Notice details sheet
 class NoticeDetailsSheet extends StatelessWidget {
+  /// Create notice details sheet
   const NoticeDetailsSheet({super.key, required this.notice});
 
   final CommuterNotice notice;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final style = NoticeStyle.of(notice);

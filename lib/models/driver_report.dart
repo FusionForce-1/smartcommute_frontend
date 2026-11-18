@@ -1,12 +1,7 @@
-// lib/models/driver_report.dart
-//
-// What a driver sends their operator (POST /driver-reports) and their list
-// of sent reports (GET /driver-reports/sent, filtered by [ReportsPeriod]).
-// The backend always delivers to the driver's own operator and attaches
-// the shift's vehicle, route and location itself.
-
+// Driver report
 import 'vehicle_live_update.dart' show parseServerTime;
 
+/// Driver report category
 enum DriverReportCategory {
   emergency('emergency', 'Emergency'),
   breakdown('breakdown', 'Breakdown'),
@@ -14,29 +9,31 @@ enum DriverReportCategory {
   vehicleIssue('vehicle_issue', 'Vehicle issue'),
   other('other', 'Other');
 
+  /// Create driver report category
   const DriverReportCategory(this.apiValue, this.label);
 
   final String apiValue;
   final String label;
 
-  /// "Other" says nothing on its own, so it needs a note.
   bool get needsNote => this == other;
 
+  /// Parse driver report
   static DriverReportCategory parse(String? value) =>
       values.firstWhere((c) => c.apiValue == value, orElse: () => other);
 }
 
-/// Longest note the backend accepts.
 const int reportNoteMaxLength = 500;
 
-/// The shift details the backend attached, if the driver was on shift.
+/// Report context
 class ReportContext {
+  /// Create report context
   const ReportContext({required this.plateNumber, this.routeCode, this.hasLocation = false});
 
   final String plateNumber;
   final String? routeCode;
   final bool hasLocation;
 
+  /// Parse from JSON
   factory ReportContext.fromJson(Map<String, dynamic> json) => ReportContext(
         plateNumber: json['plate_number'] as String? ?? '',
         routeCode: json['route_code'] as String?,
@@ -44,7 +41,9 @@ class ReportContext {
       );
 }
 
+/// Driver report
 class DriverReport {
+  /// Create driver report
   const DriverReport({
     required this.id,
     required this.category,
@@ -59,6 +58,7 @@ class DriverReport {
   final ReportContext? context;
   final DateTime createdAt;
 
+  /// Parse from JSON
   factory DriverReport.fromJson(Map<String, dynamic> json) => DriverReport(
         id: json['id'] as String,
         category: DriverReportCategory.parse(json['category'] as String?),
@@ -68,7 +68,7 @@ class DriverReport {
       );
 }
 
-/// The Reports tab's filter chips (and the calendar's [day]).
+/// Reports period options
 enum ReportsPeriod {
   recent('Recent'),
   today('Today'),
@@ -77,13 +77,12 @@ enum ReportsPeriod {
   lastYear('Last Year'),
   day('Day');
 
+  /// Create reports period
   const ReportsPeriod(this.label);
 
   final String label;
 }
 
-/// The [since, until) a period covers, in local time; nulls mean open-ended.
-/// "Last Month" / "Last Year" are the past 30 / 365 days up to now.
 ({DateTime? since, DateTime? until}) reportsRange(ReportsPeriod period, DateTime now, {DateTime? day}) {
   final today = DateTime(now.year, now.month, now.day);
   return switch (period) {

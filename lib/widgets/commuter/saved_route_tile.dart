@@ -1,15 +1,13 @@
-// lib/widgets/commuter/saved_route_tile.dart
-//
-// One saved route on the Profile tab: bookmark icon, route code, label
-// ("Home → Office") and the stops it runs between.
-
+// Saved route tile
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/commuter_profile.dart';
 import 'route_code_chip.dart';
 
+/// Saved route tile
 class SavedRouteTile extends StatelessWidget {
+  /// Create saved route tile
   const SavedRouteTile({
     super.key,
     required this.route,
@@ -20,9 +18,9 @@ class SavedRouteTile extends StatelessWidget {
   final SavedRoute route;
   final VoidCallback onTap;
 
-  /// Offers to remove the saved route.
   final VoidCallback onLongPress;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(

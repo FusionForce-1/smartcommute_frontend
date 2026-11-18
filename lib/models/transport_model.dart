@@ -1,6 +1,9 @@
+// Transport model
 import 'package:latlong2/latlong.dart';
 
+/// Transport route
 class TransportRoute {
+  /// Create transport route
   const TransportRoute({
     required this.id,
     required this.name,
@@ -17,6 +20,7 @@ class TransportRoute {
   final List<RouteStop> stops;
   final bool isActive;
 
+  /// Parse from JSON
   factory TransportRoute.fromJson(Map<String, dynamic> json) {
     final geometryData =
         json['geometry'] as Map<String, dynamic>;
@@ -49,7 +53,9 @@ class TransportRoute {
   }
 }
 
+/// Route stop
 class RouteStop {
+  /// Create route stop
   const RouteStop({
     required this.id,
     required this.name,
@@ -62,6 +68,7 @@ class RouteStop {
   final int sequence;
   final LatLng location;
 
+  /// Parse from JSON
   factory RouteStop.fromJson(Map<String, dynamic> json) {
     final locationData =
         json['location'] as Map<String, dynamic>;

@@ -1,16 +1,12 @@
-// js/operator/views/routes.js
-//
-// Routes & Stops: the operator's routes with stop / fare / vehicle counts,
-// a "Create New Route" card, Pause / Activate / Delete per route, and the
-// stop editor (js/operator/stopEditor.js) behind "Add / Edit stops".
-
+// Operator routes view
 OperatorRouter.register('routes', {
   title: 'Routes & Stops',
   heading: 'Route Management',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
-    let routes;          // undefined = loading
+    let routes;
     let showForm = false;
     const busy = new Set();
 
@@ -31,10 +27,11 @@ OperatorRouter.register('routes', {
     const listEl = el.querySelector('#route-list');
     const toggleBtn = el.querySelector('#route-toggle-form');
 
-    // ---------- Stats ----------
 
+    // Render stats
     function renderStats() {
       const loaded = Array.isArray(routes);
+      // Routes value
       const value = (fn) => (loaded ? fn() : undefined);
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Routes', value(() => routes.length)],
@@ -43,10 +40,10 @@ OperatorRouter.register('routes', {
       ]);
     }
 
-    // ---------- Create form ----------
 
-    let formPicker = null;   // the Origin/Destination map while the form is open
+    let formPicker = null;
 
+    // Render form
     function renderForm() {
       toggleBtn.textContent = showForm ? '✕ Cancel' : '＋ Add Route';
       formPicker?.destroy();
@@ -84,15 +81,16 @@ OperatorRouter.register('routes', {
         </form>`;
 
       const form = formSlot.querySelector('#route-form');
+      // Routes field
       const field = (id) => form.querySelector(`#${id}`);
       const errorEl = field('rf-error');
       const submit = field('rf-submit');
 
-      // The route name follows the terminals ("Carbon – Banawa") until the
-      // operator types a name of their own.
       let nameIsAuto = true;
+      // Routes short
       const short = (place) => String(place || '').split(',')[0].trim();
 
+      // Routes values
       const values = () => {
         const where = picker.value();
         return {
@@ -106,7 +104,9 @@ OperatorRouter.register('routes', {
           baseFare: Number(field('rf-fare').value),
         };
       };
+      // Routes complete
       const complete = (v) => v.code && v.name && v.origin && v.destination && v.baseFare > 0;
+      // Refresh routes
       const refresh = () => {
         errorEl.hidden = true;
         submit.disabled = !complete(values());
@@ -157,8 +157,8 @@ OperatorRouter.register('routes', {
       field('rf-code').focus();
     }
 
-    // ---------- Route cards ----------
 
+    // Route card
     function routeCard(r) {
       const isBusy = busy.has(r.id);
       const action = !r.owned
@@ -199,12 +199,14 @@ OperatorRouter.register('routes', {
         </article>`;
     }
 
+    // Render list
     function renderList() {
       listEl.innerHTML = routes.length
         ? `<div class="op-grid op-grid--2">${routes.map(routeCard).join('')}</div>`
         : `<div class="op-card">${AdminUi.stateMessage('No routes yet. Click Add Route to create your first route.')}</div>`;
     }
 
+    // Load routes
     function load() {
       routes = undefined;
       renderStats();
@@ -217,8 +219,8 @@ OperatorRouter.register('routes', {
       });
     }
 
-    // ---------- Actions ----------
 
+    // Set active
     async function setActive(route, active) {
       busy.add(route.id);
       renderList();
@@ -235,6 +237,7 @@ OperatorRouter.register('routes', {
       }
     }
 
+    // Toggle routes
     function toggle(route) {
       const activate = !route.is_active;
       if (activate || route.vehicle_count === 0) {
@@ -249,13 +252,14 @@ OperatorRouter.register('routes', {
       });
     }
 
+    // Remove routes
     function remove(route) {
       AdminModal.confirm({
         title: 'Delete route?',
         message: `${route.code} – ${route.name} will be removed permanently. This cannot be undone.`,
         confirmLabel: 'Delete',
         onConfirm: async () => {
-          await OperatorApi.deleteRoute(route.id); // errors show inside the modal
+          await OperatorApi.deleteRoute(route.id);
           routes = routes.filter((r) => r.id !== route.id);
           AdminUi.toast(`${route.code} – ${route.name} was deleted.`);
           renderStats();
@@ -281,12 +285,12 @@ OperatorRouter.register('routes', {
       }
     });
 
+    // Toggle form
     const toggleForm = () => {
       showForm = !showForm;
       renderForm();
     };
 
-    // Opening the form needs a verified account; Cancel always works.
     toggleBtn.addEventListener('click', () => {
       if (showForm) toggleForm();
       else OperatorUi.whenVerified(toggleForm);
@@ -295,6 +299,6 @@ OperatorRouter.register('routes', {
     renderForm();
     load();
 
-    return () => formPicker?.destroy();   // leaving the page: drop the map and its listeners
+    return () => formPicker?.destroy();
   },
 });

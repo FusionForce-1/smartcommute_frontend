@@ -1,10 +1,4 @@
-// lib/widgets/driver/report_sheet.dart
-//
-// "Report to operator": pick what happened, add a note (needed for Other),
-// Send. One request id per opened sheet, so trying again after a dropped
-// connection never sends the report twice. The sheet stays open, with the
-// note kept, when sending fails; on success it closes with a confirmation.
-
+// Report sheet
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -12,7 +6,7 @@ import '../../models/driver_report.dart';
 import '../../providers/driver_provider.dart';
 import '../../utils/request_id.dart';
 
-/// Opens the sheet; returns the confirmation to show, or null if closed without sending.
+/// Show report sheet
 Future<String?> showReportSheet(BuildContext context, DriverProvider driver) {
   return showModalBottomSheet<String>(
     context: context,
@@ -26,13 +20,15 @@ Future<String?> showReportSheet(BuildContext context, DriverProvider driver) {
   );
 }
 
-/// Colour and icon for each kind of report.
+/// Report category style
 class ReportCategoryStyle {
+  /// Create report category
   const ReportCategoryStyle._(this.color, this.icon);
 
   final Color color;
   final IconData icon;
 
+  /// Report category of
   static ReportCategoryStyle of(DriverReportCategory category) => switch (category) {
         DriverReportCategory.emergency => const ReportCategoryStyle._(AppColors.error, Icons.sos_outlined),
         DriverReportCategory.breakdown => const ReportCategoryStyle._(AppColors.accent, Icons.car_crash_outlined),
@@ -42,15 +38,19 @@ class ReportCategoryStyle {
       };
 }
 
+/// Report sheet
 class ReportSheet extends StatefulWidget {
+  /// Create report sheet
   const ReportSheet({super.key, required this.driver});
 
   final DriverProvider driver;
 
+  /// Create widget state
   @override
   State<ReportSheet> createState() => _ReportSheetState();
 }
 
+/// Report sheet state
 class _ReportSheetState extends State<ReportSheet> {
   final String _requestId = newRequestId();
   final TextEditingController _note = TextEditingController();
@@ -58,12 +58,14 @@ class _ReportSheetState extends State<ReportSheet> {
   bool _sending = false;
   String? _error;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
     _note.addListener(() => setState(() {}));
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _note.dispose();
@@ -76,6 +78,7 @@ class _ReportSheetState extends State<ReportSheet> {
     return !category.needsNote || _note.text.trim().isNotEmpty;
   }
 
+  /// Send report sheet
   Future<void> _send() async {
     final category = _category;
     if (category == null) return;
@@ -101,6 +104,7 @@ class _ReportSheetState extends State<ReportSheet> {
     });
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final category = _category;

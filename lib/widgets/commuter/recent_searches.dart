@@ -1,14 +1,12 @@
-// lib/widgets/commuter/recent_searches.dart
-//
-// "Recent Searches" list on Plan Your Route; tapping one reuses it as the
-// destination. Renders nothing until the commuter has searched.
-
+// Recent searches
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/trip_plan.dart';
 
+/// Recent searches widget
 class RecentSearches extends StatelessWidget {
+  /// Create recent searches
   const RecentSearches({
     super.key,
     required this.places,
@@ -18,6 +16,7 @@ class RecentSearches extends StatelessWidget {
   final List<TripPlace> places;
   final ValueChanged<TripPlace> onSelected;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     if (places.isEmpty) return const SizedBox.shrink();

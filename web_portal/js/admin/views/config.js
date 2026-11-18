@@ -1,12 +1,8 @@
-// js/admin/views/config.js
-//
-// Config: the settings an administrator can change (GET/PATCH /system/config),
-// which apply as soon as they are saved, and a read-only summary of how the
-// server is set up. Secrets are never sent here, only whether they are set.
-
+// Admin config view
 AdminRouter.register('config', {
   title: 'Config',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     let config = null;
@@ -15,8 +11,10 @@ AdminRouter.register('config', {
     el.innerHTML = '<div id="config-root"></div>';
     const rootEl = el.querySelector('#config-root');
 
+    // All settings
     const allSettings = () => config.groups.flatMap((g) => g.settings);
 
+    // Setting row
     function settingRow(s) {
       const changedFromDefault = s.value !== s.default;
       return `
@@ -36,6 +34,7 @@ AdminRouter.register('config', {
         </div>`;
     }
 
+    // Info panel
     function infoPanel() {
       const changed = config.updated_at
         ? `<p class="panel__meta">Settings last changed ${esc(AdminUi.formatDateTime(config.updated_at))}${
@@ -64,6 +63,7 @@ AdminRouter.register('config', {
         </section>`;
     }
 
+    // Render the view
     function render() {
       rootEl.innerHTML = `
         <form class="panel-stack" id="config-form" novalidate>
@@ -85,7 +85,7 @@ AdminRouter.register('config', {
         </form>`;
     }
 
-    /** The settings whose field differs from the saved value, as { key: number }. */
+    // Config changes
     function changes() {
       const changed = {};
       allSettings().forEach((s) => {
@@ -95,6 +95,7 @@ AdminRouter.register('config', {
       return changed;
     }
 
+    // Refresh actions
     function refreshActions() {
       const count = Object.keys(changes()).length;
       rootEl.querySelector('#config-save').disabled = saving || count === 0;
@@ -104,7 +105,7 @@ AdminRouter.register('config', {
         : '';
     }
 
-    /** The first change that is outside its limits, or null. */
+    // First problem
     function firstProblem(changed) {
       return allSettings().find((s) => {
         if (!(s.key in changed)) return false;
@@ -113,6 +114,7 @@ AdminRouter.register('config', {
       }) || null;
     }
 
+    // Save config
     async function save() {
       const changed = changes();
       const problem = firstProblem(changed);
@@ -135,6 +137,7 @@ AdminRouter.register('config', {
       }
     }
 
+    // Send test email
     async function sendTestEmail(button) {
       button.disabled = true;
       button.textContent = 'Sending…';

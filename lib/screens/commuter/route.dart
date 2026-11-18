@@ -1,9 +1,4 @@
-// lib/screens/commuter/route.dart
-//
-// Route tab — "Plan Your Route": choose From / To and a preference, then
-// Find Routes opens the results page. State lives in TripPlanProvider
-// (owned by the dashboard), so results survive tab changes.
-
+// Route screen
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -24,7 +19,9 @@ import 'find_routes_screen.dart';
 import 'pick_destination_screen.dart';
 import 'route_map_screen.dart' show VehiclesLoader;
 
+/// Route tab
 class RouteTab extends StatelessWidget {
+  /// Create route tab
   const RouteTab({
     super.key,
     required this.stops,
@@ -37,17 +34,13 @@ class RouteTab extends StatelessWidget {
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
-  /// Called when the commuter opens a chosen route on the map.
   final TripStarted? onTripStarted;
 
-  /// "Select this route": the dashboard shows it on the Home map.
   final TripSelected? onRouteSelected;
 
-  /// Fleet list for the live PUVs on a chosen route's map.
   final VehiclesLoader? loadVehicles;
 
-  // From / To search every saved stop and Metro Cebu landmark as you type,
-  // nearest the trip's other end (or the city centre) first.
+  /// Choose from
   Future<void> _chooseFrom(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
     final place = await showPlaceSearchSheet(
@@ -60,6 +53,7 @@ class RouteTab extends StatelessWidget {
     trip.setOrigin(place.location, place.name);
   }
 
+  /// Choose to
   Future<void> _chooseTo(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
     final place = await showPlaceSearchSheet(
@@ -72,6 +66,7 @@ class RouteTab extends StatelessWidget {
     trip.setDestination(place.location, place.name);
   }
 
+  /// Pick on map
   Future<void> _pickOnMap(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
     final picked = await Navigator.of(context).push<PickedPlace>(
@@ -79,7 +74,6 @@ class RouteTab extends StatelessWidget {
         builder: (_) => PickDestinationScreen(
           origin: trip.origin,
           stops: stops,
-          // Reopening goes back to the pin dropped last time.
           start: trip.destinationFromMap ? trip.destination : null,
         ),
       ),
@@ -88,16 +82,15 @@ class RouteTab extends StatelessWidget {
     trip.setDestination(picked.point, picked.label, fromMap: true);
   }
 
+  /// Find routes
   Future<void> _findRoutes(BuildContext context) async {
     final trip = context.read<TripPlanProvider>();
-    // No From chosen yet: start from the commuter's GPS location.
     if (trip.origin == null) await trip.locateOrigin();
-    if (!context.mounted || !trip.canPlan) return; // error shows under From
+    if (!context.mounted || !trip.canPlan) return;
 
-    trip.plan(); // the results page shows progress
+    trip.plan();
     Navigator.of(context).push(
       MaterialPageRoute(
-        // A pushed page sits outside the dashboard's provider scope.
         builder: (_) => ChangeNotifierProvider.value(
           value: trip,
           child: FindRoutesScreen(
@@ -111,13 +104,13 @@ class RouteTab extends StatelessWidget {
     );
   }
 
-  /// What the From box says for the commuter's GPS location, e.g.
-  /// "Your location · near Fuente Osmeña", so it's clear where we found them.
+  /// My location label
   String _myLocationLabel(LatLng here) {
     final near = nearestStop(stops, here);
     return near == null ? 'Your location' : 'Your location · near ${near.stop.name}';
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final trip = context.watch<TripPlanProvider>();
@@ -170,11 +163,14 @@ class RouteTab extends StatelessWidget {
   }
 }
 
+/// Section title widget
 class _SectionTitle extends StatelessWidget {
+  /// Create section title
   const _SectionTitle({required this.title});
 
   final String title;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Text(

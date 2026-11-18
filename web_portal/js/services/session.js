@@ -1,12 +1,9 @@
-// js/services/session.js
-//
-// Stores the logged-in user's tokens, role and email.
-// "Remember Me" keeps the session in localStorage; otherwise it lives in
-// sessionStorage and ends when the tab closes.
-
+// Services session
+// Session session
 const Session = (() => {
   const KEY = 'smartcommute.session';
 
+  // Read session
   function read() {
     try {
       return JSON.parse(localStorage.getItem(KEY) || sessionStorage.getItem(KEY));
@@ -15,21 +12,24 @@ const Session = (() => {
     }
   }
 
+  // Storage in use
   function storageInUse() {
     return localStorage.getItem(KEY) ? localStorage : sessionStorage;
   }
 
+  // Clear session
   function clear() {
     localStorage.removeItem(KEY);
     sessionStorage.removeItem(KEY);
   }
 
-  /** @param {{access_token, refresh_token, role, email}} data */
+  // Save session
   function save(data, remember = false) {
     clear();
     (remember ? localStorage : sessionStorage).setItem(KEY, JSON.stringify(data));
   }
 
+  // Update session
   function update(patch) {
     const current = read();
     if (!current) return;

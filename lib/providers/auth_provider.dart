@@ -1,31 +1,16 @@
-// lib/providers/auth_provider.dart
-//
-// This is the bridge between your screens and ApiService. Screens never
-// call ApiService directly — they call AuthProvider methods, and
-// AuthProvider calls ApiService underneath, then updates its own state
-// and calls notifyListeners() so any widget watching it rebuilds
-// automatically (e.g. a splash screen showing a spinner while
-// isLoading is true, or the router redirecting once isAuthenticated
-// flips to true).
-//
-// KNOWN GAP (flagging honestly rather than guessing):
-// TokenResponse only contains {access_token, refresh_token, token_type,
-// role, expires_in} — there's no email/name in it, and none of
-// the 19 ApiService methods fetch "my own profile." So `currentUser`
-// stays null right after login; you only reliably get `role` from the
-// token response. If a Profile screen needs full user details later,
-// ask your backend teammate whether a GET /auth/me or GET /users/me
-// endpoint exists or needs to be added — don't guess an endpoint name.
-
+// Auth provider
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../services/api_service.dart';
 
+/// Auth status
 enum AuthStatus { unknown, authenticated, guest, unauthenticated }
 
+/// Auth provider
 class AuthProvider extends ChangeNotifier {
   final ApiService _apiService;
 
+  /// Create auth
   AuthProvider({ApiService? apiService})
       : _apiService = apiService ?? ApiService();
 
@@ -42,18 +27,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   AuthStatus get status => _status;
 
-  // ---------------------------------------------------------------
-  // LOGIN (email + password)
-  // ---------------------------------------------------------------
-  // Deliberately does NOT catch errors here — LoginScreen's own
-  // _handleLogin() already wraps this call in try/catch and shows its
-  // own ErrorBanner text ("Invalid email or password.").
-  // If we swallowed the error here too, the screen would never know
-  // the call failed and would incorrectly proceed as if login worked.
-  //
-  // `rememberMe` is accepted to match LoginScreen's callback signature,
-  // but nothing in your backend spec currently uses it — flag this
-  // with your team; for now it's a no-op placeholder.
+  /// Login auth
   Future<void> login(
     String email,
     String password, {
@@ -68,19 +42,12 @@ class AuthProvider extends ChangeNotifier {
       _isGuest = false;
       _status = AuthStatus.authenticated;
     } finally {
-      // Runs whether login succeeded or threw — guarantees isLoading
-      // always resets, so the UI never gets stuck on a spinner.
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // ---------------------------------------------------------------
-  // LOGIN, TWO-FACTOR STEP
-  // ---------------------------------------------------------------
-  // login() throws TwoFactorRequired when the account has two-factor on;
-  // the emailed code is then confirmed here. Errors propagate so the
-  // code screen can show them.
+  /// Verify login code
   Future<void> verifyLoginCode(String email, String otp) async {
     _isLoading = true;
     notifyListeners();
@@ -96,19 +63,9 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // GOOGLE SIGN-IN
-  // ---------------------------------------------------------------
-  // Takes the idToken as a parameter — the ACTUAL Google sign-in
-  // popup/flow happens in main.dart's wiring (using the google_sign_in
-  // package), not here. This method only knows what to do once it has
-  // a token, matching separation of concerns: AuthProvider talks to
-  // YOUR backend, not to Google directly.
-  /// Set by the register screen while its User Agreement / Privacy Policy
-  /// box is ticked. Google sign-in finishes outside that screen (see
-  /// app_router.dart), so the agreement travels with it from here.
   bool googleSignUpTermsAccepted = false;
 
+  /// Login with Google
   Future<void> loginWithGoogle(String idToken) async {
     _isLoading = true;
     notifyListeners();
@@ -127,24 +84,15 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // GUEST MODE
-  // ---------------------------------------------------------------
-  // LoginScreen's onGuestContinue is a plain VoidCallback (not async),
-  // so this method can't be `Future<void>` if we want to wire it
-  // directly. State updates happen immediately and synchronously;
-  // the SecureStorage clear is fire-and-forget in the background
-  // since guests have nothing to clear 99% of the time anyway.
+  /// Continue as guest
   void continueAsGuest() {
     _isGuest = true;
     _status = AuthStatus.guest;
-    _apiService.continueAsGuest(); // fire-and-forget, not awaited
+    _apiService.continueAsGuest();
     notifyListeners();
   }
 
-  // ---------------------------------------------------------------
-  // REGISTER (commuter) — POST /auth/register
-  // ---------------------------------------------------------------
+  /// Register commuter
   Future<void> registerCommuter({
     required String fullName,
     required String email,
@@ -158,7 +106,6 @@ class AuthProvider extends ChangeNotifier {
           email: email.trim(),
           password: password,
           name: fullName.trim(),
-          // The register screen only calls this once the box is ticked.
           acceptedTerms: true,
         ),
       );
@@ -168,9 +115,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // FORGOT PASSWORD — POST /auth/forgot-password
-  // ---------------------------------------------------------------
+  /// Send password reset OTP
   Future<void> sendPasswordResetOtp(String email) async {
     _isLoading = true;
     notifyListeners();
@@ -182,11 +127,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // VERIFY OTP / RESET — POST /auth/reset-password
-  // ---------------------------------------------------------------
-  // VerifyOtpScreen collects the 6-digit code, SetNewPasswordScreen the
-  // new password; the backend checks both in this one call.
+  /// Verify OTP and reset password
   Future<void> verifyOtpAndResetPassword({
     required String email,
     required String otp,
@@ -202,13 +143,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // LOGOUT
-  // ---------------------------------------------------------------
-  // Never throws: ApiService clears the stored tokens even when the
-  // server call fails, so the user is signed out locally either way and
-  // the screen can always return to Login. Guests have no server
-  // session, so they skip the call (it would only 401).
+  /// Logout auth
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
@@ -227,18 +162,12 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ---------------------------------------------------------------
-  // SESSION CHECK (for SplashScreen — not built yet, but this is
-  // what it will call to decide: go to /login, guest map, or dashboard)
-  // ---------------------------------------------------------------
+  /// Check session
   Future<void> checkSession() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // Attempting a silent refresh doubles as "is there a valid
-      // session at all?" — if there's no refresh token or it's
-      // expired, this throws and we fall through to unauthenticated.
       final tokens = await _apiService.refreshToken();
       _role = tokens.role;
       _isGuest = false;

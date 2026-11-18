@@ -1,50 +1,45 @@
-// js/operator/driverReportAlerts.js
-//
-// Tells the operator about reports from their drivers, on every page:
-// polls every 30 s (there is no push for these), keeps the unread badge on
-// the Driver Reports nav item current, and toasts each new report.
-// Emergencies get a red toast that stays until dismissed.
-// Fires `driver-reports:changed` on window when new ones arrive, so an open
-// Driver Reports view can reload.
-
+// Driver report alerts
+// Driver report alerts
 const DriverReportAlerts = (() => {
   const POLL_MS = 30000;
   const NEW_LIMIT = 20;
   const NOTE_SHOWN = 80;
 
   let timer = null;
-  let primed = false;       // until prime() succeeds, every report would look new
-  let since = null;         // created_at of the newest report seen (server time)
-  let seen = new Set();     // ids created at `since` — the query includes it
-  let stickies = [];        // emergency toasts still up
+  let primed = false;
+  let since = null;
+  let seen = new Set();
+  let stickies = [];
 
+  // Open driver report
   const open = () => { location.hash = '#/driver-reports'; };
 
+  // Emergency toast
   function emergencyToast(message) {
     stickies.push(AdminUi.toast(message, { error: true, sticky: true, onClick: open }));
   }
 
+  // Set badge
   function setBadge(count) {
     const badge = document.getElementById('op-reports-badge');
     if (badge) {
       badge.textContent = count > 99 ? '99+' : String(count);
       badge.hidden = !count;
     }
-    // Everything has been read, so the emergencies have been seen.
     if (!count) {
       stickies.forEach((el) => el.remove());
       stickies = [];
     }
   }
 
-  /** Re-reads the unread count (e.g. after the operator marks reports read). */
+  // Refresh driver report
   async function refresh() {
     const { count } = await OperatorApi.driverReportsUnreadCount();
     setBadge(count);
     return count;
   }
 
-  /** @param {Array} reports — newest first, as the inbox returns them */
+  // Driver report remember
   function remember(reports) {
     if (!reports.length) return;
     const newest = reports[0].created_at;
@@ -55,6 +50,7 @@ const DriverReportAlerts = (() => {
     reports.filter((r) => r.created_at === since).forEach((r) => seen.add(r.id));
   }
 
+  // Driver report describe
   function describe(r) {
     const label = (OperatorUi.REPORT_CATEGORY[r.category] || OperatorUi.REPORT_CATEGORY.other).label;
     const plate = r.context?.plate_number ? ` (${r.context.plate_number})` : '';
@@ -62,6 +58,7 @@ const DriverReportAlerts = (() => {
     return { label, who: `${r.driver_name}${plate}`, note };
   }
 
+  // Driver report announce
   function announce(reports) {
     const emergencies = reports.filter((r) => r.category === 'emergency');
     const others = reports.filter((r) => r.category !== 'emergency');
@@ -77,6 +74,7 @@ const DriverReportAlerts = (() => {
     }
   }
 
+  // Check driver report
   async function check() {
     const [fresh] = await Promise.all([
       OperatorApi.driverReports({ since, limit: NEW_LIMIT }),
@@ -89,7 +87,7 @@ const DriverReportAlerts = (() => {
     window.dispatchEvent(new CustomEvent('driver-reports:changed'));
   }
 
-  /** Starting point: the newest report so far, and what is still unread from before. */
+  // Driver report prime
   async function prime() {
     const [latest, count, emergencies] = await Promise.all([
       OperatorApi.driverReports({ limit: 1 }),
@@ -108,19 +106,19 @@ const DriverReportAlerts = (() => {
     }
   }
 
+  // Schedule driver report
   function schedule() {
     timer = setTimeout(async () => {
       try {
         await (primed ? check() : prime());
       } catch (err) {
         if (stopOn(err)) return;
-        // Offline or a server hiccup: try again next round.
       }
       schedule();
     }, POLL_MS);
   }
 
-  /** Unverified operators get 403 here, and a signed-out page redirects. */
+  // Stop on
   function stopOn(err) {
     if (err.statusCode === 403 || err.statusCode === 401) {
       stop();
@@ -129,6 +127,7 @@ const DriverReportAlerts = (() => {
     return false;
   }
 
+  // Start driver report
   async function start() {
     if (timer) return;
     try {
@@ -139,6 +138,7 @@ const DriverReportAlerts = (() => {
     schedule();
   }
 
+  // Stop driver report
   function stop() {
     clearTimeout(timer);
     timer = null;

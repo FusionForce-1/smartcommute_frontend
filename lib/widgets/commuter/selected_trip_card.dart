@@ -1,12 +1,4 @@
-// lib/widgets/commuter/selected_trip_card.dart
-//
-// Home tab card for the route picked with "Select this route": which PUV,
-// where to board and alight, fare and time. Tap it for the full details;
-// the ✕ cancels the selection. While the commuter travels it also says
-// where they are in the trip (services/trip_progress.dart), when they get
-// there (services/trip_eta.dart: the next live jeep while they walk or wait,
-// the ride left once on board), and that they're on the jeep they waited for.
-
+// Selected trip card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -15,7 +7,9 @@ import '../../models/trip_plan.dart';
 import '../../services/trip_eta.dart';
 import '../../services/trip_progress.dart';
 
+/// Selected trip card
 class SelectedTripCard extends StatelessWidget {
+  /// Create selected trip card
   const SelectedTripCard({
     super.key,
     required this.trip,
@@ -26,21 +20,17 @@ class SelectedTripCard extends StatelessWidget {
     this.boardedPlate,
   });
 
-  /// Where the commuter is in the trip; null before their first GPS fix.
   final TripProgressState? progress;
 
-  /// Time to the destination from where they are now; null without a fix
-  /// (the planner's time shows instead).
   final TripEta? eta;
 
-  /// The plate of the jeep they're riding, when it runs the leg they're on
-  /// (their phone moves with its GPS); null otherwise.
   final String? boardedPlate;
 
   final SelectedTrip trip;
   final VoidCallback onCancel;
   final VoidCallback onOpen;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final option = trip.option;
@@ -142,18 +132,20 @@ class SelectedTripCard extends StatelessWidget {
     );
   }
 
+  /// Selected trip metres
   static String _metres(double m) => m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';
 
+  /// Selected trip name
   static String _name(RouteLeg leg) => leg.routeCode ?? leg.routeName;
 
-  /// "Arrive 9:42 AM · 18 min" from where they are now; the planner's time before a fix.
+  /// Selected trip time
   String _time(BuildContext context) {
     final e = eta;
     if (e == null) return '${trip.option.totalEtaMin} min';
     return 'Arrive ${TimeOfDay.fromDateTime(e.arriveAt.toLocal()).format(context)} · ${e.minutes} min';
   }
 
-  /// "You're on the 07B you were waiting for · ABC 123", once on board.
+  /// On board
   Widget? _onBoard() {
     final p = progress;
     final plate = boardedPlate;
@@ -184,7 +176,6 @@ class SelectedTripCard extends StatelessWidget {
     );
   }
 
-  /// "Walk to Central Bloc" / "On the jeep · 2.3 km to Plaza Sugbo" / …
   (IconData, String, Color)? _status() {
     final p = progress;
     if (p == null) return null;
@@ -203,7 +194,7 @@ class SelectedTripCard extends StatelessWidget {
     };
   }
 
-  /// While walking to or waiting at the stop: when the next jeep gets there.
+  /// Wait line
   String? _waitLine() {
     final p = progress;
     final e = eta;

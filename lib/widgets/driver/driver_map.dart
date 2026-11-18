@@ -1,14 +1,4 @@
-// lib/widgets/driver/driver_map.dart
-//
-// The driver's route line and stops with the jeep on top: where the live
-// feed puts it (its tracker, or this phone while the tracker is offline),
-// else this phone's own fix. The Map tab shows it as a card and full screen
-// ([expanded]); the buttons (expand / collapse, centre on my location, zoom)
-// are the commuter map's MapControls. [myLocation] (a blue dot) is where the
-// phone found the driver when no jeep position is known, e.g. off shift.
-// The route is framed only while neither is known: the parent's MapFollower
-// keeps the camera on them from then on.
-
+// Driver map
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -23,7 +13,9 @@ import '../../providers/driver_provider.dart';
 import '../commuter/live_map.dart' show MapControls;
 import '../commuter/vehicle_marker.dart';
 
+/// Driver map
 class DriverMap extends StatefulWidget {
+  /// Create driver map
   const DriverMap({
     super.key,
     required this.driver,
@@ -41,35 +33,31 @@ class DriverMap extends StatefulWidget {
   final DriverProvider driver;
   final MapController controller;
 
-  /// Full screen: edge to edge, no card corners.
   final bool expanded;
   final VoidCallback? onToggleExpanded;
 
-  /// "Centre on my location" (always shown when set), and whether the
-  /// camera is following.
   final VoidCallback? onLocate;
   final ValueListenable<bool>? following;
 
   final VoidCallback? onMapReady;
 
-  /// Every camera move, so dragging can stop the camera following.
   final MapEventCallback? onMapEvent;
 
-  /// The phone's own position, drawn while the jeep's isn't known.
   final LatLng? myLocation;
 
-  /// False when the parent places the controls itself (above a sheet).
   final bool showControls;
 
+  /// Create widget state
   @override
   State<DriverMap> createState() => _DriverMapState();
 }
 
+/// Driver map state
 class _DriverMapState extends State<DriverMap> {
   bool _ready = false;
   String? _framedRouteId;
 
-  /// Frames the route once per route, when both it and the map are ready.
+  /// Frame route
   void _frameRoute() {
     final route = widget.driver.route;
     if (!_ready || route == null || route.id == _framedRouteId || route.geometry.length < 2) return;
@@ -83,7 +71,7 @@ class _DriverMapState extends State<DriverMap> {
     });
   }
 
-  /// The course while moving; null while stopped (it swings at random).
+  /// Driver map heading
   double? _heading(DriverProvider driver) {
     final live = driver.live;
     if (driver.jeepGps != JeepGps.none && live?.heading != null) return live!.heading;
@@ -92,6 +80,7 @@ class _DriverMapState extends State<DriverMap> {
     return fix.heading;
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final driver = widget.driver;
@@ -123,7 +112,6 @@ class _DriverMapState extends State<DriverMap> {
             _frameRoute();
           },
           onMapEvent: widget.onMapEvent,
-          // Stays alive scrolled out of the dashboard: the camera still follows.
           keepAlive: true,
         ),
         children: [
@@ -165,10 +153,12 @@ class _DriverMapState extends State<DriverMap> {
   }
 }
 
-/// A route stop: white with a thick teal ring.
+/// Stop dot widget
 class _StopDot extends StatelessWidget {
+  /// Create stop dot
   const _StopDot();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
@@ -181,10 +171,12 @@ class _StopDot extends StatelessWidget {
   }
 }
 
-/// Where the phone found the driver: a blue dot with a white ring.
+/// My location dot widget
 class _MyLocationDot extends StatelessWidget {
+  /// Create my location dot
   const _MyLocationDot();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -199,12 +191,14 @@ class _MyLocationDot extends StatelessWidget {
   }
 }
 
-/// The driver's PUV, facing the way it is driving.
+/// Jeep marker
 class _JeepMarker extends StatelessWidget {
+  /// Create jeep marker
   const _JeepMarker({this.heading});
 
   final double? heading;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     Widget puv = SvgPicture.asset(VehicleMarker.asset, width: 36, height: 36);

@@ -1,15 +1,12 @@
-// lib/widgets/driver/crowd_estimate_card.dart
-//
-// How full the vehicle is, from Empty to Full. The value is saved when the
-// driver lets go of the slider, not on every step of the drag. Without the
-// callbacks (off shift) it's shown but locked.
-
+// Crowd estimate card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import 'driver_card.dart';
 
+/// Crowd estimate card
 class CrowdEstimateCard extends StatelessWidget {
+  /// Create crowd estimate card
   const CrowdEstimateCard({
     super.key,
     required this.percent,
@@ -19,10 +16,10 @@ class CrowdEstimateCard extends StatelessWidget {
 
   final int percent;
 
-  /// Null while off shift: the slider is locked.
   final ValueChanged<int>? onChanged;
   final ValueChanged<int>? onChangeEnd;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     const hint = TextStyle(fontSize: 13, color: AppColors.navInactive);
@@ -71,15 +68,18 @@ class CrowdEstimateCard extends StatelessWidget {
   }
 }
 
-/// White circle with a dark outline, as in the design.
+/// Outlined thumb
 class _OutlinedThumb extends SliderComponentShape {
+  /// Create outlined thumb
   const _OutlinedThumb();
 
   static const double _radius = 11;
 
+  /// Get preferred size
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size.fromRadius(_radius);
 
+  /// Paint the canvas
   @override
   void paint(
     PaintingContext context,

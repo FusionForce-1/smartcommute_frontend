@@ -1,29 +1,20 @@
-// lib/services/place_search.dart
-//
-// Searchable places for the commuter's From / To boxes: the saved stops plus
-// ~6,000 Metro Cebu landmarks (malls, terminals, schools, churches,
-// barangays...) from the same OpenStreetMap data the map shows. The list is
-// bundled as assets/data/cebu_landmarks.json, built by
-// Smart-Commute-Backend/tools/build_landmarks.py (same file as the operator
-// portal's), so matches appear instantly while typing, offline too.
-
+// Place search
 import 'dart:convert';
 
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:latlong2/latlong.dart';
 
-/// A place the commuter can travel from or to.
+/// Place service
 class Place {
+  /// Create place
   const Place({required this.name, required this.location, required this.kind});
 
   final String name;
   final LatLng location;
 
-  /// What it is, shown under the name: "Mall / supermarket", "Your stop"...
   final String kind;
 }
 
-/// A search hit: the place and how far it is from where the search centred.
 typedef PlaceMatch = ({Place place, double metres});
 
 const Map<String, String> _accents = {
@@ -35,7 +26,7 @@ const Map<String, String> _accents = {
   'ñ': 'n', 'ç': 'c',
 };
 
-/// Lowercase, no accents or punctuation: "Santo Niño!" -> "santo nino".
+/// Fold place text
 String foldPlaceText(String text) {
   final lower = text.toLowerCase();
   final buf = StringBuffer();
@@ -45,7 +36,9 @@ String foldPlaceText(String text) {
   return buf.toString().replaceAll(RegExp('[^a-z0-9]+'), ' ').trim();
 }
 
+/// Entry service
 class _Entry {
+  /// Create entry
   _Entry(this.place) : folded = foldPlaceText(place.name) {
     words = folded.split(' ');
   }
@@ -55,8 +48,9 @@ class _Entry {
   late final List<String> words;
 }
 
-/// Places with instant "starts with the words you typed" search.
+/// Place index
 class PlaceIndex {
+  /// Create place index
   PlaceIndex(Iterable<Place> places) : _entries = [for (final p in places) _Entry(p)];
 
   final List<_Entry> _entries;
@@ -67,13 +61,13 @@ class PlaceIndex {
   static Future<PlaceIndex>? _landmarks;
   static PlaceIndex? _loaded;
 
-  /// The bundled Metro Cebu landmarks, loaded once. Empty if unavailable.
+  /// Place index landmarks
   static Future<PlaceIndex> landmarks() =>
       _landmarks ??= _loadLandmarks().then((index) => _loaded = index);
 
-  /// The landmarks if they have finished loading (no waiting), else null.
   static PlaceIndex? get loadedLandmarks => _loaded;
 
+  /// Load landmarks
   static Future<PlaceIndex> _loadLandmarks() async {
     try {
       final raw = await rootBundle.loadString('assets/data/cebu_landmarks.json');
@@ -83,7 +77,7 @@ class PlaceIndex {
     }
   }
 
-  /// {"kinds": [...], "places": [[name, lat, lng, kindIndex], ...]}
+  /// Parse from landmark JSON
   factory PlaceIndex.fromLandmarkJson(Map<String, dynamic> json) {
     final kinds = (json['kinds'] as List).cast<String>();
     return PlaceIndex([
@@ -96,10 +90,7 @@ class PlaceIndex {
     ]);
   }
 
-  /// Best matches for [query], nearest [near] first within each tier:
-  /// whole name starts with it, then every typed word starts a word
-  /// ("sm ceb" -> SM City Cebu), then (3+ letters) anywhere in the name.
-  /// One hit per name (e.g. a stop on each side of the road).
+  /// Search place index
   List<PlaceMatch> search(String query, {LatLng? near, int limit = 8}) {
     final q = foldPlaceText(query);
     if (q.length < 2) return const [];
@@ -130,7 +121,7 @@ class PlaceIndex {
     return out;
   }
 
-  /// The named place closest to [point], if one is within [maxMetres].
+  /// Place index nearest
   PlaceMatch? nearest(LatLng point, {double maxMetres = 150}) {
     PlaceMatch? best;
     for (final e in _entries) {
@@ -141,6 +132,6 @@ class PlaceIndex {
   }
 }
 
-/// "350 m away" / "2.4 km away".
+/// Format place distance
 String formatPlaceDistance(double metres) =>
     metres < 1000 ? '${metres.round()} m away' : '${(metres / 1000).toStringAsFixed(1)} km away';

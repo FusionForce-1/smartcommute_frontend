@@ -1,31 +1,31 @@
-// lib/models/trip_plan.dart
-//
-// Mirror sa backend trip_models.py (POST /trip-plan).
-// Walay fare computation diri — gi-display ra nato unsa ang i-return sa backend.
-
+// Trip plan
 import 'package:latlong2/latlong.dart';
 
 import 'models.dart';
 import 'transport_model.dart';
 import 'vehicle_live_update.dart' show parseServerTime;
 
-/// Unsa ang i-minimize sa trip planner (backend `preferences.minimize`).
+/// Trip preference options
 enum TripPreference {
   time('time', 'Fastest'),
   transfers('transfers', 'Few Transfers');
 
+  /// Create trip preference
   const TripPreference(this.apiValue, this.label);
 
   final String apiValue;
   final String label;
 }
 
+/// Trip plan response
 class TripPlanResponse {
+  /// Create trip plan response
   const TripPlanResponse({required this.options, required this.generatedAt});
 
   final List<RouteOption> options;
   final DateTime generatedAt;
 
+  /// Parse from JSON
   factory TripPlanResponse.fromJson(Map<String, dynamic> json) {
     return TripPlanResponse(
       options: (json['options'] as List<dynamic>)
@@ -36,7 +36,9 @@ class TripPlanResponse {
   }
 }
 
+/// Route option
 class RouteOption {
+  /// Create route option
   const RouteOption({
     required this.rank,
     required this.legs,
@@ -55,22 +57,17 @@ class RouteOption {
   final double totalFare;
   final int transfers;
 
-  /// Walking for the whole trip, and the last stretch (stop -> destination).
-  /// Null from older backends that didn't send them.
   final int? totalWalkM;
   final int? walkFromAlightM;
   final int? walkFromAlightMin;
 
-  /// Estimated arrival at the destination (UTC), traffic included.
   final DateTime? arriveAt;
 
-  /// Same routes in the same order — used to keep the commuter's selection
-  /// when the plan refreshes as they move.
   String get signature => legs.map((leg) => leg.routeId).join('>');
 
-  /// E.g. "01K → 13C"
   String get routeSummary => legs.map((leg) => leg.routeName).join(' → ');
 
+  /// Parse from JSON
   factory RouteOption.fromJson(Map<String, dynamic> json) {
     return RouteOption(
       rank: json['rank'] as int,
@@ -88,7 +85,9 @@ class RouteOption {
   }
 }
 
+/// Route leg
 class RouteLeg {
+  /// Create route leg
   const RouteLeg({
     required this.routeId,
     required this.routeName,
@@ -120,46 +119,37 @@ class RouteLeg {
   final int etaMin;
   final double fare;
 
-  // From the route recommender; null from older backends.
   final String? routeCode;
   final int? walkToBoardM;
   final int? walkToBoardMin;
 
-  /// Minutes until the next jeep reaches [boardStop] after the commuter does.
   final int? waitMin;
 
-  /// True when [waitMin] comes from a live jeep's GPS, false for a typical wait.
   final bool waitIsLive;
   final String? nextVehicleId;
   final double? rideKm;
   final int? rideMin;
 
-  /// The ridden part of the route (board -> alight), along the streets.
   final List<LatLng>? path;
 
-  /// "light" | "moderate" | "heavy" — from the jeeps' live speed when
-  /// [speedIsLive], else the usual traffic for this time of day.
   final String? traffic;
   final double? speedKmh;
   final bool speedIsLive;
 
-  /// Extra minutes this ride takes compared with free-flowing traffic.
   final int? trafficDelayMin;
 
-  /// A driver or operator marked the route congested.
   final bool congestionReported;
 
-  /// "outbound" (Terminal A -> B, the way the route is drawn) or "return" (B -> A).
   final String direction;
 
   bool get isReturn => direction == 'return';
 
   String get boardLabel => boardStop.displayName;
 
-  /// A placeholder alight stop (no stop near the destination) reads as the destination.
   String get alightLabel =>
       alightStop.isPlaceholder ? 'Your destination' : alightStop.name;
 
+  /// Parse from JSON
   factory RouteLeg.fromJson(Map<String, dynamic> json) {
     return RouteLeg(
       routeId: json['route_id'] as String,
@@ -186,6 +176,7 @@ class RouteLeg {
     );
   }
 
+  /// Parse line
   static List<LatLng>? _parseLine(dynamic json) {
     if (json is! Map<String, dynamic>) return null;
     final coords = json['coordinates'] as List<dynamic>? ?? const [];
@@ -197,18 +188,16 @@ class RouteLeg {
   }
 }
 
+/// Stop display extension
 extension StopDisplay on StopModel {
-  /// Ang backend stub mo-return og "Origin" stop nga id "0" sa [0, 0]
-  /// kung walay tinuod nga stop — ipakita nato as "Your location".
   bool get isPlaceholder => id == '0' || (location.lat == 0 && location.lng == 0);
 
   String get displayName => isPlaceholder ? 'Your location' : name;
 }
 
+/// Route option stops extension
 extension RouteOptionStops on RouteOption {
-  /// Stops ridden across every leg, counted along each route's stop order.
-  /// Null when a leg's route or its board/alight stop isn't in [routesById]
-  /// (e.g. the backend's placeholder origin stop).
+  /// Stop count
   int? stopCount(Map<String, TransportRoute> routesById) {
     var total = 0;
     for (final leg in legs) {
@@ -224,22 +213,23 @@ extension RouteOptionStops on RouteOption {
   }
 }
 
-/// A named point the commuter travels from or to (a stop, or a map pin).
+/// Trip place
 class TripPlace {
+  /// Create trip place
   const TripPlace({required this.location, required this.label});
 
   final LatLng location;
   final String label;
 }
 
+/// Format fare
 String formatFare(double fare) => '₱${fare.toStringAsFixed(2)}';
 
-/// "₱13" for whole pesos, "₱13.50" otherwise — for compact fare badges.
+/// Format fare compact
 String formatFareCompact(double fare) =>
     fare == fare.roundToDouble() ? '₱${fare.toStringAsFixed(0)}' : formatFare(fare);
 
-/// "Walk 104 m to Capitol · Next PUV 4 min (live)" — null if the backend
-/// didn't send walking/wait details.
+/// Boarding summary
 String? boardingSummary(RouteLeg leg) {
   final walk = leg.walkToBoardM;
   final wait = leg.waitMin;
@@ -254,7 +244,7 @@ String? boardingSummary(RouteLeg leg) {
   return parts.join('  •  ');
 }
 
-/// "Heavy traffic (+6 min)  •  Congestion reported" — null without traffic data.
+/// Traffic summary
 String? trafficSummary(RouteOption option) {
   final legs = option.legs.where((l) => l.traffic != null).toList();
   if (legs.isEmpty) return null;
@@ -269,9 +259,11 @@ String? trafficSummary(RouteOption option) {
   ].join('  •  ');
 }
 
+/// Format distance
 String formatDistance(int metres) =>
     metres < 1000 ? '$metres m' : '${(metres / 1000).toStringAsFixed(1)} km';
 
+/// Format transfers
 String formatTransfers(int transfers) {
   if (transfers == 0) return 'No transfers';
   if (transfers == 1) return '1 transfer';

@@ -1,18 +1,17 @@
-// lib/widgets/commuter/route_code_chip.dart
-//
-// Teal pill with a route code ("07B"), shared by the route, vehicle and
-// alert lists. [compact] is the smaller size used inside alert cards.
-
+// Route code chip
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Route code chip
 class RouteCodeChip extends StatelessWidget {
+  /// Create route code chip
   const RouteCodeChip({super.key, required this.code, this.compact = false});
 
   final String code;
   final bool compact;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(

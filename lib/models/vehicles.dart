@@ -1,4 +1,7 @@
+// Vehicles model
+/// Vehicle model
 class Vehicle {
+  /// Create vehicle
   const Vehicle({
     required this.id,
     required this.plateNumber,
@@ -15,6 +18,7 @@ class Vehicle {
   final String? crowdLevel;
   final Map<String, dynamic>? lastPosition;
 
+  /// Parse from JSON
   factory Vehicle.fromJson(Map<String, dynamic> json) {
     return Vehicle(
       id: json['id'] as String,

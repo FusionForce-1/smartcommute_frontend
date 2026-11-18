@@ -1,13 +1,10 @@
-// lib/widgets/auth/smart_commute_logo.dart
-//
-// Logo lockup + tagline for Login / Register. Prefers the bundled PNG;
-// falls back to a painted mark so the preview still matches the mockups
-// when assets/images is empty.
-
+// Smart commute logo
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 
+/// Smart commute logo widget
 class SmartCommuteLogo extends StatelessWidget {
+  /// Create smart commute logo
   const SmartCommuteLogo({
     super.key,
     this.height = 140,
@@ -19,6 +16,7 @@ class SmartCommuteLogo extends StatelessWidget {
   final bool showTagline;
   final Color? taglineColor;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -46,10 +44,13 @@ class SmartCommuteLogo extends StatelessWidget {
   }
 }
 
+/// Painted lockup widget
 class _PaintedLockup extends StatelessWidget {
+  /// Create painted lockup
   const _PaintedLockup({required this.height});
   final double height;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final markHeight = height * 0.58;
@@ -93,9 +94,12 @@ class _PaintedLockup extends StatelessWidget {
   }
 }
 
+/// Mark painter
 class _MarkPainter extends CustomPainter {
+  /// Create mark painter
   const _MarkPainter();
 
+  /// Paint the canvas
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
@@ -154,6 +158,7 @@ class _MarkPainter extends CustomPainter {
     );
   }
 
+  /// Repaint when changed
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

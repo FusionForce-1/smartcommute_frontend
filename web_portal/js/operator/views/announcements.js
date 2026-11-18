@@ -1,22 +1,16 @@
-// js/operator/views/announcements.js
-//
-// Announcements: send notices (service alerts, schedule changes,
-// promotions) to the commuters on this operator's routes, and withdraw the
-// ones already sent. The backend picks the recipients; the operator only
-// learns how many it reached. Drivers don't get these — they send reports
-// the other way (Driver Reports).
-
+// Operator announcements view
 OperatorRouter.register('announcements', {
   title: 'Announcements',
   heading: 'Announcements',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const ROUTE_CODES_SHOWN = 3;
-    let notices;         // undefined = loading
+    let notices;
     let targets = [];
     let severity = 'info';
-    let requestId = null; // kept across retries of one send, so it can't go out twice
+    let requestId = null;
     const busy = new Set();
 
     el.innerHTML = `
@@ -79,8 +73,8 @@ OperatorRouter.register('announcements', {
     const listEl = el.querySelector('#notice-list');
     const countEl = el.querySelector('#notice-count');
 
-    // ---------- Form ----------
 
+    // Render severity
     function renderSeverity() {
       severityField.hidden = categorySelect.value !== 'service_alert';
       severityEl.querySelectorAll('[data-severity]').forEach((b) => {
@@ -89,6 +83,7 @@ OperatorRouter.register('announcements', {
       });
     }
 
+    // Render route options
     function renderRouteOptions() {
       const current = routeSelect.value;
       routeSelect.innerHTML = `<option value="">All your routes</option>${targets
@@ -97,11 +92,12 @@ OperatorRouter.register('announcements', {
       if (targets.some((t) => t.route_id === current)) routeSelect.value = current;
     }
 
+    // Announcements complete
     const complete = () => titleInput.value.trim() && messageInput.value.trim();
 
     form.addEventListener('input', () => {
       errorEl.hidden = true;
-      requestId = null;   // a changed announcement is a new one
+      requestId = null;
       submitBtn.disabled = !complete();
       renderSeverity();
     });
@@ -148,8 +144,8 @@ OperatorRouter.register('announcements', {
       }
     });
 
-    // ---------- List ----------
 
+    // Routes chip
     function routesChip(codes) {
       if (!codes.length) return OperatorUi.chip('Your routes');
       const shown = codes.slice(0, ROUTE_CODES_SHOWN).join(', ');
@@ -157,6 +153,7 @@ OperatorRouter.register('announcements', {
       return OperatorUi.chip(more > 0 ? `${shown} +${more} more` : shown);
     }
 
+    // Notice card
     function noticeCard(n) {
       const isAlert = n.category === 'service_alert';
       const sev = OperatorUi.SEVERITY[n.severity] || OperatorUi.SEVERITY.info;
@@ -188,8 +185,8 @@ OperatorRouter.register('announcements', {
         </article>`;
     }
 
+    // Render list
     function renderList() {
-      // Newest first, withdrawn ones after the rest.
       const ordered = [...notices.filter((n) => !n.withdrawn_at), ...notices.filter((n) => n.withdrawn_at)];
       const active = notices.length - notices.filter((n) => n.withdrawn_at).length;
       countEl.textContent = `${active} active ${active === 1 ? 'announcement' : 'announcements'}`;
@@ -198,6 +195,7 @@ OperatorRouter.register('announcements', {
         : `<div class="op-card">${AdminUi.stateMessage('Nothing sent yet. Announcements you send will appear here.')}</div>`;
     }
 
+    // Load announcements
     function load() {
       notices = undefined;
       AdminUi.loadInto(listEl, () => OperatorApi.sentNotices(), (list) => {
@@ -212,6 +210,7 @@ OperatorRouter.register('announcements', {
       }).catch(() => {});
     }
 
+    // Confirm withdraw
     function confirmWithdraw(notice) {
       AdminModal.confirm({
         title: 'Withdraw announcement?',

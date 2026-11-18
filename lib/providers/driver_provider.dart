@@ -1,21 +1,4 @@
-// lib/providers/driver_provider.dart
-//
-// State behind the Driver Dashboard: who the driver is, their assigned
-// vehicles and routes, the shift their operator started, crowd, passenger
-// and route-status reports during it, who they drive for, and the reports
-// they send their operator, filtered by period on the Reports tab.
-//
-// The operator starts and ends shifts in the portal; [refresh] (every
-// [refreshInterval] once [startAutoRefresh] is called, and right away when
-// the live feed says the shift ended) follows them. While a shift is open
-// the phone shares its location as a backup: the backend only uses it while
-// the jeep's tracker is offline. Which of the two the jeep's position is
-// coming from is read from the live feed ([jeepGps]).
-//
-// Crowd and passenger taps update the screen straight away and are rolled
-// back if the server refuses them. Actions return null on success or a
-// message to show.
-
+// Driver provider
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -32,10 +15,12 @@ import '../services/driver_service.dart';
 import '../services/websocket_service.dart';
 import 'load_state.dart';
 
-/// Where the jeep's live position is coming from.
+/// Jeep GPS options
 enum JeepGps { tracker, phone, none }
 
+/// Driver provider
 class DriverProvider extends ChangeNotifier {
+  /// Create driver
   DriverProvider(
     this._service, {
     GpsIngestionSession? gps,
@@ -50,10 +35,8 @@ class DriverProvider extends ChangeNotifier {
 
   final DriverService _service;
 
-  /// The phone's GPS, shared while a shift is open (the tracker's backup).
   final GpsIngestionSession gps;
 
-  /// Commuter-side broadcast, used here for our own jeep.
   final WebSocketService? _liveFeed;
 
   final Duration refreshInterval;
@@ -62,7 +45,6 @@ class DriverProvider extends ChangeNotifier {
   static const String noShiftMessage = "Your operator hasn't started your shift yet.";
   static const String noTrackerMessage = 'No GPS tracker is set up for this jeep, so your phone has nothing to back up. Ask your operator.';
 
-  /// No live fix for this long and the jeep counts as having no GPS.
   static const Duration liveFresh = Duration(seconds: 30);
 
   LoadState _loadState = LoadState.idle;
@@ -75,7 +57,7 @@ class DriverProvider extends ChangeNotifier {
   ReportsPeriod _reportsPeriod = ReportsPeriod.recent;
   DateTime? _reportsDay;
   bool _reportsLoading = false;
-  TransportRoute? _route;   // the current vehicle's line and stops
+  TransportRoute? _route;
   VehicleLiveUpdate? _live;
   DateTime? _liveAt;
   String? _gpsError;
@@ -93,7 +75,6 @@ class DriverProvider extends ChangeNotifier {
   RouteStatus get routeStatus => onShift ? _routeStatus : RouteStatus.unavailable;
   ReportsPeriod get reportsPeriod => _reportsPeriod;
 
-  /// The calendar day picked on the Reports tab (period [ReportsPeriod.day]).
   DateTime? get reportsDay => _reportsDay;
   bool get reportsLoading => _reportsLoading;
   List<AssignedVehicle> get vehicles => _data?.vehicles ?? const [];
@@ -101,13 +82,10 @@ class DriverProvider extends ChangeNotifier {
   bool get onShift => _shift != null;
   int get crowdPercent => _crowdPercent;
 
-  /// The reports this driver sent in the chosen period, newest first.
   List<DriverReport> get reports => _reports;
 
-  /// Why the phone isn't sharing its location (e.g. permission denied), if so.
   String? get gpsError => _gpsError;
 
-  /// The shift's vehicle, else the first one assigned.
   AssignedVehicle? get vehicle {
     final list = vehicles;
     final id = _shift?.vehicleId;
@@ -117,7 +95,6 @@ class DriverProvider extends ChangeNotifier {
     return list.isEmpty ? null : list.first;
   }
 
-  /// Our jeep's latest live frame (position, next stop, ETA).
   VehicleLiveUpdate? get live => _live?.vehicleId == vehicle?.id ? _live : null;
 
   JeepGps get jeepGps {
@@ -129,9 +106,8 @@ class DriverProvider extends ChangeNotifier {
     return live.source == 'phone' ? JeepGps.phone : JeepGps.tracker;
   }
 
-  // ── Loading ─────────────────────────────────────────────────
 
-  /// Loads the dashboard (a spinner the first time only) and follows the shift.
+  /// Load driver
   Future<void> load() async {
     if (_refreshing) return;
     _refreshing = true;
@@ -165,15 +141,16 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// Same as [load]: the operator may have started or ended the shift.
+  /// Refresh driver
   Future<void> refresh() => load();
 
-  /// Checks for shift changes every [refreshInterval] while the dashboard is open.
+  /// Start auto refresh
   void startAutoRefresh() {
     _timer?.cancel();
     _timer = Timer.periodic(refreshInterval, (_) => refresh());
   }
 
+  /// Load reports
   Future<void> loadReports() async {
     final period = _reportsPeriod;
     final day = _reportsDay;
@@ -182,26 +159,21 @@ class DriverProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final list = await _service.sentReports(since: range.since, until: range.until);
-      // Ignore a slower answer for a filter that's no longer chosen.
       if (period == _reportsPeriod && day == _reportsDay) _reports = list;
     } catch (_) {
-      // The list is extra: keep showing the last one.
     } finally {
       _reportsLoading = false;
       notifyListeners();
     }
   }
 
-  /// A filter chip ([period]) or a calendar [day] on the Reports tab.
+  /// Show reports
   Future<void> showReports(ReportsPeriod period, {DateTime? day}) {
     _reportsPeriod = period;
     _reportsDay = period == ReportsPeriod.day ? day : null;
     return loadReports();
   }
 
-  /// Sends a report to the driver's operator. [requestId] stays the same for
-  /// retries of one report, so a resend after a dropped connection is stored
-  /// once. Returns the stored report, or a message to show.
   Future<({DriverReport? sent, String? error})> sendReport(
     DriverReportCategory category, {
     String? note,
@@ -216,8 +188,7 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// The route's line and stops for the map, fetched once; null if it has none
-  /// (a failed fetch is tried again next time).
+  /// Route line
   Future<TransportRoute?> routeLine(String routeId) {
     return _routeLines[routeId] ??= _service.route(routeId).then<TransportRoute?>(
       (route) => route,
@@ -228,9 +199,9 @@ class DriverProvider extends ChangeNotifier {
     );
   }
 
-  /// The current vehicle's route line and stops (for the map and "Distance").
   TransportRoute? get route => _route?.id == vehicle?.routeId ? _route : null;
 
+  /// Load current route
   Future<void> _loadCurrentRoute() async {
     final routeId = vehicle?.routeId;
     if (routeId == null || routeId.isEmpty || _route?.id == routeId) return;
@@ -241,16 +212,12 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// Where the jeep is: the live feed (its tracker or this phone as backup),
-  /// else this phone's own last fix.
   LatLng? get jeepPosition {
     if (jeepGps != JeepGps.none) return live?.location;
     final fix = gps.lastFix;
     return fix == null ? live?.location : LatLng(fix.latitude, fix.longitude);
   }
 
-  /// Metres from the jeep to the next stop the live feed names; null when
-  /// either is unknown.
   double? get distanceToNextStopM {
     final name = live?.nextStop;
     final at = jeepPosition;
@@ -262,8 +229,8 @@ class DriverProvider extends ChangeNotifier {
     return null;
   }
 
-  // ── Phone GPS (the tracker's backup) ────────────────────────
 
+  /// Sync phone GPS
   Future<void> _syncPhoneGps() async {
     final shift = _shift;
     if (shift == null) {
@@ -271,12 +238,12 @@ class DriverProvider extends ChangeNotifier {
       _gpsError = null;
       return;
     }
-    if (vehicle?.hasTracker != true) {   // the backend only takes a phone's GPS as a tracker's backup
+    if (vehicle?.hasTracker != true) {
       if (gps.isActive) await gps.stop();
       _gpsError = noTrackerMessage;
       return;
     }
-    if (gps.isActive || _gpsError != null) return;   // a refused permission isn't asked again by itself
+    if (gps.isActive || _gpsError != null) return;
     try {
       await gps.start(shift.vehicleId);
     } catch (e) {
@@ -285,23 +252,22 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// "Try again" after turning location on.
+  /// Retry phone GPS
   Future<void> retryPhoneGps() async {
     _gpsError = null;
     notifyListeners();
     await _syncPhoneGps();
   }
 
-  // ── Reports during a shift ──────────────────────────────────
 
-  /// Moves the slider without saving (called while dragging).
+  /// Preview crowd
   void previewCrowd(int percent) {
     if (!onShift) return;
     _crowdPercent = percent;
     notifyListeners();
   }
 
-  /// Saves where the slider was let go.
+  /// Commit crowd
   Future<String?> commitCrowd(int percent) async {
     final shift = _shift;
     if (shift == null) return noShiftMessage;
@@ -318,7 +284,7 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// On-Route / Delayed / Unavailable; shown straight away, undone if refused.
+  /// Set route status
   Future<String?> setRouteStatus(RouteStatus status) async {
     if (!onShift) return noShiftMessage;
     final before = _routeStatus;
@@ -335,7 +301,7 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  /// +1 when a passenger boards; -1 to undo a mistaken tap.
+  /// Change passengers
   Future<String?> changePassengers(int change) async {
     final shift = _shift;
     if (shift == null) return noShiftMessage;
@@ -353,8 +319,8 @@ class DriverProvider extends ChangeNotifier {
     }
   }
 
-  // ── Live feed ───────────────────────────────────────────────
 
+  /// Listen for live updates
   void _listenForLiveUpdates() {
     final feed = _liveFeed;
     if (feed == null || _liveStarted) return;
@@ -362,21 +328,20 @@ class DriverProvider extends ChangeNotifier {
     feed.connect();
     feed.listenForMessages((message) {
       final json = jsonDecode(message as String) as Map<String, dynamic>;
-      if (json['vehicle_id'] is! String) return;   // e.g. transit alerts
+      if (json['vehicle_id'] is! String) return;
       onLiveFrame(VehicleLiveUpdate.fromJson(json));
     });
   }
 
-  /// One frame from the live feed (public for tests).
+  /// On live frame
   @visibleForTesting
   void onLiveFrame(VehicleLiveUpdate update) {
     if (update.vehicleId != vehicle?.id) return;
     if (update.shiftEnded) {
-      unawaited(refresh());   // the operator ended the shift
+      unawaited(refresh());
       return;
     }
     final current = _live;
-    // merge() returns null for an older fix that arrived late.
     final next = current == null || current.vehicleId != update.vehicleId ? update : current.merge(update);
     if (next == null) return;
     _live = next;
@@ -384,6 +349,7 @@ class DriverProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _timer?.cancel();

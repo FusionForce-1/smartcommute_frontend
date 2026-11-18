@@ -1,15 +1,4 @@
-// lib/widgets/stop_image.dart
-//
-// Shows a real photo of the area around a Transport Stop based on its
-// coordinates, so commuters can recognize the place right away.
-//
-// Image sources (tried in order):
-//   1. Google Street View Static API — only if GOOGLE_MAPS_API_KEY is in .env
-//   2. Esri World Imagery satellite tiles centered on the stop (free, no key)
-//
-// Note: ang Esri "export" endpoint (single snapshot image) gi-disable na
-// (HTTP 500), so mini map gikan sa satellite tiles na ang gamit.
-
+// Stop image
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -20,12 +9,12 @@ import '../config/env_config.dart';
 import '../config/theme_config.dart';
 import '../models/transport_stop.dart';
 
+/// Stop image URLs
 class StopImageUrls {
+  /// Create stop image
   StopImageUrls._();
 
-  /// Street-level photo of the stop. Returns null if no API key is set.
-  /// `return_error_code=true` makes Google return 404 when there's no
-  /// Street View coverage, so we fall back to the satellite image.
+  /// Street view
   static String? streetView(LatLng location, {int size = 400}) {
     final key = EnvConfig.googleMapsApiKey;
     if (key == null) return null;
@@ -36,13 +25,10 @@ class StopImageUrls {
         '&key=$key';
   }
 
-  /// Esri World Imagery tiles (CORS-enabled, works on web).
   static const String satelliteTiles =
       'https://server.arcgisonline.com/ArcGIS/rest/services/'
       'World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
-  /// The single satellite tile containing [location], plus where in that
-  /// tile (0..1 on each axis) the location falls.
   static ({String url, Offset position}) satelliteTile(LatLng location, {int zoom = 18}) {
     final n = math.pow(2, zoom).toDouble();
     final lat = location.latitude * math.pi / 180;
@@ -56,8 +42,9 @@ class StopImageUrls {
   }
 }
 
-/// Image of the area around [location], with automatic fallbacks.
+/// Stop image
 class StopImage extends StatelessWidget {
+  /// Create stop image
   const StopImage({
     super.key,
     required this.location,
@@ -67,10 +54,10 @@ class StopImage extends StatelessWidget {
 
   final LatLng location;
 
-  /// Requested image resolution in pixels (square).
   final int size;
   final BoxFit fit;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final satellite = _satellite();
@@ -81,6 +68,7 @@ class StopImage extends StatelessWidget {
     return _network(streetViewUrl, onError: satellite);
   }
 
+  /// Stop image network
   Widget _network(String url, {required Widget onError}) {
     return Image.network(
       url,
@@ -103,8 +91,7 @@ class StopImage extends StatelessWidget {
     );
   }
 
-  /// Static satellite view centered on the stop (~120m across at zoom 18).
-  /// AbsorbPointer: ang tap modawat sa marker / sheet, dili sa mini map.
+  /// Stop image satellite
   Widget _satellite() {
     return AbsorbPointer(
       child: FlutterMap(
@@ -128,11 +115,9 @@ class StopImage extends StatelessWidget {
   }
 }
 
-/// Map marker for a stop: a round photo thumbnail with a pointer below it.
-/// Use with `Marker(width: StopImageMarker.widthFor(photo),
-/// height: StopImageMarker.heightFor(photo), alignment: Alignment.topCenter)`
-/// so the pointer tip sits exactly on the stop's coordinates.
+/// Stop image marker
 class StopImageMarker extends StatelessWidget {
+  /// Create stop image marker
   const StopImageMarker({
     super.key,
     required this.stop,
@@ -140,21 +125,20 @@ class StopImageMarker extends StatelessWidget {
     this.photo = maxPhoto,
   });
 
-  /// Photo diameter when fully zoomed in. Kept small: many stops sit close
-  /// together, and big pins piled up into a mess.
   static const double maxPhoto = 28;
   static const double _pointerHeight = 6;
 
-  /// Size of the Marker box that holds a pin with a [photo]-wide photo.
+  /// Width for
   static double widthFor(double photo) => photo + 4;
+  /// Height for
   static double heightFor(double photo) => photo + _pointerHeight;
 
   final TransportStop stop;
   final VoidCallback? onTap;
 
-  /// Photo diameter in pixels — the map shrinks it as you zoom out.
   final double photo;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -186,22 +170,21 @@ class StopImageMarker extends StatelessWidget {
   }
 }
 
-/// Pin photo: Street View when a key is set, else one satellite tile
-/// cropped around the stop. Not [StopImage] — its fallback is a whole
-/// FlutterMap, and one per pin made the Home map freeze.
+/// Stop thumbnail widget
 class _StopThumbnail extends StatelessWidget {
+  /// Create stop thumbnail
   const _StopThumbnail({required this.location});
 
   static const double _tileSize = 256;
 
   final LatLng location;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final satellite = LayoutBuilder(
       builder: (context, constraints) {
         final tile = StopImageUrls.satelliteTile(location);
-        // Alignment that puts the stop's spot in the tile at the center.
         double align(double fraction, double extent) =>
             ((fraction * _tileSize - extent / 2) / (_tileSize - extent) * 2 - 1)
                 .clamp(-1.0, 1.0);
@@ -230,11 +213,14 @@ class _StopThumbnail extends StatelessWidget {
   }
 }
 
+/// Pointer painter
 class _PointerPainter extends CustomPainter {
+  /// Create pointer painter
   const _PointerPainter(this.color);
 
   final Color color;
 
+  /// Paint the canvas
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()
@@ -245,11 +231,12 @@ class _PointerPainter extends CustomPainter {
     canvas.drawPath(path, Paint()..color = color);
   }
 
+  /// Repaint when changed
   @override
   bool shouldRepaint(_PointerPainter oldDelegate) => oldDelegate.color != color;
 }
 
-/// Bottom sheet with a large photo of the stop plus its name and landmark.
+/// Show stop details sheet
 Future<void> showStopDetailsSheet(BuildContext context, TransportStop stop) {
   return showModalBottomSheet<void>(
     context: context,
@@ -257,7 +244,6 @@ Future<void> showStopDetailsSheet(BuildContext context, TransportStop stop) {
     builder: (context) {
       final textTheme = Theme.of(context).textTheme;
       return SafeArea(
-        // Scrollable para dili mag-overflow sa mubo nga window (e.g. Chrome sa laptop)
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -269,8 +255,6 @@ Future<void> showStopDetailsSheet(BuildContext context, TransportStop stop) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 16:10 photo, pero dili molapas 35% sa screen height —
-              // sa lapad nga screen ma-crop gamay imbes mo-taas kaayo.
               LayoutBuilder(
                 builder: (context, constraints) {
                   final height = math.min(

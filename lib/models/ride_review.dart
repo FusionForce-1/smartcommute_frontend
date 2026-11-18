@@ -1,13 +1,9 @@
-// lib/models/ride_review.dart
-//
-// A commuter's rating of a jeepney ride (POST /reviews, GET /reviews/mine).
-// The backend credits it to the jeep's assigned driver; the operator sees
-// it on their Reports page, never who wrote it.
-
+// Ride review
 import 'vehicle_live_update.dart' show parseServerTime;
 
-/// Quick tags; the backend accepts exactly these keys.
+/// Review tag
 class ReviewTag {
+  /// Create review tag
   const ReviewTag(this.key, this.label, {required this.positive});
 
   final String key;
@@ -28,11 +24,14 @@ class ReviewTag {
     ReviewTag('dirty', 'Dirty PUV', positive: false),
   ];
 
+  /// Label of
   static String labelOf(String key) =>
       all.firstWhere((t) => t.key == key, orElse: () => ReviewTag(key, key.replaceAll('_', ' '), positive: true)).label;
 }
 
+/// Ride review
 class RideReview {
+  /// Create ride review
   const RideReview({
     required this.id,
     required this.routeId,
@@ -53,6 +52,7 @@ class RideReview {
   final String? comment;
   final DateTime createdAt;
 
+  /// Parse from JSON
   factory RideReview.fromJson(Map<String, dynamic> json) => RideReview(
         id: json['id'] as String,
         routeId: json['route_id'] as String,

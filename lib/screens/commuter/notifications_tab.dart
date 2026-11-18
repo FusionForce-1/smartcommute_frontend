@@ -1,11 +1,4 @@
-// lib/screens/commuter/notifications_tab.dart
-//
-// Notifications tab: what operators sent about the routes the commuter
-// saved or rode — unread count, Mark all read, category filters, Load more.
-// Tapping a notice marks it read and opens its details. Pull down to
-// refresh. Guests have no inbox and are invited to sign up instead. State
-// lives in NoticesProvider (owned by the dashboard).
-
+// Notifications tab
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -18,17 +11,20 @@ import '../../widgets/commuter/notice_card.dart';
 import '../../widgets/commuter/notice_details_sheet.dart';
 import '../../widgets/commuter/notice_filter_bar.dart';
 
+/// Notifications tab
 class NotificationsTab extends StatelessWidget {
+  /// Create notifications tab
   const NotificationsTab({super.key, this.onCreateAccount});
 
-  /// Guests: leave the guest visit and open Register.
   final VoidCallback? onCreateAccount;
 
+  /// Open notifications tab
   void _open(BuildContext context, CommuterNotice notice) {
     context.read<NoticesProvider>().markRead(notice);
     showNoticeDetailsSheet(context, notice);
   }
 
+  /// Mark all read
   Future<void> _markAllRead(BuildContext context) async {
     final error = await context.read<NoticesProvider>().markAllRead();
     if (error != null && context.mounted) {
@@ -36,6 +32,7 @@ class NotificationsTab extends StatelessWidget {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final notices = context.watch<NoticesProvider>();
@@ -76,6 +73,7 @@ class NotificationsTab extends StatelessWidget {
     );
   }
 
+  /// Notifications tab content
   List<Widget> _content(BuildContext context, NoticesProvider notices) {
     switch (notices.state) {
       case LoadState.idle:
@@ -125,11 +123,14 @@ class NotificationsTab extends StatelessWidget {
   }
 }
 
+/// Guest invite widget
 class _GuestInvite extends StatelessWidget {
+  /// Create guest invite
   const _GuestInvite({required this.onCreateAccount});
 
   final VoidCallback? onCreateAccount;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final onCreateAccount = this.onCreateAccount;
@@ -157,7 +158,9 @@ class _GuestInvite extends StatelessWidget {
   }
 }
 
+/// Message widget
 class _Message extends StatelessWidget {
+  /// Create message
   const _Message({
     required this.icon,
     required this.text,
@@ -170,6 +173,7 @@ class _Message extends StatelessWidget {
   final Color color;
   final VoidCallback? onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final onRetry = this.onRetry;

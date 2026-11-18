@@ -1,28 +1,4 @@
-// lib/screens/commuter/home.dart
-//
-// Home tab: destination search, Live Map, quick actions and the
-// "Nearby Vehicles" list. Opens the live vehicle socket and animates
-// one smoothed track per jeep.
-//
-// The map can go full screen (expand button on the map): it then fills the
-// tab with the search bar floating on top, its buttons on the right, and
-// "Nearby Vehicles" in a sheet that drags up, or down to just its handle.
-// The same map (camera, live jeeps, selection) moves between the two layouts.
-//
-// A route picked with "Select this route" on the Route tab ([selectedTrip])
-// is drawn on the map, framed to fit, with a card above it to open its
-// details or cancel it ([onCancelTrip]).
-//
-// Picking a jeep in the "Nearby Vehicles" list shows how to catch it: how far
-// it is from the commuter, the shortest walk to the route's nearest stop (or
-// closest point) and to the jeep itself, with distance and minutes, and how
-// soon the jeep reaches that spot (services/boarding_planner.dart).
-//
-// The map opens on the commuter and follows them as they move; with a jeep
-// picked it keeps the two of them in view (widgets/map_follower.dart). A
-// selected route stays framed until they set off. Dragging the map stops
-// the following; "Center on my location" starts it again.
-
+// Home screen
 import 'dart:async';
 import 'dart:convert';
 
@@ -58,7 +34,9 @@ import '../../widgets/stop_image.dart';
 import '../../widgets/stop_search_sheet.dart';
 import 'route_map_screen.dart';
 
+/// Home tab
 class HomeTab extends StatefulWidget {
+  /// Create home tab
   const HomeTab({
     super.key,
     required this.stops,
@@ -76,37 +54,30 @@ class HomeTab extends StatefulWidget {
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
-  /// Fleet list from /vehicles, used to tell which route a live jeep is on.
   final List<Vehicle> vehicles;
 
-  /// A live jeep isn't in [vehicles] / [routes] (added after they loaded):
-  /// asks the dashboard to load them again.
   final VoidCallback? onUnknownVehicle;
 
-  /// "Refresh vehicle markers": reload stops, routes and vehicles now.
   final VoidCallback? onRefresh;
 
-  /// The route picked with "Select this route", shown until cancelled.
   final SelectedTrip? selectedTrip;
   final VoidCallback? onCancelTrip;
 
-  /// The phone's positions, the live feed and walking directions; tests pass fakes.
   final Stream<Position>? positions;
   final WebSocketService? socket;
   final WalkingRouteService? walking;
 
+  /// Create widget state
   @override
   State<HomeTab> createState() => _HomeTabState();
 }
 
+/// Home tab state
 class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   static const int _maxNearby = 5;
 
-  /// Phone fixes with a reported error above this (metres) are ignored.
   static const double _maxFixErrorM = 25;
 
-  /// How far the commuter moves before a selected route's overview gives
-  /// way to following them.
   static const double _setOffM = 30;
 
   final MapController _mapController = MapController();
@@ -114,82 +85,64 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   bool _mapReady = false;
   LatLng? _currentLocation;
 
-  /// The whole selected route is framed; [_overviewFrom] is where the
-  /// commuter was then.
   bool _tripOverview = false;
   LatLng? _overviewFrom;
 
-  // Keeps the "you are here" marker following the phone as it moves.
   StreamSubscription<Position>? _positionSub;
-  LatLng? _lastSortedAt; // where "Nearby Vehicles" was last sorted from
+  LatLng? _lastSortedAt;
 
-  // One smoothed track per jeep, so several vehicles broadcasting at once
-  // each keep their own marker.
   final Map<String, VehicleTrack> _tracks = {};
 
-  // Drives marker animation: only the vehicle layer repaints per frame,
-  // and the ticker stops once every marker has reached its latest fix.
   final Stopwatch _clock = Stopwatch()..start();
   final ValueNotifier<int> _frame = ValueNotifier(0);
   late final Ticker _ticker;
 
-  // Bumped per socket message, so "Nearby Vehicles" rebuilds on new
-  // data instead of on every animation frame.
   final ValueNotifier<int> _fleetVersion = ValueNotifier(0);
 
-  /// The jeep picked from "Nearby Vehicles"; we show how to catch it.
   String? _selectedVehicleId;
 
-  // How to catch the selected jeep (null until we know where both are).
   BoardingPlan? _plan;
-  WalkingRoute? _walk;           // to the boarding spot
-  WalkingRoute? _jeepWalk;       // to the jeep itself
-  bool _walkingToJeep = false;   // which of the two the map draws
-  String? _boardName;            // "near Fuente BRT Station"
+  WalkingRoute? _walk;
+  WalkingRoute? _jeepWalk;
+  bool _walkingToJeep = false;
+  String? _boardName;
 
-  /// Follows the commuter along [HomeTab.selectedTrip]: walking to board,
-  /// riding, getting off (services/trip_progress.dart).
   late TripProgress? _progress = _progressFor(widget.selectedTrip);
 
-  /// How [HomeTab.selectedTrip] is drawn; null when none is selected.
   late TripRouteLayers? _tripLayers = _layersFor(widget.selectedTrip, _progress);
 
+  /// Progress for
   static TripProgress? _progressFor(SelectedTrip? trip) =>
       trip == null ? null : TripProgress(trip.option, trip.routesById);
 
+  /// Layers for
   static TripRouteLayers? _layersFor(SelectedTrip? trip, TripProgress? progress) =>
       trip == null ? null : TripRouteLayers.of(trip.option, trip.routesById, progress: progress);
 
-  // ---------- Full-screen map ----------
 
   bool _mapExpanded = false;
 
-  /// Keeps the one map (and its controller) alive as it moves between the
-  /// card layout and the full-screen layout.
   final GlobalKey _mapKey = GlobalKey();
 
   final DraggableScrollableController _sheet = DraggableScrollableController();
 
-  /// How much of the full-screen height the sheet covers; the map buttons
-  /// ride just above it.
   final ValueNotifier<double> _sheetExtent = ValueNotifier(0);
 
   static const double _sheetOpen = 0.34;
   static const double _sheetMax = 0.75;
 
-  /// Height of the sheet's drag handle: all that shows when minimized.
   static const double _sheetHandle = 30;
 
-  /// How far down the full-screen map the search bar reaches.
   static const double _searchBarBottom = 60;
-  LatLng? _walkPlannedTo;        // boarding spot the current _walk leads to
+  LatLng? _walkPlannedTo;
   LatLng? _walkPlannedFrom;
-  LatLng? _jeepWalkTo;           // where the jeep was for the current _jeepWalk
+  LatLng? _jeepWalkTo;
   DateTime _lastPlanAt = DateTime.fromMillisecondsSinceEpoch(0);
   late final WalkingRouteService _walking = widget.walking ?? WalkingRouteService();
 
   late final WebSocketService _socket;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
@@ -200,6 +153,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _locateOnOpen();
   }
 
+  /// React to widget update
   @override
   void didUpdateWidget(HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -212,12 +166,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       _showTrip();
     }
     if (oldWidget.stops.isEmpty && widget.stops.isNotEmpty) _fitToStops();
-    // New vehicle / route lists: jeeps that were hidden may now be listed.
     if (!identical(oldWidget.vehicles, widget.vehicles) || !identical(oldWidget.routes, widget.routes)) {
       _fleetVersion.value++;
     }
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _arrivedClear?.cancel();
@@ -232,8 +186,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  // ---------- Live vehicles ----------
 
+  /// On vehicle message
   void _onVehicleMessage(dynamic message) {
     if (!mounted) return;
 
@@ -243,7 +197,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     final now = _clock.elapsed;
     final track = _tracks[update.vehicleId];
     if (update.shiftEnded) {
-      // Off duty now: take the jeep off the map (it comes back with its next shift's GPS).
       if (_tracks.remove(update.vehicleId) != null) {
         if (update.vehicleId == _selectedVehicleId) _clearSelectedVehicle();
         _frame.value++;
@@ -254,16 +207,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     if (track == null) {
       _tracks[update.vehicleId] = VehicleTrack(update, now);
     } else {
-      track.push(update, now); // drops out-of-order fixes and GPS glitches
+      track.push(update, now);
     }
 
     _frame.value++;
     _fleetVersion.value++;
     if (!_ticker.isActive) _ticker.start();
-    // A jeep we can't place on a route is new to us: reload the lists so it
-    // shows up in Nearby Vehicles without restarting the app.
     if (update.location != null && _routeOf(update.vehicleId) == null) widget.onUnknownVehicle?.call();
-    // The selected jeep moved: refresh how far it is from the boarding spot.
     if (update.vehicleId == _selectedVehicleId &&
         DateTime.now().difference(_lastPlanAt) > const Duration(seconds: 3)) {
       _updateBoarding();
@@ -271,22 +221,22 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     if (update.vehicleId == _selectedVehicleId) _followCamera();
   }
 
+  /// On tick
   void _onTick(Duration _) {
     _frame.value++;
     if (!_tracks.values.any((t) => t.isAnimating(_clock.elapsed))) _ticker.stop();
   }
 
+  /// Refresh vehicles
   void _refreshVehicles() {
     _tracks.clear();
     _frame.value++;
     _fleetVersion.value++;
     _socket.connect();
-    widget.onRefresh?.call();   // also pick up jeeps / routes added since the app opened
+    widget.onRefresh?.call();
   }
 
-  /// Available live jeeps on a known route: the nearest few, those still
-  /// coming to the commuter first (soonest first, without GPS). Signal-lost
-  /// jeeps and drivers set to Unavailable are left out: they can't be boarded.
+  /// Nearby vehicles
   List<NearbyVehicle> _nearbyVehicles({int limit = _maxNearby}) {
     final routesById = {for (final r in widget.routes) r.id: r};
     final routeByVehicle = {
@@ -324,11 +274,11 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           plan: _planFor(v.route, v.track.latest.location!, here, v.track.headingAt(_clock.elapsed)),
         ),
     ];
-    // Stable: jeeps that passed the commuter drop below those still coming.
     bool passed(NearbyVehicle v) => v.plan?.jeepPassed ?? false;
     return [...nearest.where((v) => !passed(v)), ...nearest.where(passed)];
   }
 
+  /// Plan for
   static BoardingPlan _planFor(TransportRoute? route, LatLng jeep, LatLng here, double? heading) => planBoarding(
         route: lineAsDriven(route?.geometry ?? const [], jeep: jeep, user: here, heading: heading),
         user: here,
@@ -336,17 +286,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         stops: route?.stops ?? const [],
       );
 
-  // ---------- Nearby Vehicles → line on the map ----------
 
-  /// A jeep tapped in the list: makes sure we know where the commuter is
-  /// (the walking line starts there), then shows how to catch it.
+  /// Pick nearby vehicle
   Future<void> _pickNearbyVehicle(String vehicleId) async {
     if (_selectedVehicleId != vehicleId && _currentLocation == null && await _locate() == null) return;
     if (mounted) _selectVehicle(vehicleId);
   }
 
-  /// Shows (or, tapped again, hides) how to catch [vehicleId], keeping the
-  /// jeep, the commuter and the boarding spot on the map.
+  /// Select vehicle
   void _selectVehicle(String vehicleId) {
     if (_selectedVehicleId == vehicleId) return _clearSelectedVehicle();
     setState(() {
@@ -368,6 +315,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _followCamera();
   }
 
+  /// Clear selected vehicle
   void _clearSelectedVehicle() {
     setState(() {
       _selectedVehicleId = null;
@@ -378,6 +326,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _followCamera();
   }
 
+  /// Reset boarding
   void _resetBoarding() {
     _plan = null;
     _walk = null;
@@ -388,6 +337,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _jeepWalkTo = null;
   }
 
+  /// Route of
   TransportRoute? _routeOf(String vehicleId) {
     for (final v in widget.vehicles) {
       if (v.id != vehicleId) continue;
@@ -398,8 +348,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     return null;
   }
 
-  /// Recomputes where to board the selected jeep; fetches new walking paths
-  /// only when the commuter, the boarding spot or the jeep moved noticeably.
+  /// Update boarding
   void _updateBoarding() {
     final id = _selectedVehicleId;
     final here = _currentLocation;
@@ -425,6 +374,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _nameBoardingSpot(plan, id);
   }
 
+  /// Plan walk to jeep
   void _planWalkToJeep(String id, LatLng here, LatLng jeep) {
     _jeepWalkTo = jeep;
     if (_jeepWalk == null) setState(() => _jeepWalk = WalkingRouteService.straight(here, jeep));
@@ -434,7 +384,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     });
   }
 
-  /// Names the boarding spot: its stop, else the nearest stop or landmark.
+  /// Name boarding spot
   Future<void> _nameBoardingSpot(BoardingPlan plan, String vehicleId) async {
     if (plan.stopName != null) {
       setState(() => _boardName = plan.stopName);
@@ -456,13 +406,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     setState(() => _boardName = name);
   }
 
+  /// ETA minutes
   int? _etaMinutes(VehicleLiveUpdate update) {
     final eta = update.etaNextStop;
     return eta != null && eta >= 0 ? eta : null;
   }
 
-  // ---------- Map ----------
 
+  /// On map ready
   void _onMapReady() {
     _mapReady = true;
     _follow.mapReady();
@@ -475,8 +426,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// Frames the selected route until the commuter sets off; with no route
-  /// any more, goes back to following them.
+  /// Show trip
   void _showTrip() {
     final fit = _tripLayers?.cameraFit;
     _tripOverview = fit != null;
@@ -489,14 +439,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// Moves the camera with the commuter, or keeps them and the picked jeep
-  /// both in view.
+  /// Follow camera
   void _followCamera() {
     if (!_follow.following.value) return;
     final here = _currentLocation;
     if (here == null) return;
     final id = _selectedVehicleId;
-    // Where the marker is gliding to, or the camera would trail it by a fix.
     final jeep = id == null || id == _ridingVehicleId ? null : _tracks[id]?.latest.location;
     if (jeep != null) {
       _follow.frame([here, jeep, if (_plan case final plan?) plan.boardAt], covered: _mapCovered);
@@ -505,14 +453,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// What sits on top of the map. A sheet pulled up past its open height is
-  /// being read, not the map, and the frame needs the room that's left.
   EdgeInsets get _mapCovered {
     if (!_mapExpanded) return EdgeInsets.zero;
     final sheet = _sheetExtent.value.clamp(0.0, _sheetOpen);
     return EdgeInsets.only(top: _searchBarBottom, bottom: sheet * _mapController.camera.size.height);
   }
 
+  /// On trip overview
   bool _onTripOverview(LatLng here) {
     if (!_tripOverview) return false;
     final from = _overviewFrom ??= here;
@@ -520,6 +467,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     return _tripOverview;
   }
 
+  /// Open selected trip
   void _openSelectedTrip() {
     final trip = widget.selectedTrip;
     if (trip == null) return;
@@ -528,7 +476,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     ));
   }
 
-  /// The selected route's card, sliding in and out as it's chosen / cancelled.
+  /// Selected trip slot
   Widget _selectedTripSlot({required EdgeInsets padding}) {
     final trip = widget.selectedTrip;
     return AnimatedSize(
@@ -539,7 +487,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           ? const SizedBox(width: double.infinity)
           : Padding(
               padding: padding,
-              // Rebuilt per jeep update too, so the next jeep's wait stays current.
               child: ValueListenableBuilder<int>(
                 valueListenable: _fleetVersion,
                 builder: (context, _, __) => SelectedTripCard(
@@ -555,7 +502,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  /// Every live jeep that can be boarded: where it is now and which way it's driving.
+  /// Live jeeps
   List<LiveJeep> _liveJeeps() {
     final now = _clock.elapsed;
     final routeOf = {for (final v in widget.vehicles) v.id: v.routeId};
@@ -568,7 +515,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     ];
   }
 
-  /// The selected trip's time to the destination from where the commuter is now.
+  /// Trip ETA
   TripEta? _tripEta(SelectedTrip trip) {
     final state = _progress?.state;
     final here = _currentLocation;
@@ -583,8 +530,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  /// The jeep the commuter is riding (services/ride_matcher.dart), when it
-  /// runs the trip leg they're on and drives it the way the trip goes.
+  /// Boarded vehicle
   Vehicle? _boardedVehicle() {
     final id = _ridingVehicleId;
     final progress = _progress;
@@ -599,7 +545,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       if (v.id == id) vehicle = v;
     }
     if (vehicle == null || vehicle.routeId != leg.routeId) return null;
-    // Same route the other way isn't the jeep they were waiting for.
     final track = _tracks[id];
     final heading = track?.headingAt(_clock.elapsed) ?? track?.latest.heading;
     final at = track?.latest.location;
@@ -611,9 +556,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     return vehicle;
   }
 
+  /// Fit to stops
   void _fitToStops() {
     final stops = widget.stops;
-    // A selected route keeps the map framed on it; the commuter keeps it on them.
     if (!_mapReady || stops.isEmpty || _tripLayers != null || _currentLocation != null) return;
     if (stops.length == 1) {
       _mapController.move(stops.first.location, 16);
@@ -628,6 +573,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
+  /// Search destination
   Future<void> _searchDestination() async {
     if (widget.stops.isEmpty) {
       _showMessage('Stops are still loading. Please try again in a moment.');
@@ -640,7 +586,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     showStopDetailsSheet(context, stop);
   }
 
-  /// Back to following the commuter, wherever the map was left.
+  /// Center on my location
   Future<void> _centerOnMyLocation() async {
     _tripOverview = false;
     _follow.resume();
@@ -648,8 +594,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     await _locate();
   }
 
-  /// Asks for permission if needed, takes a fix and starts following the
-  /// phone. Returns null (after telling the commuter why) on failure.
+  /// Locate home tab
   Future<LatLng?> _locate() async {
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -674,9 +619,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// Starts tracking the phone as the tab opens, so the map can center on
-  /// the commuter. Asks for permission once; if they say no, the map stays
-  /// on the stops and the locate button explains why.
+  /// Locate on open
   Future<void> _locateOnOpen() async {
     if (widget.positions != null) return _startPositionUpdates();
     try {
@@ -686,14 +629,13 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         _startPositionUpdates();
       }
     } catch (_) {
-      // No location support here; the locate button still reports why.
     }
   }
 
+  /// Start position updates
   void _startPositionUpdates() {
     if (_positionSub != null || !mounted) return;
     final LocationSettings settings = !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-        // Ask Android for a fix every second; the default can be much slower.
         ? AndroidSettings(
             accuracy: LocationAccuracy.best,
             distanceFilter: 2,
@@ -702,9 +644,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         : const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 2);
     _positionSub = (widget.positions ?? Geolocator.getPositionStream(locationSettings: settings)).listen(
       (p) {
-        // Indoors Android mixes in Wi-Fi/cell fixes that can be 50-100 m off,
-        // which made the dot hop around. Once we have a position, skip any
-        // fix the phone itself rates worse than _maxFixErrorM.
         if (_currentLocation != null && p.accuracy > _maxFixErrorM) return;
         _setCurrentLocation(LatLng(p.latitude, p.longitude), speedMps: p.speed);
       },
@@ -715,6 +654,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
+  /// Set current location
   void _setCurrentLocation(LatLng here, {double? speedMps}) {
     if (!mounted) return;
     final now = _clock.elapsed;
@@ -730,7 +670,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     });
     if (_selectedVehicleId != null) _updateBoarding();
     _followCamera();
-    // Re-sort "Nearby Vehicles" only after a real move, not on every fix.
     final last = _lastSortedAt;
     if (last == null || const Distance().as(LengthUnit.Meter, last, here) > 25) {
       _lastSortedAt = here;
@@ -738,8 +677,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// With a trip selected, the map shows only the jeeps on its routes (and
-  /// one picked from Nearby Vehicles); null shows them all.
+  /// Trip vehicle IDs
   Set<String>? _tripVehicleIds() {
     final trip = widget.selectedTrip;
     if (trip == null) return null;
@@ -751,23 +689,19 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     };
   }
 
-  /// Moves the selected route's progress on (greys the travelled part)
-  /// and says when the commuter gets on, should get off, or has arrived.
+  /// Track trip
   void _trackTrip(LatLng here, double? speedMps) {
     final progress = _progress;
     final trip = widget.selectedTrip;
     if (progress == null || trip == null) return;
     final before = progress.state;
     var now = progress.update(here, at: DateTime.now(), reportedSpeedMps: speedMps);
-    // On a jeep of this leg's route (its GPS moves with the phone): riding,
-    // even if the phone's own speed on the line hasn't shown it yet.
     final boarded = _boardedVehicle();
     if (boarded != null && !now.isRiding) now = progress.boarded(here, at: DateTime.now());
     _tripLayers = _layersFor(trip, progress);
     final leg = trip.option.legs[now.legIndex];
     final name = leg.routeCode ?? leg.routeName;
 
-    // Once per leg: the jeep they're on is the one they were waiting for.
     String? boardedMessage;
     if (boarded != null && now.phase == TripPhase.riding && _boardedNoticeLeg != now.legIndex) {
       _boardedNoticeLeg = now.legIndex;
@@ -786,7 +720,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       _ => boardedMessage,
     };
     if (message != null) _postMessage(message, replace: message == boardedMessage);
-    // Trip done: clear it after a moment, so the map goes back to every stop and jeep.
     if (now.phase == TripPhase.arrived) {
       _arrivedClear?.cancel();
       _arrivedClear = Timer(clearAfterArrival, () {
@@ -795,17 +728,15 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  /// The jeep the commuter is riding: the map draws them as that jeep.
   final RideMatcher _ride = RideMatcher();
   String? _ridingVehicleId;
 
-  /// The leg whose "you're on the jeep you were waiting for" was shown.
   int? _boardedNoticeLeg;
 
-  /// How long the finished trip stays on the map after "You've arrived".
   static const Duration clearAfterArrival = Duration(seconds: 15);
   Timer? _arrivedClear;
 
+  /// Show message
   void _showMessage(String text, {bool replace = false}) {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
@@ -813,17 +744,16 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     messenger.showSnackBar(SnackBar(content: Text(text)));
   }
 
-  /// [_showMessage] after this frame (called from inside setState).
+  /// Post message
   void _postMessage(String text, {bool replace = false}) =>
       WidgetsBinding.instance.addPostFrameCallback((_) => _showMessage(text, replace: replace));
 
-  // ---------- UI ----------
 
+  /// Set map expanded
   void _setMapExpanded(bool expanded) {
     if (expanded == _mapExpanded) return;
     setState(() => _mapExpanded = expanded);
     if (!expanded) return;
-    // The sheet starts at its handle and slides up into view.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_mapExpanded && _sheet.isAttached) {
         _sheet.animateTo(_sheetOpen, duration: const Duration(milliseconds: 350), curve: Curves.easeOutCubic);
@@ -831,6 +761,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     });
   }
 
+  /// Toggle sheet
   void _toggleSheet(double minSize) {
     if (!_sheet.isAttached) return;
     final open = _sheet.size > minSize + 0.02;
@@ -841,10 +772,10 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // Back leaves full screen instead of leaving the app.
       canPop: !_mapExpanded,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _setMapExpanded(false);
@@ -853,6 +784,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
+  /// Live map
   Widget _liveMap({required bool expanded}) {
     return LiveMap(
       key: _mapKey,
@@ -873,7 +805,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       jeepPath: _plan?.jeepPath,
       expanded: expanded,
       onToggleExpanded: () => _setMapExpanded(!_mapExpanded),
-      // Full screen: the buttons sit above the sheet, placed below.
       showControls: !expanded,
       topInset: expanded ? 56 : 0,
       trip: _tripLayers,
@@ -882,7 +813,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  /// "Catch the jeep" card, when a jeep is picked and the walk is known.
+  /// Boarding card
   Widget? _boardingCard() {
     if (_selectedVehicleId == null || _plan == null || _walk == null) return null;
     return _BoardingCard(
@@ -898,6 +829,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
+  /// Nearby section
   List<Widget> _nearbySection(BuildContext context) => [
         Text(
           'Nearby Vehicles',
@@ -918,6 +850,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
         ),
       ];
 
+  /// Build content
   Widget _buildContent(BuildContext context) {
     final boarding = _boardingCard();
     return ListView(
@@ -943,8 +876,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     );
   }
 
-  /// Map edge to edge, search on top, buttons on the right riding above a
-  /// draggable "Nearby Vehicles" sheet.
+  /// Build full screen
   Widget _buildFullScreen() {
     return LayoutBuilder(
       builder: (context, box) {
@@ -968,7 +900,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
               valueListenable: _sheetExtent,
               builder: (context, extent, controls) {
                 final bottom = extent.clamp(minSize, 1.0) * height + AppSpacing.xs;
-                // Fade the buttons out once the sheet climbs into their way.
                 final hidden = bottom > height * 0.55;
                 return Positioned(
                   right: AppSpacing.sm,
@@ -1013,7 +944,6 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                     controller: scroll,
                     padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
                     children: [
-                      // Drag here, or tap to open / minimize.
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => _toggleSheet(minSize),
@@ -1047,12 +977,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   }
 }
 
-/// Looks like a text field; opens the stop search sheet when tapped.
+/// Search field
 class _SearchField extends StatelessWidget {
+  /// Create search field
   const _SearchField({required this.onTap});
 
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -1086,10 +1018,9 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// "How to catch it": how far the jeep is, the shortest walks to the boarding
-/// spot and to the jeep (tap one to see it on the map), and whether the
-/// commuter gets there in time.
+/// Boarding card
 class _BoardingCard extends StatelessWidget {
+  /// Create boarding card
   const _BoardingCard({
     required this.routeCode,
     required this.plan,
@@ -1127,6 +1058,7 @@ class _BoardingCard extends StatelessWidget {
     return 'The $routeCode is ${formatKm(jeep)} from that spot along its route, about $jeepMin min. $race';
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final where = plan.stopName != null || boardName != null
@@ -1207,8 +1139,9 @@ class _BoardingCard extends StatelessWidget {
   }
 }
 
-/// One way to walk: where to, how far, how long. The selected one is on the map.
+/// Walk option widget
 class _WalkOption extends StatelessWidget {
+  /// Create walk option
   const _WalkOption({
     super.key,
     required this.icon,
@@ -1224,6 +1157,7 @@ class _WalkOption extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1265,16 +1199,17 @@ class _WalkOption extends StatelessWidget {
   }
 }
 
-/// A live jeep in "Nearby Vehicles"; [metres] and [plan] are null without
-/// our location.
 typedef NearbyVehicle = ({TransportRoute route, VehicleLiveUpdate update, double? metres, BoardingPlan? plan});
 
+/// Nearby list
 class _NearbyList extends StatelessWidget {
+  /// Reach minutes
   static int? _reachMinutes(NearbyVehicle v) {
     final metres = v.plan?.jeepToBoardM;
     return metres == null ? null : jeepMinutes(metres, v.update.speed);
   }
 
+  /// Create nearby list
   const _NearbyList({
     required this.vehicles,
     this.notInService = 0,
@@ -1285,13 +1220,12 @@ class _NearbyList extends StatelessWidget {
 
   final List<NearbyVehicle> vehicles;
 
-  /// Live jeeps on the map that aren't taking passengers (no shift started,
-  /// or the driver set Unavailable): not listed, but explained.
   final int notInService;
   final int? Function(VehicleLiveUpdate) etaOf;
   final String? selectedId;
   final ValueChanged<String> onSelected;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     if (vehicles.isEmpty) {

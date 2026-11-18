@@ -1,17 +1,8 @@
-// Every class here follows the same pattern:
-//   - a plain Dart class with typed fields
-//   - a `fromJson` factory that converts the raw Map<String,dynamic>
-//     Dio gives you back into that typed object
-// ApiService methods return these typed objects instead of raw JSON,
-// so the rest of your app never has to write response['field'] and
-// risk typos or null-safety crashes.
-
+// Models model
 import 'vehicle_live_update.dart' show parseServerTime;
 
-// ---------------------------------------------------------------
-// AUTH
-// ---------------------------------------------------------------
 
+/// Token response
 class TokenResponse {
   final String accessToken;
   final String refreshToken;
@@ -19,6 +10,7 @@ class TokenResponse {
   final String role;
   final int expiresIn;
 
+  /// Create token response
   TokenResponse({
     required this.accessToken,
     required this.refreshToken,
@@ -27,6 +19,7 @@ class TokenResponse {
     required this.expiresIn,
   });
 
+  /// Parse from JSON
   factory TokenResponse.fromJson(Map<String, dynamic> json) => TokenResponse(
         accessToken: json['access_token'],
         refreshToken: json['refresh_token'],
@@ -36,6 +29,7 @@ class TokenResponse {
       );
 }
 
+/// User model
 class UserModel {
   final String id;
   final String email;
@@ -44,6 +38,7 @@ class UserModel {
   final bool isActive;
   final bool isVerified;
 
+  /// Create user
   UserModel({
     required this.id,
     required this.email,
@@ -55,6 +50,7 @@ class UserModel {
 
   String get fullName => name;
 
+  /// Parse from JSON
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
         id: json['id'],
         email: json['email'],
@@ -65,17 +61,16 @@ class UserModel {
       );
 }
 
-// Used when SENDING a registration request — not parsed from JSON,
-// so it needs toJson() instead of fromJson().
+/// User create
 class UserCreate {
   final String email;
   final String password;
   final String name;
   final String? role;
 
-  /// The User Agreement / Privacy Policy box — the backend requires it.
   final bool acceptedTerms;
 
+  /// Create user create
   UserCreate({
     required this.email,
     required this.password,
@@ -84,6 +79,7 @@ class UserCreate {
     this.acceptedTerms = false,
   });
 
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'email': email,
         'password': password,
@@ -93,15 +89,16 @@ class UserCreate {
       };
 }
 
+/// User update
 class UserUpdate {
   final String? name;
   final String? role;
   final bool? isActive;
 
+  /// Create user update
   UserUpdate({this.name, this.role, this.isActive});
 
-  // Only includes fields that were actually set — PATCH requests
-  // should never send null for a field you didn't mean to change.
+  /// Convert to JSON
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{};
     if (name != null) map['name'] = name;
@@ -111,32 +108,30 @@ class UserUpdate {
   }
 }
 
-// ---------------------------------------------------------------
-// GEOJSON (shared shape used by routes, stops, trips)
-// ---------------------------------------------------------------
 
+/// GeoJSON point
 class GeoJSONPoint {
   final double lat;
   final double lng;
 
+  /// Create GeoJSON point
   GeoJSONPoint({required this.lat, required this.lng});
 
+  /// Parse from JSON
   factory GeoJSONPoint.fromJson(Map<String, dynamic> json) {
     final coords = json['coordinates'] as List;
     return GeoJSONPoint(lat: coords[1].toDouble(), lng: coords[0].toDouble());
   }
 
-  // GeoJSON order is [lng, lat] — easy to get backwards, double check this
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'type': 'Point',
         'coordinates': [lng, lat],
       };
 }
 
-// ---------------------------------------------------------------
-// ROUTES / STOPS / VEHICLES
-// ---------------------------------------------------------------
 
+/// Stop model
 class StopModel {
   final String id;
   final String name;
@@ -144,6 +139,7 @@ class StopModel {
   final GeoJSONPoint location;
   final String? landmark;
 
+  /// Create stop
   StopModel({
     required this.id,
     required this.name,
@@ -152,6 +148,7 @@ class StopModel {
     this.landmark,
   });
 
+  /// Parse from JSON
   factory StopModel.fromJson(Map<String, dynamic> json) => StopModel(
         id: json['id'],
         name: json['name'],
@@ -161,18 +158,22 @@ class StopModel {
       );
 }
 
+/// fare matrix
 class FareMatrix {
   final double base;
   final double perKm;
 
+  /// Create fare matrix
   FareMatrix({required this.base, required this.perKm});
 
+  /// Parse from JSON
   factory FareMatrix.fromJson(Map<String, dynamic> json) => FareMatrix(
         base: json['base'].toDouble(),
         perKm: json['per_km'].toDouble(),
       );
 }
 
+/// Route model
 class RouteModel {
   final String id;
   final String name;
@@ -181,6 +182,7 @@ class RouteModel {
   final FareMatrix fareMatrix;
   final bool isActive;
 
+  /// Create route
   RouteModel({
     required this.id,
     required this.name,
@@ -190,6 +192,7 @@ class RouteModel {
     required this.isActive,
   });
 
+  /// Parse from JSON
   factory RouteModel.fromJson(Map<String, dynamic> json) => RouteModel(
         id: json['id'],
         name: json['name'],
@@ -202,6 +205,7 @@ class RouteModel {
       );
 }
 
+/// Vehicle model
 class VehicleModel {
   final String id;
   final String plateNumber;
@@ -210,6 +214,7 @@ class VehicleModel {
   final String? crowdLevel;
   final GPSPositionModel? lastPosition;
 
+  /// Create vehicle
   VehicleModel({
     required this.id,
     required this.plateNumber,
@@ -219,6 +224,7 @@ class VehicleModel {
     this.lastPosition,
   });
 
+  /// Parse from JSON
   factory VehicleModel.fromJson(Map<String, dynamic> json) => VehicleModel(
         id: json['id'],
         plateNumber: json['plate_number'],
@@ -231,14 +237,16 @@ class VehicleModel {
       );
 }
 
+/// GPS position model
 class GPSPositionModel {
   final String vehicleId;
   final double lat;
   final double lng;
-  final double? speed; // km/h
-  final double? heading; // degrees from north
-  final DateTime? timestamp; // device fix time (UTC)
+  final double? speed;
+  final double? heading;
+  final DateTime? timestamp;
 
+  /// Create GPS position
   GPSPositionModel({
     required this.vehicleId,
     required this.lat,
@@ -248,10 +256,7 @@ class GPSPositionModel {
     this.timestamp,
   });
 
-  // The backend sends positions in two shapes:
-  //   GET /vehicles/{id}/position -> {"location": GeoJSON Point, "timestamp", ...}
-  //   vehicle.last_position       -> {"lat", "lng", "timestamp"} (no vehicle_id)
-  // so accept both instead of assuming flat lat/lng.
+  /// Parse from JSON
   factory GPSPositionModel.fromJson(Map<String, dynamic> json, {String? vehicleId}) {
     final double lat;
     final double lng;
@@ -274,17 +279,17 @@ class GPSPositionModel {
   }
 }
 
-// ---------------------------------------------------------------
-// ROUTE STATUS (driver/operator updates)
-// ---------------------------------------------------------------
 
+/// Route status update
 class RouteStatusUpdate {
   final String routeId;
-  final String status; // "active" | "suspended" | "congested"
+  final String status;
   final String? reason;
 
+  /// Create route status update
   RouteStatusUpdate({required this.routeId, required this.status, this.reason});
 
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'route_id': routeId,
         'status': status,
@@ -292,28 +297,30 @@ class RouteStatusUpdate {
       };
 }
 
-// ---------------------------------------------------------------
-// TRIP PLANNING
-// ---------------------------------------------------------------
 
+/// Trip prefs
 class TripPrefs {
-  final String minimize; // "time" | "fare" | "transfers"
+  final String minimize;
   final int maxTransfers;
 
+  /// Create trip prefs
   TripPrefs({this.minimize = 'time', this.maxTransfers = 2});
 
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'minimize': minimize,
         'max_transfers': maxTransfers,
       };
 }
 
+/// Trip plan request
 class TripPlanRequest {
   final GeoJSONPoint origin;
   final GeoJSONPoint destination;
   final DateTime preferredArrival;
   final TripPrefs preferences;
 
+  /// Create trip plan request
   TripPlanRequest({
     required this.origin,
     required this.destination,
@@ -321,6 +328,7 @@ class TripPlanRequest {
     required this.preferences,
   });
 
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'origin': origin.toJson(),
         'destination': destination.toJson(),
@@ -329,6 +337,7 @@ class TripPlanRequest {
       };
 }
 
+/// Route leg
 class RouteLeg {
   final String routeId;
   final String routeName;
@@ -337,6 +346,7 @@ class RouteLeg {
   final int etaMin;
   final double fare;
 
+  /// Create route leg
   RouteLeg({
     required this.routeId,
     required this.routeName,
@@ -346,6 +356,7 @@ class RouteLeg {
     required this.fare,
   });
 
+  /// Parse from JSON
   factory RouteLeg.fromJson(Map<String, dynamic> json) => RouteLeg(
         routeId: json['route_id'],
         routeName: json['route_name'],
@@ -356,6 +367,7 @@ class RouteLeg {
       );
 }
 
+/// Route option
 class RouteOption {
   final int rank;
   final List<RouteLeg> legs;
@@ -363,6 +375,7 @@ class RouteOption {
   final double totalFare;
   final int transfers;
 
+  /// Create route option
   RouteOption({
     required this.rank,
     required this.legs,
@@ -371,6 +384,7 @@ class RouteOption {
     required this.transfers,
   });
 
+  /// Parse from JSON
   factory RouteOption.fromJson(Map<String, dynamic> json) => RouteOption(
         rank: json['rank'],
         legs: (json['legs'] as List).map((l) => RouteLeg.fromJson(l)).toList(),
@@ -380,12 +394,15 @@ class RouteOption {
       );
 }
 
+/// Trip plan response
 class TripPlanResponse {
   final List<RouteOption> options;
   final DateTime generatedAt;
 
+  /// Create trip plan response
   TripPlanResponse({required this.options, required this.generatedAt});
 
+  /// Parse from JSON
   factory TripPlanResponse.fromJson(Map<String, dynamic> json) =>
       TripPlanResponse(
         options: (json['options'] as List)
@@ -395,16 +412,15 @@ class TripPlanResponse {
       );
 }
 
-// ---------------------------------------------------------------
-// FEEDBACK
-// ---------------------------------------------------------------
 
+/// Feedback create
 class FeedbackCreate {
   final String routeId;
   final String message;
-  final String category; // delay | overcrowding | route_issue | driver_behavior | other
+  final String category;
   final GeoJSONPoint? location;
 
+  /// Create feedback create
   FeedbackCreate({
     required this.routeId,
     required this.message,
@@ -412,6 +428,7 @@ class FeedbackCreate {
     this.location,
   });
 
+  /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'route_id': routeId,
         'message': message,
@@ -420,6 +437,7 @@ class FeedbackCreate {
       };
 }
 
+/// Feedback response
 class FeedbackResponse {
   final String id;
   final String routeId;
@@ -427,6 +445,7 @@ class FeedbackResponse {
   final String category;
   final String status;
 
+  /// Create feedback response
   FeedbackResponse({
     required this.id,
     required this.routeId,
@@ -435,6 +454,7 @@ class FeedbackResponse {
     required this.status,
   });
 
+  /// Parse from JSON
   factory FeedbackResponse.fromJson(Map<String, dynamic> json) =>
       FeedbackResponse(
         id: json['id'],
@@ -445,10 +465,8 @@ class FeedbackResponse {
       );
 }
 
-// ---------------------------------------------------------------
-// ANNOUNCEMENTS
-// ---------------------------------------------------------------
 
+/// Announcement model
 class Announcement {
   final String id;
   final String title;
@@ -456,6 +474,7 @@ class Announcement {
   final String? targetRole;
   final DateTime expiresAt;
 
+  /// Create announcement
   Announcement({
     required this.id,
     required this.title,
@@ -464,6 +483,7 @@ class Announcement {
     required this.expiresAt,
   });
 
+  /// Parse from JSON
   factory Announcement.fromJson(Map<String, dynamic> json) => Announcement(
         id: json['id'],
         title: json['title'],

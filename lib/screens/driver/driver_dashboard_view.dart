@@ -1,10 +1,4 @@
-// lib/screens/driver/driver_dashboard_view.dart
-//
-// The driver app's screen: the logo header and three tabs — Map (the
-// dashboard, and the map full screen), Reports, and Profile — with the
-// bottom navigation. Reads DriverProvider from above. Every tab stays
-// alive, so the map keeps its camera while browsing the others.
-
+// Driver dashboard view
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -19,16 +13,20 @@ import 'driver_map_tab.dart';
 import 'driver_profile_tab.dart';
 import 'driver_reports_tab.dart';
 
+/// Driver dashboard view
 class DriverDashboardView extends StatefulWidget {
+  /// Create driver dashboard
   const DriverDashboardView({super.key, required this.onSignOut, required this.profileService});
 
   final VoidCallback onSignOut;
   final ProfileService profileService;
 
+  /// Create widget state
   @override
   State<DriverDashboardView> createState() => _DriverDashboardViewState();
 }
 
+/// Driver dashboard state
 class _DriverDashboardViewState extends State<DriverDashboardView> {
   static const _navItems = [
     CommuterNavItem(icon: Icons.location_on_outlined, label: 'Map'),
@@ -39,11 +37,13 @@ class _DriverDashboardViewState extends State<DriverDashboardView> {
 
   int _tab = 0;
 
+  /// Select driver dashboard
   void _select(int tab) {
     if (tab == _tab) return;
     setState(() => _tab = tab);
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final driver = context.watch<DriverProvider>();
@@ -52,7 +52,6 @@ class _DriverDashboardViewState extends State<DriverDashboardView> {
       backgroundColor: AppColors.backgroundIceBlue,
       body: Column(
         children: [
-          // The Profile tab has its own teal header.
           if (_tab != _profileTab) const CommuterHeader(),
           Expanded(
             child: switch (driver.loadState) {
@@ -79,12 +78,15 @@ class _DriverDashboardViewState extends State<DriverDashboardView> {
   }
 }
 
+/// Load error widget
 class _LoadError extends StatelessWidget {
+  /// Create load error
   const _LoadError({required this.message, required this.onRetry});
 
   final String? message;
   final VoidCallback onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Center(

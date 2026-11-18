@@ -1,10 +1,4 @@
-// lib/screens/driver/driver_profile_tab.dart
-//
-// The driver's Profile tab: a teal header (initials, name, email, route,
-// vehicle, "Driver"), their route(s), the operator they drive for, their
-// most recent route, and the account links (Privacy & Security, Help &
-// Support, Terms & Privacy Policy, Sign out).
-
+// Driver profile tab
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,7 +13,9 @@ import '../../widgets/commuter/settings_group.dart';
 import '../commuter/help_support_screen.dart';
 import '../commuter/privacy_security_screen.dart';
 
+/// Driver profile tab
 class DriverProfileTab extends StatelessWidget {
+  /// Create driver profile tab
   const DriverProfileTab({
     super.key,
     required this.driver,
@@ -29,10 +25,10 @@ class DriverProfileTab extends StatelessWidget {
 
   final DriverProvider driver;
 
-  /// /users/me/* (Privacy & Security works for any role).
   final ProfileService profileService;
   final VoidCallback onSignOut;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final vehicles = driver.vehicles;
@@ -114,12 +110,14 @@ class DriverProfileTab extends StatelessWidget {
   }
 }
 
-/// Teal banner: initials, name, email, route, vehicle and the "Driver" pill.
+/// Driver header
 class _DriverHeader extends StatelessWidget {
+  /// Create driver header
   const _DriverHeader({required this.driver});
 
   final DriverProvider driver;
 
+  /// Initials of
   static String initialsOf(String name) {
     final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
     if (parts.isEmpty) return '?';
@@ -128,6 +126,7 @@ class _DriverHeader extends StatelessWidget {
     return (first + last).toUpperCase();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final vehicle = driver.vehicle;
@@ -135,7 +134,7 @@ class _DriverHeader extends StatelessWidget {
     const detail = TextStyle(fontSize: 13, color: Colors.white);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // white status-bar icons on teal
+      value: SystemUiOverlayStyle.light,
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.brandTeal,
@@ -175,11 +174,14 @@ class _DriverHeader extends StatelessWidget {
   }
 }
 
+/// Section title widget
 class _SectionTitle extends StatelessWidget {
+  /// Create section title
   const _SectionTitle(this.title);
 
   final String title;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -192,11 +194,14 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+/// Card widget
 class _Card extends StatelessWidget {
+  /// Create card
   const _Card({required this.child});
 
   final Widget child;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -211,24 +216,29 @@ class _Card extends StatelessWidget {
   }
 }
 
+/// Empty card
 class _EmptyCard extends StatelessWidget {
+  /// Create empty card
   const _EmptyCard(this.text);
 
   final String text;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return _Card(child: Text(text, style: const TextStyle(fontSize: 14, color: AppColors.textSecondary)));
   }
 }
 
-/// "KEN · KEN-124" over "Terminal A → Terminal B", with a pin icon.
+/// Route row
 class _RouteRow extends StatelessWidget {
+  /// Create route row
   const _RouteRow({required this.vehicle, this.onShift = false});
 
   final AssignedVehicle vehicle;
   final bool onShift;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -269,12 +279,14 @@ class _RouteRow extends StatelessWidget {
   }
 }
 
-/// Company name and account owner, side by side.
+/// Operator card
 class _OperatorCard extends StatelessWidget {
+  /// Create operator card
   const _OperatorCard({required this.operator});
 
   final DriverOperator? operator;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final company = operator?.companyName;

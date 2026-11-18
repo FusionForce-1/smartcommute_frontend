@@ -1,12 +1,4 @@
-// lib/widgets/map_follower.dart
-//
-// Keeps a map on what moves: the commuter, the driver's jeep, or both at
-// once. The camera glides to each new position instead of jumping.
-//
-// Dragging the map stops it, so people can look around; "Center on my
-// location" starts it again. Zooming doesn't stop it, and the zoom they
-// picked is kept.
-
+// Map follower
 import 'dart:math' as math;
 import 'dart:ui' show lerpDouble;
 
@@ -16,24 +8,21 @@ import 'package:flutter/widgets.dart' show EdgeInsets;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+/// Map follower
 class MapFollower {
+  /// Create map follower
   MapFollower(this._map, TickerProvider vsync) : _glide = AnimationController(vsync: vsync, duration: glideTime) {
     _glide.addListener(_step);
   }
 
   static const Duration glideTime = Duration(milliseconds: 600);
 
-  /// Where the camera goes when following starts: street level.
   static const double streetZoom = 16;
 
-  /// Moves smaller than this are GPS jitter, not worth moving the map for.
   static const double minMoveM = 3;
 
-  /// A frame leaves its points this far in from the edge of the map...
   static const double _framePaddingPx = 56;
 
-  /// ...and is redone once one comes this close to it. Less than the padding,
-  /// or a point would count as near the edge the moment it was framed.
   static const double _edgeClearancePx = 32;
 
   static const Set<MapEventSource> _lookingAround = {
@@ -45,12 +34,10 @@ class MapFollower {
   final MapController _map;
   final AnimationController _glide;
 
-  /// True while the camera follows; the locate button shows it.
   final ValueNotifier<bool> following = ValueNotifier(true);
 
   bool _ready = false;
 
-  /// The next move also goes to street level (or the frame's own zoom).
   bool _fresh = true;
 
   LatLng _from = const LatLng(0, 0);
@@ -58,24 +45,27 @@ class MapFollower {
   double _fromZoom = 0;
   double _toZoom = 0;
 
-  /// The map can be moved from now on.
+  /// Map ready
   void mapReady() => _ready = true;
 
+  /// On map event
   void onMapEvent(MapEvent event) {
     if (_lookingAround.contains(event.source)) stop();
   }
 
+  /// Stop map follower
   void stop() {
     _glide.stop();
     following.value = false;
   }
 
+  /// Resume map follower
   void resume() {
     following.value = true;
     _fresh = true;
   }
 
-  /// Keeps [point] in the middle of the map.
+  /// Center map follower
   void center(LatLng point) {
     if (!_ready || !following.value) return;
     final camera = _map.camera;
@@ -85,9 +75,7 @@ class MapFollower {
     _glideTo(point, zoom);
   }
 
-  /// Keeps all of [points] on the map, clear of whatever [covered] says sits
-  /// on top of it, reframing only when one nears the edge or they have drawn
-  /// much closer together.
+  /// Map follower frame
   void frame(List<LatLng> points, {EdgeInsets covered = EdgeInsets.zero}) {
     if (!_ready || !following.value || points.isEmpty) return;
     final camera = _map.camera;
@@ -102,6 +90,7 @@ class MapFollower {
     _glideTo(fitted.center, fitted.zoom);
   }
 
+  /// Well in view
   static bool _wellInView(MapCamera camera, List<LatLng> points, EdgeInsets covered) {
     final view = camera.visibleBounds;
     final latPerPx = (view.north - view.south) / camera.size.height;
@@ -114,6 +103,7 @@ class MapFollower {
         p.latitude < north && p.latitude > south && p.longitude < east && p.longitude > west);
   }
 
+  /// Glide to
   void _glideTo(LatLng center, double zoom) {
     final camera = _map.camera;
     _from = camera.center;
@@ -123,6 +113,7 @@ class MapFollower {
     _glide.forward(from: 0);
   }
 
+  /// Step map follower
   void _step() {
     final t = Curves.easeOut.transform(_glide.value);
     _map.move(
@@ -130,11 +121,11 @@ class MapFollower {
         lerpDouble(_from.latitude, _to.latitude, t)!,
         lerpDouble(_from.longitude, _to.longitude, t)!,
       ),
-      // Not gliding the zoom: keep whatever the person zooms to meanwhile.
       _fromZoom == _toZoom ? _map.camera.zoom : lerpDouble(_fromZoom, _toZoom, t)!,
     );
   }
 
+  /// Clean up resources
   void dispose() {
     _glide.dispose();
     following.dispose();

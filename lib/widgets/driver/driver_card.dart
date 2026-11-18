@@ -1,13 +1,11 @@
-// lib/widgets/driver/driver_card.dart
-//
-// White outlined card used for every section of the Driver Dashboard,
-// with an optional title and trailing widget on the first row.
-
+// Driver card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Driver card
 class DriverCard extends StatelessWidget {
+  /// Create driver card
   const DriverCard({super.key, required this.child, this.title, this.trailing});
 
   final Widget child;
@@ -20,6 +18,7 @@ class DriverCard extends StatelessWidget {
     color: AppColors.textPrimary,
   );
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final title = this.title;

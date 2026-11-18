@@ -1,14 +1,12 @@
-// lib/widgets/commuter/trip_locations_card.dart
-//
-// "From" / "To" card on Plan Your Route, with a swap button between them.
-// Purely presentational: the Route tab supplies labels and callbacks.
-
+// Trip locations card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import 'commuter_field_box.dart';
 
+/// Trip locations card
 class TripLocationsCard extends StatelessWidget {
+  /// Create trip locations card
   const TripLocationsCard({
     super.key,
     required this.fromValue,
@@ -25,15 +23,12 @@ class TripLocationsCard extends StatelessWidget {
     this.onOpenSettings,
   });
 
-  /// Shown in the From box; null shows the "Your location" hint.
   final String? fromValue;
   final String? toValue;
   final bool isLocating;
 
-  /// From is the commuter's own GPS location: the button shows as on.
   final bool usingMyLocation;
 
-  /// To is a pin dropped on the map: the map button shows as on.
   final bool destinationOnMap;
   final String? fromError;
 
@@ -42,12 +37,11 @@ class TripLocationsCard extends StatelessWidget {
   final VoidCallback onChooseTo;
   final VoidCallback onPickOnMap;
 
-  /// Null disables the swap button (both ends must be set).
   final VoidCallback? onSwap;
 
-  /// Shown next to [fromError] where the platform can open location settings.
   final VoidCallback? onOpenSettings;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final error = fromError;
@@ -130,11 +124,9 @@ class TripLocationsCard extends StatelessWidget {
   }
 }
 
-/// Round icon button with three looks: idle (grey circle, outlined icon),
-/// busy (teal with a spinner) and active (teal with a white icon) — used for
-/// "Use my location" (on while From is the commuter's GPS) and "Pick on
-/// map" (on while To is a dropped pin). Tap again to update either.
+/// State icon button
 class _StateIconButton extends StatelessWidget {
+  /// Create icon button
   const _StateIconButton({
     super.key,
     required this.idleIcon,
@@ -156,6 +148,7 @@ class _StateIconButton extends StatelessWidget {
   final bool active;
   final VoidCallback onPressed;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final Widget icon;
@@ -207,26 +200,29 @@ class _StateIconButton extends StatelessWidget {
   }
 }
 
-/// Round "swap From and To" button between the two boxes. Turns half a
-/// circle on every swap so the tap visibly did something; greyed out until
-/// both ends are set.
+/// Swap button
 class _SwapButton extends StatefulWidget {
+  /// Create swap button
   const _SwapButton({required this.onSwap});
 
   final VoidCallback? onSwap;
 
+  /// Create widget state
   @override
   State<_SwapButton> createState() => _SwapButtonState();
 }
 
+/// Swap button state
 class _SwapButtonState extends State<_SwapButton> {
   double _turns = 0;
 
+  /// Swap button tap
   void _tap() {
     setState(() => _turns += 0.5);
     widget.onSwap!();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onSwap != null;
@@ -262,12 +258,15 @@ class _SwapButtonState extends State<_SwapButton> {
   }
 }
 
+/// End label
 class _EndLabel extends StatelessWidget {
+  /// Create end label
   const _EndLabel({required this.label, required this.color});
 
   final String label;
   final Color color;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Row(

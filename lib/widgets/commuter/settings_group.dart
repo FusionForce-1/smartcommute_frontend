@@ -1,20 +1,18 @@
-// lib/widgets/commuter/settings_group.dart
-//
-// Grouped white list used on the Profile tab, plus its two row types:
-// a switch row (Notifications) and a link row (Account).
-
+// Settings group
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Settings group widget
 class SettingsGroup extends StatelessWidget {
+  /// Create settings group
   const SettingsGroup({super.key, required this.children});
 
   final List<Widget> children;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
-    // Material (not a decorated box) so the rows' tap ripples show.
     return Material(
       color: Colors.white,
       clipBehavior: Clip.antiAlias,
@@ -34,7 +32,9 @@ class SettingsGroup extends StatelessWidget {
   }
 }
 
+/// Settings switch row
 class SettingsSwitchRow extends StatelessWidget {
+  /// Create settings switch row
   const SettingsSwitchRow({
     super.key,
     required this.title,
@@ -48,6 +48,7 @@ class SettingsSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return SwitchListTile(
@@ -60,7 +61,9 @@ class SettingsSwitchRow extends StatelessWidget {
   }
 }
 
+/// Settings link row
 class SettingsLinkRow extends StatelessWidget {
+  /// Create settings link row
   const SettingsLinkRow({
     super.key,
     required this.icon,
@@ -74,6 +77,7 @@ class SettingsLinkRow extends StatelessWidget {
   final VoidCallback onTap;
   final Color color;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return ListTile(

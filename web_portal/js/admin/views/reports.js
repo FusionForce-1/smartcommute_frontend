@@ -1,10 +1,8 @@
-// js/admin/views/reports.js
-//
-// Reports: system activity summary and the most recent audit log entries.
-
+// Admin reports view
 AdminRouter.register('reports', {
   title: 'Reports',
 
+  // Mount the view
   mount(el) {
     const RECENT_ACTIVITY = 15;
     const esc = AdminUi.escapeHtml;

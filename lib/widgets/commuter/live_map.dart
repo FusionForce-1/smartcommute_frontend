@@ -1,28 +1,4 @@
-// lib/widgets/commuter/live_map.dart
-//
-// Live Map card: OSM tiles locked to the service area, stops (small dots
-// when zoomed out, photo pins up close), animated vehicle markers, the
-// commuter's location and zoom buttons.
-// Owns no state — the Home tab feeds it data and the map controller.
-//
-// With [selectedVehicleId] set (picked from "Nearby Vehicles") it shows how
-// to catch that jeep: the walk from [currentLocation] to [boardAt] along
-// [walkPath] (blue dots) and the jeep's route up to that spot ([jeepPath],
-// teal). Without a boarding plan it falls back to a straight line from the
-// jeep's animated position to the commuter, redrawn every frame.
-//
-// Stops aren't drawn on their own (too much clutter): only a selected
-// [trip]'s stops show, on its line. [showAllStops] brings every stop back.
-// With a trip selected only the jeeps in [onlyVehicles] (those on its
-// routes) are drawn; every jeep comes back when the trip is cleared.
-//
-// The commuter is a blue circle ("you are here"), not a pin. While they
-// ride a jeep ([ridingVehicleId], see services/ride_matcher.dart) the two
-// merge: no circle, just that jeep, larger and ringed in the same blue.
-//
-// [expanded] draws it edge to edge (the Home tab's full-screen map) instead
-// of as a rounded card; [onToggleExpanded] adds the expand / collapse button.
-
+// Live map
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -36,7 +12,9 @@ import '../stop_image.dart';
 import 'trip_route_layers.dart';
 import 'vehicle_marker.dart';
 
+/// Live map
 class LiveMap extends StatelessWidget {
+  /// Create live map
   const LiveMap({
     super.key,
     required this.controller,
@@ -68,63 +46,48 @@ class LiveMap extends StatelessWidget {
   final List<TransportStop> stops;
   final Map<String, VehicleTrack> tracks;
 
-  /// Shared animation clock; [frame] ticks whenever vehicle markers move.
   final Stopwatch clock;
   final ValueNotifier<int> frame;
 
   final VoidCallback onMapReady;
 
-  /// Every camera move, e.g. so dragging can stop the camera following.
   final MapEventCallback? onMapEvent;
 
-  /// "Center on my location", and whether the camera is following.
   final VoidCallback? onLocate;
   final ValueListenable<bool>? following;
 
   final LatLng? currentLocation;
 
-  /// Jeep to draw the "vehicle → you" line from; [onClearSelection] hides it.
   final String? selectedVehicleId;
   final VoidCallback? onClearSelection;
 
-  /// Walk from the commuter to [boardAt] (by road, or straight if unknown).
   final List<LatLng>? walkPath;
 
-  /// Where to wait for the selected jeep.
   final LatLng? boardAt;
 
-  /// The jeep's route from where it is now to [boardAt] (empty once passed).
   final List<LatLng>? jeepPath;
 
-  /// Full screen: no card corners, border or shadow.
   final bool expanded;
 
-  /// Shows the expand / collapse button in the map controls.
   final VoidCallback? onToggleExpanded;
 
-  /// False when the parent places [MapControls] itself (e.g. above a sheet).
   final bool showControls;
 
-  /// Space at the top covered by something floating over the map (the
-  /// full-screen search bar), so the "Hide line" chip sits below it.
   final double topInset;
 
-  /// The route picked with "Select this route": its lines and stops.
   final TripRouteLayers? trip;
 
-  /// When set, only these jeeps are drawn (a selected trip's routes).
   final Set<String>? onlyVehicles;
 
-  /// Draw every stop (dots zoomed out, photo pins up close). Off on Home.
   final bool showAllStops;
 
-  /// The jeep the commuter is on: drawn as "you", in place of the circle.
   final String? ridingVehicleId;
 
   static const Color _walkLine = Color(0xFF2F6FED);
 
   static const Color _selectionLine = AppColors.brandTeal;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -144,14 +107,11 @@ class LiveMap extends StatelessWidget {
           minZoom: MapConfig.minZoom,
           maxZoom: MapConfig.maxZoom,
           cameraConstraint: CameraConstraint.contain(bounds: MapConfig.mapBounds),
-          // North always up: a two-finger twist used to rotate the map with
-          // no way back, making every direction look wrong.
           interactionOptions: const InteractionOptions(
             flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           ),
           onMapReady: onMapReady,
           onMapEvent: onMapEvent,
-          // Stays alive scrolled out of the Home list: the camera still follows.
           keepAlive: true,
         ),
         children: [
@@ -160,8 +120,6 @@ class LiveMap extends StatelessWidget {
             userAgentPackageName: MapConfig.userAgentPackageName,
           ),
           if (trip case final trip?) PolylineLayer(polylines: trip.lines),
-          // How to catch the selected jeep: its route to the boarding spot,
-          // and the walk there. Under the markers so every end stays visible.
           if (selectedVehicleId != null && walkPath != null)
             PolylineLayer(
               polylines: [
@@ -183,7 +141,6 @@ class LiveMap extends StatelessWidget {
                 ),
               ],
             )
-          // Fallback: vehicle → you, straight, following the jeep.
           else if ((selectedVehicleId, currentLocation) case (final id?, final here?))
             ValueListenableBuilder<int>(
               valueListenable: frame,
@@ -221,10 +178,8 @@ class LiveMap extends StatelessWidget {
                 Marker(point: here, width: 44, height: 44, child: const _YouAreHere()),
               ],
             ),
-          // Under the vehicles, so a stop never hides a jeep.
           if (showAllStops && trip == null) _StopMarkers(stops: stops),
           if (trip case final trip?) MarkerLayer(markers: trip.markers),
-          // Only this layer repaints per animation frame.
           ValueListenableBuilder<int>(
             valueListenable: frame,
             builder: (context, _, __) {
@@ -278,27 +233,25 @@ class LiveMap extends StatelessWidget {
   }
 }
 
-/// Stops, sized for how far out the map is — they only ever get SMALLER as
-/// you zoom out, never bigger. Zoomed out, many stops share a few streets,
-/// so each is a dot that shrinks with the map. From street level
-/// ([photoZoom]) in, they spread out enough for photo pins.
+/// Stop markers widget
 class _StopMarkers extends StatelessWidget {
+  /// Create stop markers
   const _StopMarkers({required this.stops});
 
   final List<TransportStop> stops;
 
   static const double photoZoom = 15;
 
-  /// Dot diameter: 4 px at zoom 11 or further out, up to 10 px at zoom 14.
+  /// Dot size
   static double dotSize(double zoom) => (4 + (zoom - 11) * 2).clamp(4.0, 10.0);
 
-  /// Photo diameter: 18 px at zoom 15, up to the full size at zoom 17.
+  /// Photo size
   static double photoSize(double zoom) =>
       (18 + (zoom - photoZoom) * 5).clamp(18.0, StopImageMarker.maxPhoto);
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
-    // Rebuilds as the camera moves, so sizes follow the zoom live.
     final zoom = MapCamera.of(context).zoom;
     final photo = photoSize(zoom);
     final dot = dotSize(zoom);
@@ -320,7 +273,6 @@ class _StopMarkers extends StatelessWidget {
           else
             Marker(
               point: stop.location,
-              // Bigger than the dot, so it is still easy to tap.
               width: 20,
               height: 20,
               child: GestureDetector(
@@ -333,11 +285,14 @@ class _StopMarkers extends StatelessWidget {
   }
 }
 
+/// Stop dot widget
 class _StopDot extends StatelessWidget {
+  /// Create stop dot
   const _StopDot({required this.size});
 
   final double size;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -348,7 +303,6 @@ class _StopDot extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.secondary,
           shape: BoxShape.circle,
-          // A thinner ring on the tiniest dots, or it hides the colour.
           border: Border.all(color: Colors.white, width: size >= 8 ? 2 : 1),
           boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2)],
         ),
@@ -357,8 +311,7 @@ class _StopDot extends StatelessWidget {
   }
 }
 
-/// The commuter on the map: a blue dot with a white ring and a soft halo.
-/// The ridden jeep stands in for the commuter: drawn only if it's on the map.
+/// Live map extension
 extension on LiveMap {
   bool get _ridingShown {
     final id = ridingVehicleId;
@@ -367,12 +320,14 @@ extension on LiveMap {
   }
 }
 
-/// "You are on this jeep": the jeep inside the you-are-here blue ring.
+/// Riding marker
 class _RidingMarker extends StatelessWidget {
+  /// Create riding marker
   const _RidingMarker({required this.child});
 
   final Widget child;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Tooltip(
@@ -391,9 +346,12 @@ class _RidingMarker extends StatelessWidget {
   }
 }
 
+/// You are here widget
 class _YouAreHere extends StatelessWidget {
+  /// Create you are here
   const _YouAreHere();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Tooltip(
@@ -423,10 +381,12 @@ class _YouAreHere extends StatelessWidget {
   }
 }
 
-/// Where to wait for the selected jeep: a teal-ringed circle with a bus.
+/// Board here widget
 class _BoardHere extends StatelessWidget {
+  /// Create board here
   const _BoardHere();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -442,13 +402,15 @@ class _BoardHere extends StatelessWidget {
   }
 }
 
-/// Top-left "✕ Hide line" chip shown while a vehicle is selected.
+/// Clear selection chip
 class _ClearSelectionChip extends StatelessWidget {
+  /// Create clear selection chip
   const _ClearSelectionChip({required this.onPressed, this.topInset = 0});
 
   final VoidCallback onPressed;
   final double topInset;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -467,10 +429,9 @@ class _ClearSelectionChip extends StatelessWidget {
   }
 }
 
-/// The map's buttons, stacked on the right: expand / collapse (with
-/// [onToggleExpanded]), center on my location (with [onLocate]; solid while
-/// the camera is [following]) and zoom.
+/// Map controls widget
 class MapControls extends StatelessWidget {
+  /// Create map controls
   const MapControls({
     super.key,
     required this.controller,
@@ -486,12 +447,14 @@ class MapControls extends StatelessWidget {
   final VoidCallback? onLocate;
   final ValueListenable<bool>? following;
 
+  /// Zoom by
   void _zoomBy(double delta) {
     final camera = controller.camera;
     final zoom = (camera.zoom + delta).clamp(MapConfig.minZoom, MapConfig.maxZoom);
     controller.move(camera.center, zoom);
   }
 
+  /// Map controls card
   static Widget _card(Widget child) => Material(
         color: Colors.white,
         elevation: 3,
@@ -500,6 +463,7 @@ class MapControls extends StatelessWidget {
         child: child,
       );
 
+  /// Locate button
   Widget _locateButton({required bool on}) => IconButton(
         tooltip: 'Center on my location',
         icon: Icon(on ? Icons.my_location : Icons.location_searching),
@@ -507,6 +471,7 @@ class MapControls extends StatelessWidget {
         onPressed: onLocate,
       );
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final following = this.following;

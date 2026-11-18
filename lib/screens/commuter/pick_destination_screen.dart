@@ -1,11 +1,4 @@
-// lib/screens/commuter/pick_destination_screen.dart
-//
-// I-drag ang map para ang pin sa tunga mao ang destination.
-// The pin lifts while the map moves and drops when it stops; a card below
-// says where it is ("Near Fuente Osmeña · 120 m") as you drag. Stops show
-// as dots and the trip's start as a green dot. "Set destination" pops a
-// [PickedPlace] with the point and a readable label.
-
+// Pick destination screen
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -17,17 +10,15 @@ import '../../config/theme_config.dart';
 import '../../models/transport_stop.dart';
 import '../../services/nearest_stop.dart';
 
-/// Where the commuter dropped the pin, and how to show it on the Route tab.
 typedef PickedPlace = ({LatLng point, String label});
 
-/// Sugod sa location sa commuter kung naa sa service area,
-/// kung dili, sa default center (para dili ma-assert ang camera constraint).
+/// Initial pick center
 LatLng initialPickCenter(LatLng? origin) {
   if (origin != null && MapConfig.serviceArea.contains(origin)) return origin;
   return MapConfig.defaultCenter;
 }
 
-/// "Pinned spot · near Fuente Osmeña", or the coordinates when no stop is near.
+/// Pinned label
 String pinnedLabel(LatLng point, List<TransportStop> stops) {
   final near = nearestStop(stops, point);
   if (near != null) return 'Pinned spot · near ${near.stop.name}';
@@ -35,7 +26,9 @@ String pinnedLabel(LatLng point, List<TransportStop> stops) {
       '${point.longitude.toStringAsFixed(4)})';
 }
 
+/// Pick destination screen
 class PickDestinationScreen extends StatefulWidget {
+  /// Create pick destination
   const PickDestinationScreen({
     super.key,
     this.origin,
@@ -43,23 +36,24 @@ class PickDestinationScreen extends StatefulWidget {
     this.start,
   });
 
-  /// The trip's start, drawn as a green dot.
   final LatLng? origin;
   final List<TransportStop> stops;
 
-  /// Where the map opens: the previously pinned spot, else [origin].
   final LatLng? start;
 
+  /// Create widget state
   @override
   State<PickDestinationScreen> createState() => _PickDestinationScreenState();
 }
 
+/// Pick destination state
 class _PickDestinationScreenState extends State<PickDestinationScreen> {
   final MapController _mapController = MapController();
   late LatLng _center = initialPickCenter(widget.start ?? widget.origin);
   bool _moving = false;
   Timer? _settle;
 
+  /// Clean up resources
   @override
   void dispose() {
     _settle?.cancel();
@@ -67,9 +61,9 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
     super.dispose();
   }
 
+  /// On moved
   void _onMoved(MapCamera camera, bool hasGesture) {
     _settle?.cancel();
-    // Considered stopped once no move has come in for a moment.
     _settle = Timer(const Duration(milliseconds: 220), () {
       if (mounted) setState(() => _moving = false);
     });
@@ -79,12 +73,14 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
     });
   }
 
+  /// Back to start
   void _backToStart() {
     final origin = widget.origin;
     if (origin == null) return;
     _mapController.move(initialPickCenter(origin), 16);
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final origin = widget.origin;
@@ -140,7 +136,6 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
               ),
             ],
           ),
-          // The exact spot: a small shadow that the pin lifts away from.
           IgnorePointer(
             child: Center(
               child: AnimatedContainer(
@@ -154,7 +149,6 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
               ),
             ),
           ),
-          // Pin tip sits on the center; it lifts while the map moves.
           IgnorePointer(
             child: Center(
               child: AnimatedPadding(
@@ -203,7 +197,6 @@ class _PickDestinationScreenState extends State<PickDestinationScreen> {
                           Expanded(
                             child: AnimatedSwitcher(
                               duration: const Duration(milliseconds: 150),
-                              // Keep the text left-aligned next to the icon.
                               layoutBuilder: (current, previous) => Stack(
                                 alignment: Alignment.centerLeft,
                                 children: [...previous, if (current != null) current],

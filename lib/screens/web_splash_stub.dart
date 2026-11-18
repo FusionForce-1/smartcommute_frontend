@@ -1,2 +1,3 @@
-// Android / iOS (and tests): there is no HTML loading screen to remove.
+// Web splash stub
+/// Remove web splash
 void removeWebSplash() {}

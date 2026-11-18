@@ -1,11 +1,9 @@
-// js/modal.js
-//
-// Forgot Password, Verify OTP, and Operator Google "Complete Profile"
-// share this popup shell.
-
+// Modal dialog helper
+// Auth modal
 const AuthModal = (() => {
   let backdropEl = null;
 
+  // Open modal
   function open(html, { onMount, centered = true } = {}) {
     close();
     backdropEl = document.createElement('div');
@@ -21,6 +19,7 @@ const AuthModal = (() => {
     if (typeof onMount === 'function') onMount();
   }
 
+  // Set content
   function setContent(html, { onMount, centered = true } = {}) {
     if (!backdropEl) return open(html, { onMount, centered });
     const extra = centered ? ' auth-card--centered' : '';
@@ -30,6 +29,7 @@ const AuthModal = (() => {
     if (typeof onMount === 'function') onMount();
   }
 
+  // Close modal
   function close() {
     if (backdropEl) {
       backdropEl.remove();

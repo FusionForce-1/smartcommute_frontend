@@ -1,14 +1,12 @@
-// lib/widgets/commuter/preference_selector.dart
-//
-// Equal-width toggles (Fastest / Few Transfers); the chosen one is
-// filled teal.
-
+// Preference selector
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/trip_plan.dart';
 
+/// Preference selector
 class PreferenceSelector extends StatelessWidget {
+  /// Create preference selector
   const PreferenceSelector({
     super.key,
     required this.selected,
@@ -18,6 +16,7 @@ class PreferenceSelector extends StatelessWidget {
   final TripPreference selected;
   final ValueChanged<TripPreference> onSelected;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -37,7 +36,9 @@ class PreferenceSelector extends StatelessWidget {
   }
 }
 
+/// Preference button
 class _PreferenceButton extends StatelessWidget {
+  /// Create preference button
   const _PreferenceButton({
     required this.label,
     required this.selected,
@@ -48,6 +49,7 @@ class _PreferenceButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Semantics(

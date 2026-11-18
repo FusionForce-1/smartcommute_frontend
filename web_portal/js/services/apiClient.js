@@ -1,22 +1,16 @@
-// js/services/apiClient.js
-//
-// Thin fetch() wrapper for the FastAPI backend:
-//   - sends the Bearer token from Session
-//   - on 401, refreshes the access token once and retries
-//   - turns FastAPI error bodies into Error(message) with .statusCode
-// If the session cannot be refreshed it is cleared and a
-// `session:expired` event fires on window so the page can redirect.
-
+// Services API client
+// API client
 const ApiClient = (() => {
   let refreshInFlight = null;
 
+  // API error
   function apiError(message, statusCode) {
     const err = new Error(message);
     err.statusCode = statusCode;
     return err;
   }
 
-  /** FastAPI sends `detail` as a string, or as a list for 422 validation errors. */
+  // Message from
   function messageFrom(data, response) {
     const detail = data?.detail;
     if (typeof detail === 'string') return detail;
@@ -24,11 +18,11 @@ const ApiClient = (() => {
     return `Request failed (${response.status} ${response.statusText}).`;
   }
 
+  // Refresh session
   async function refreshSession() {
     const refreshToken = Session.refreshToken;
     if (!refreshToken) return false;
 
-    // Several requests can 401 at once; share a single refresh call.
     refreshInFlight ??= send('POST', '/auth/refresh', { refresh_token: refreshToken }, { auth: false })
       .then((tokens) => {
         Session.update({
@@ -44,8 +38,8 @@ const ApiClient = (() => {
     return refreshInFlight;
   }
 
+  // Send client
   async function send(method, path, body, { auth = true, retry = true } = {}) {
-    // FormData (file uploads) sets its own multipart Content-Type.
     const isForm = body instanceof FormData;
     const headers = isForm ? {} : { 'Content-Type': 'application/json' };
     if (auth && Session.accessToken) headers.Authorization = `Bearer ${Session.accessToken}`;
@@ -77,7 +71,7 @@ const ApiClient = (() => {
     return data;
   }
 
-  /** Builds "?a=1&b=2", skipping empty values. */
+  // Client query
   function query(params = {}) {
     const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== '');
     return entries.length ? `?${new URLSearchParams(entries)}` : '';
@@ -87,11 +81,15 @@ const ApiClient = (() => {
     request: send,
     query,
     get: (path, params) => send('GET', `${path}${query(params)}`),
+    // Client post
     post: (path, body) => send('POST', path, body),
-    /** POST a FormData body (multipart file upload). */
+    // Upload client
     upload: (path, formData) => send('POST', path, formData),
+    // Client put
     put: (path, body) => send('PUT', path, body),
+    // Client patch
     patch: (path, body) => send('PATCH', path, body),
+    // Delete client
     delete: (path) => send('DELETE', path),
   };
 })();

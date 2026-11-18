@@ -1,8 +1,4 @@
-// lib/widgets/driver/my_route_info.dart
-//
-// "My Route" in the full-screen map's sheet: the route, where the jeep's
-// GPS is coming from, and the next stop with its ETA and distance.
-
+// My route info
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -10,7 +6,9 @@ import '../../providers/driver_provider.dart';
 import '../../services/nearest_stop.dart' show formatMetres;
 import '../../utils/shift_time.dart';
 
+/// My route info widget
 class MyRouteInfo extends StatelessWidget {
+  /// Create my route info
   const MyRouteInfo({super.key, required this.driver});
 
   final DriverProvider driver;
@@ -24,6 +22,7 @@ class MyRouteInfo extends StatelessWidget {
     };
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final vehicle = driver.vehicle;

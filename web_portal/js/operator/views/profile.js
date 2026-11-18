@@ -1,12 +1,9 @@
-// js/operator/views/profile.js
-//
-// Profile: the operator's company details from GET /operators/me, with an
-// Edit Profile modal (PATCH /operators/me).
-
+// Operator profile view
 OperatorRouter.register('profile', {
   title: 'Profile',
   heading: 'Operator Profile',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     let profile = null;
@@ -23,10 +20,11 @@ OperatorRouter.register('profile', {
     const cardEl = el.querySelector('#profile-card');
     const editBtn = el.querySelector('#profile-edit');
 
-    /** "Cebu City Transport Co." -> "CC" */
+    // Profile initials
     const initials = (name) =>
       (name || '').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
 
+    // Profile row
     function row(label, value) {
       const missing = !value || !String(value).trim();
       return `
@@ -36,6 +34,7 @@ OperatorRouter.register('profile', {
         </div>`;
     }
 
+    // Render the view
     function render() {
       cardEl.innerHTML = `
         <div class="op-profile__head">
@@ -54,6 +53,7 @@ OperatorRouter.register('profile', {
       editBtn.disabled = false;
     }
 
+    // Load profile
     function load() {
       editBtn.disabled = true;
       AdminUi.loadInto(cardEl, OperatorApi.profile, (p) => {
@@ -62,7 +62,9 @@ OperatorRouter.register('profile', {
       });
     }
 
+    // Open edit
     function openEdit() {
+      // Profile field
       const field = (id, label, value, attrs = '') => `
         <div class="form-field">
           <label for="${id}">${label}</label>

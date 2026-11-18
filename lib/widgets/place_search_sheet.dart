@@ -1,11 +1,4 @@
-// lib/widgets/place_search_sheet.dart
-//
-// "Where from / where to?" sheet for Plan Your Route. Typing shows, at once,
-// the saved stops and every Metro Cebu landmark that matches (see
-// services/place_search.dart), nearest to [near] first. For anything not
-// listed, "Search online" asks OpenStreetMap (Nominatim) — only on tap, as
-// its usage policy asks (no search-as-you-type).
-
+// Place search sheet
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
@@ -16,7 +9,7 @@ import '../models/transport_stop.dart';
 import '../services/place_search.dart';
 import 'stop_image.dart';
 
-/// Opens the sheet; pops with the chosen place, or null.
+/// Show place search sheet
 Future<Place?> showPlaceSearchSheet(
   BuildContext context, {
   required List<TransportStop> stops,
@@ -32,6 +25,7 @@ Future<Place?> showPlaceSearchSheet(
   );
 }
 
+/// Kind icon
 IconData _kindIcon(String kind) {
   final k = kind.toLowerCase();
   if (k.contains('your stop') || k.contains('stop') || k.contains('terminal')) return Icons.directions_bus_outlined;
@@ -46,22 +40,25 @@ IconData _kindIcon(String kind) {
   return Icons.place_outlined;
 }
 
+/// Place search sheet
 class _PlaceSearchSheet extends StatefulWidget {
+  /// Create place search sheet
   const _PlaceSearchSheet({required this.stops, required this.title, this.near});
 
   final List<TransportStop> stops;
   final String title;
   final LatLng? near;
 
+  /// Create widget state
   @override
   State<_PlaceSearchSheet> createState() => _PlaceSearchSheetState();
 }
 
+/// Place search sheet state
 class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
   static final Dio _http = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
-    // Nominatim asks apps to identify themselves (ignored by browsers).
     headers: {'User-Agent': 'SmartCommute/1.0 (commuter app)', 'Accept-Language': 'en'},
   ));
 
@@ -76,10 +73,10 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
   String? _onlineNote;
   bool _searchingOnline = false;
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
-    // Usually already loaded (the Route tab opens it once): use it right away.
     final ready = PlaceIndex.loadedLandmarks;
     if (ready != null) {
       _landmarks = ready;
@@ -91,6 +88,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     });
   }
 
+  /// Stop named
   TransportStop? _stopNamed(Place p) {
     for (final s in widget.stops) {
       if (s.name == p.name && s.location == p.location) return s;
@@ -98,6 +96,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     return null;
   }
 
+  /// Local matches
   List<PlaceMatch> _localMatches() {
     final mine = _stops.search(_query, near: widget.near, limit: 4);
     final taken = {for (final m in mine) foldPlaceText(m.place.name)};
@@ -107,6 +106,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     return [...mine, ...others].take(12).toList();
   }
 
+  /// Search online
   Future<void> _searchOnline() async {
     final q = _query.trim();
     if (q.length < 3 || _searchingOnline) return;
@@ -149,6 +149,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     }
   }
 
+  /// Place search tile
   Widget _tile(PlaceMatch m) {
     final stop = m.place.kind == 'Your stop' ? _stopNamed(m.place) : null;
     final distanceText = widget.near == null ? '' : ' · ${formatPlaceDistance(m.metres)}';
@@ -169,6 +170,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
     );
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final typed = _query.trim();

@@ -1,11 +1,6 @@
-// js/views/register.js
-//
-// Operator registration. Collects Full Name, Email, Contact Number,
-// Company Name, Franchise Number, Password, plus the User Agreement /
-// Privacy Policy consent (js/legal.js). Google complete-profile overlay
-// matches OPERATOR_GOOGLE.png.
-
+// Views register view
 Router.register('register', {
+  // Render the view
   render() {
     return `
       <div class="auth-page">
@@ -44,18 +39,20 @@ Router.register('register', {
       </div>`;
   },
 
+  // Initialize the page
   init() {
     wirePasswordToggle('register-password');
     wirePasswordToggle('register-repeat-password');
 
+    // Show register error
     function showRegisterError(message) {
       const banner = document.querySelector('#register-error .error-banner__text');
       if (banner) banner.textContent = message;
       showError('register-error');
-      // The banner is at the top of a tall form; bring it into view.
       document.getElementById('register-error')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
+    // Register value
     const value = (id) => document.getElementById(id).value.trim();
     Consent.wire(document.getElementById('register-form'));
 
@@ -105,7 +102,6 @@ Router.register('register', {
             Session.clear();
             throw new Error(`This Google account is already registered as ${result.role}. Use a different account.`);
           }
-          // Opens "Complete your Profile" for new operators; returning ones go straight in.
           await PortalRedirect.afterLogin(result.role);
         } catch (err) {
           GoogleAuth.forgetAccount();
@@ -116,14 +112,13 @@ Router.register('register', {
   },
 });
 
-/** Returns the first problem with the form, or '' if it is valid. */
+// Validate registration
 function validateRegistration({ name, email, password, repeatPassword, profile }) {
   if (!name || !email || !profile.contact_number || !profile.company_name || !profile.franchise_number || !password) {
     return 'Please fill in your name, email, contact number, company name, franchise number and password.';
   }
   if (name.length < 2) return 'Full name must be at least 2 characters.';
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
-  // Same order as the fields on the form: Contact Number sits above Franchise Number.
   const contactProblem = OperatorProfileRules.contactProblem(profile.contact_number);
   if (contactProblem) return contactProblem;
   if (profile.company_name.length < 2) return 'Company name must be at least 2 characters.';
@@ -134,10 +129,8 @@ function validateRegistration({ name, email, password, repeatPassword, profile }
   return '';
 }
 
-// "Complete your Profile" popup (OPERATOR_GOOGLE.png). Shown to a signed-in
-// operator who has no company profile yet: after Google sign-up, or on
-// login if the profile step was never finished.
 const OperatorProfilePopup = {
+  // Open register
   open(email) {
     const html = `
       <button type="button" class="modal-close" id="profile-close" aria-label="Close">
@@ -165,13 +158,14 @@ const OperatorProfilePopup = {
       </form>
     `;
 
-    // Leaving without finishing signs the user out again.
+    // Cancel register
     const cancel = () => {
       Session.clear();
       GoogleAuth.forgetAccount();
       AuthModal.close();
     };
 
+    // Show profile error
     function showProfileError(message) {
       document.querySelector('#profile-error .error-banner__text').textContent = message;
       showError('profile-error');

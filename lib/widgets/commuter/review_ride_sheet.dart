@@ -1,9 +1,4 @@
-// lib/widgets/commuter/review_ride_sheet.dart
-//
-// "Rate your ride": which route and jeep (by its plate number), 1-5 stars,
-// quick tags and an optional comment. The backend credits it to the jeep's
-// assigned driver; the operator sees it without the commuter's name.
-
+// Review ride sheet
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -12,7 +7,7 @@ import '../../models/transport_model.dart';
 import '../../models/vehicles.dart';
 import '../../providers/profile_provider.dart';
 
-/// Opens the sheet; resolves to true when a review was sent.
+/// Show review ride sheet
 Future<bool?> showReviewRideSheet(
   BuildContext context, {
   required ProfileProvider profile,
@@ -31,7 +26,9 @@ Future<bool?> showReviewRideSheet(
 
 const String _unknownPlate = '__unknown__';
 
+/// Review ride sheet
 class _ReviewRideSheet extends StatefulWidget {
+  /// Create review ride sheet
   const _ReviewRideSheet(
       {required this.profile, required this.routes, required this.vehicles});
 
@@ -39,10 +36,12 @@ class _ReviewRideSheet extends StatefulWidget {
   final List<TransportRoute> routes;
   final List<Vehicle> vehicles;
 
+  /// Create widget state
   @override
   State<_ReviewRideSheet> createState() => _ReviewRideSheetState();
 }
 
+/// Review ride sheet state
 class _ReviewRideSheetState extends State<_ReviewRideSheet> {
   late String? _routeId =
       widget.routes.length == 1 ? widget.routes.first.id : null;
@@ -53,6 +52,7 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
   bool _sending = false;
   String? _error;
 
+  /// Clean up resources
   @override
   void dispose() {
     _comment.dispose();
@@ -76,6 +76,7 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
     'Excellent'
   ];
 
+  /// Submit review ride
   Future<void> _submit() async {
     setState(() {
       _sending = true;
@@ -99,6 +100,7 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final jeeps = _jeeps;
@@ -143,7 +145,7 @@ class _ReviewRideSheetState extends State<_ReviewRideSheet> {
               ),
               const SizedBox(height: AppSpacing.sm),
               DropdownButtonFormField<String>(
-                key: ValueKey(_routeId), // reset when the route changes
+                key: ValueKey(_routeId),
                 initialValue: _vehicleId,
                 isExpanded: true,
                 decoration: const InputDecoration(

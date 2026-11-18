@@ -1,10 +1,4 @@
-// lib/widgets/driver/shift_card.dart
-//
-// The driver's shift, as their operator runs it: off shift, or on shift
-// with the running time, the distance driven so far, where the jeep's GPS
-// is coming from (its tracker, or this phone while the tracker is offline)
-// and the passenger counter.
-
+// Shift card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -14,7 +8,9 @@ import '../../utils/shift_time.dart';
 import 'driver_card.dart';
 import 'elapsed_clock.dart';
 
+/// Shift card
 class ShiftCard extends StatelessWidget {
+  /// Create shift card
   const ShiftCard({
     super.key,
     required this.shift,
@@ -29,11 +25,11 @@ class ShiftCard extends StatelessWidget {
   final AssignedVehicle? vehicle;
   final JeepGps jeepGps;
 
-  /// Why this phone isn't sharing its location, if it isn't.
   final String? gpsError;
   final VoidCallback onRetryGps;
   final ValueChanged<int> onPassengerChange;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final shift = this.shift;
@@ -118,13 +114,16 @@ class ShiftCard extends StatelessWidget {
   }
 }
 
+/// GPS line widget
 class _GpsLine extends StatelessWidget {
+  /// Create GPS line
   const _GpsLine({required this.jeepGps, required this.gpsError, required this.onRetry});
 
   final JeepGps jeepGps;
   final String? gpsError;
   final VoidCallback onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final (icon, color, text) = switch (jeepGps) {
@@ -169,26 +168,31 @@ class _GpsLine extends StatelessWidget {
   }
 }
 
-/// Soft green dot that slowly pulses while the shift runs.
+/// Live dot widget
 class _LiveDot extends StatefulWidget {
+  /// Create live dot
   const _LiveDot();
 
+  /// Create widget state
   @override
   State<_LiveDot> createState() => _LiveDotState();
 }
 
+/// Live dot state
 class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin {
   late final AnimationController _pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1400),
   )..repeat(reverse: true);
 
+  /// Clean up resources
   @override
   void dispose() {
     _pulse.dispose();
     super.dispose();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
@@ -207,12 +211,15 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
   }
 }
 
+/// Passenger counter widget
 class _PassengerCounter extends StatelessWidget {
+  /// Create passenger counter
   const _PassengerCounter({required this.count, required this.onChange});
 
   final int count;
   final ValueChanged<int> onChange;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Row(

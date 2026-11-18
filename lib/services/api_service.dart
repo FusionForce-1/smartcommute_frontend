@@ -1,46 +1,35 @@
-// lib/services/api_service.dart
-//
-// Sign-in, registration and password reset, plus the general API calls.
-// Each method calls an endpoint, turns the JSON into a model (models.dart)
-// and lets a DioException through: the screen that called it shows the
-// error. DioInterceptor refreshes tokens underneath.
-
+// API service
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/models.dart';
 import 'dio_interceptor.dart';
 
-/// Thrown by [ApiService.login] when the account has two-factor
-/// authentication on: a code was emailed and must be confirmed with
-/// [ApiService.verifyLoginCode] before the user is signed in.
+/// Two factor required
 class TwoFactorRequired implements Exception {
+  /// Create two factor required
   const TwoFactorRequired({required this.email, required this.maskedEmail});
 
-  /// The email the user signed in with (sent back with the code).
   final String email;
 
-  /// Where the code went, e.g. "op******@cebulines.ph".
   final String maskedEmail;
 
+  /// Readable text form
   @override
   String toString() => 'Two-factor code required for $maskedEmail';
 }
 
+/// API service
 class ApiService {
   final Dio _dio;
   final FlutterSecureStorage _secureStorage;
 
-  // Constructor takes the pre-configured Dio from dio_interceptor.dart
-  // rather than building its own — this way there's only ONE Dio
-  // instance (with the interceptor attached) for the whole app.
+  /// Create API service
   ApiService({Dio? dio, FlutterSecureStorage? secureStorage})
       : _dio = dio ?? buildDioClient(),
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
-  // =================================================================
-  // AUTH
-  // =================================================================
 
+  /// Login data
   Future<TokenResponse> login(String email, String password) async {
     final response = await _dio.post('/auth/login', data: {
       'email': email.trim(),
@@ -58,7 +47,7 @@ class ApiService {
     return tokens;
   }
 
-  /// Second step of a two-factor login: POST /auth/login/verify.
+  /// Verify login code
   Future<TokenResponse> verifyLoginCode(String email, String otp) async {
     final response = await _dio.post('/auth/login/verify', data: {
       'email': email,
@@ -69,8 +58,7 @@ class ApiService {
     return tokens;
   }
 
-  /// [acceptedTerms]: sent from the register screen once its User
-  /// Agreement / Privacy Policy box is ticked; the backend records it.
+  /// Login with Google
   Future<TokenResponse> loginWithGoogle(String idToken, {bool acceptedTerms = false}) async {
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
@@ -81,23 +69,18 @@ class ApiService {
     return tokens;
   }
 
+  /// Register data
   Future<UserModel> register(UserCreate data) async {
     final response = await _dio.post('/auth/register', data: data.toJson());
-    // Backend returns UserResponse — registration does NOT log the user
-    // in automatically (no tokens in this response), so we just return
-    // the created user; AuthProvider should route to /login after this.
     return UserModel.fromJson(response.data);
   }
 
-  // No API call at all — this is purely local state. It lives here
-  // (rather than only in AuthProvider) so AuthProvider stays focused
-  // on STATE, while ApiService stays focused on "talks to network or
-  // storage." Guests simply never call _storeTokens, so onRequest in
-  // the interceptor finds nothing in SecureStorage and sends no header.
+  /// Continue as guest
   Future<void> continueAsGuest() async {
     await _secureStorage.deleteAll();
   }
 
+  /// Refresh token
   Future<TokenResponse> refreshToken() async {
     final refreshTokenValue = await _secureStorage.read(key: 'refresh_token');
     if (refreshTokenValue == null) {
@@ -111,31 +94,27 @@ class ApiService {
     return tokens;
   }
 
+  /// Logout data
   Future<void> logout() async {
     try {
       await _dio.post('/auth/logout');
     } finally {
-      // Clear local tokens even if the network call fails (e.g. no
-      // internet) — the user still expects to be logged out locally.
       await _secureStorage.deleteAll();
     }
   }
 
-  // Small private helper so login/loginWithGoogle/refreshToken don't
-  // each repeat the same two secureStorage.write calls.
+  /// Store tokens
   Future<void> _storeTokens(TokenResponse tokens) async {
     await _secureStorage.write(key: 'access_token', value: tokens.accessToken);
     await _secureStorage.write(key: 'refresh_token', value: tokens.refreshToken);
   }
 
-  /// Emails a password reset code (POST /auth/forgot-password, 202).
+  /// Send password reset OTP
   Future<void> sendPasswordResetOtp(String email) async {
     await _dio.post('/auth/forgot-password', data: {'email': email});
   }
 
-  // The backend needs email + otp + new_password together in one call
-  // (new_password at least 6 characters, or it answers 422). The code
-  // comes from VerifyOtpScreen, the password from SetNewPasswordScreen.
+  /// Verify OTP and reset password
   Future<void> verifyOtpAndResetPassword(
     String email,
     String otp,
@@ -148,10 +127,8 @@ class ApiService {
     });
   }
 
-  // =================================================================
-  // ROUTES / STOPS / VEHICLES (5 methods) — work for guests too
-  // =================================================================
 
+  /// Get routes
   Future<List<RouteModel>> getRoutes() async {
     final response = await _dio.get('/routes');
     return (response.data as List)
@@ -159,15 +136,15 @@ class ApiService {
         .toList();
   }
 
+  /// Get route by ID
   Future<RouteModel> getRouteById(String id) async {
     final response = await _dio.get('/routes/$id');
     return RouteModel.fromJson(response.data);
   }
 
+  /// Get stops
   Future<List<StopModel>> getStops({double? lat, double? lng, double? radiusMeters}) async {
     final response = await _dio.get('/stops', queryParameters: {
-      // Only attach ?near=... if the caller actually wants a
-      // proximity search — otherwise fetch the full stop list.
       if (lat != null && lng != null) 'near': '$lat,$lng',
       if (radiusMeters != null) 'radius': radiusMeters,
     });
@@ -176,6 +153,7 @@ class ApiService {
         .toList();
   }
 
+  /// Get vehicles
   Future<List<VehicleModel>> getVehicles({String? routeId}) async {
     final response = await _dio.get('/vehicles', queryParameters: {
       if (routeId != null) 'route_id': routeId,
@@ -185,29 +163,27 @@ class ApiService {
         .toList();
   }
 
+  /// Get vehicle position
   Future<GPSPositionModel> getVehiclePosition(String id) async {
     final response = await _dio.get('/vehicles/$id/position');
     return GPSPositionModel.fromJson(response.data);
   }
 
-  // =================================================================
-  // TRIP PLANNING (open to guests) & FEEDBACK (requires commuter login)
-  // =================================================================
 
+  /// Plan trip
   Future<TripPlanResponse> planTrip(TripPlanRequest request) async {
     final response = await _dio.post('/trip-plan', data: request.toJson());
     return TripPlanResponse.fromJson(response.data);
   }
 
+  /// Submit feedback
   Future<FeedbackResponse> submitFeedback(FeedbackCreate feedback) async {
     final response = await _dio.post('/feedback', data: feedback.toJson());
     return FeedbackResponse.fromJson(response.data);
   }
 
-  // =================================================================
-  // ANNOUNCEMENTS (1 method) — works for guests too
-  // =================================================================
 
+  /// Get announcements
   Future<List<Announcement>> getAnnouncements() async {
     final response = await _dio.get('/announcements');
     return (response.data as List)
@@ -215,14 +191,13 @@ class ApiService {
         .toList();
   }
 
-  // =================================================================
-  // DRIVER / OPERATOR (2 methods)
-  // =================================================================
 
+  /// Update route status
   Future<void> updateRouteStatus(RouteStatusUpdate update) async {
     await _dio.patch('/route-status', data: update.toJson());
   }
 
+  /// Get fleet
   Future<List<VehicleModel>> getFleet({String? operatorId}) async {
     final response = await _dio.get('/fleet', queryParameters: {
       if (operatorId != null) 'operator_id': operatorId,
@@ -232,10 +207,8 @@ class ApiService {
         .toList();
   }
 
-  // =================================================================
-  // ADMIN (4 methods)
-  // =================================================================
 
+  /// Get users
   Future<List<UserModel>> getUsers({String? role}) async {
     final response = await _dio.get('/users', queryParameters: {
       if (role != null) 'role': role,
@@ -245,17 +218,19 @@ class ApiService {
         .toList();
   }
 
+  /// Update user
   Future<UserModel> updateUser(String id, UserUpdate update) async {
     final response = await _dio.patch('/users/$id', data: update.toJson());
     return UserModel.fromJson(response.data);
   }
 
+  /// Verify operator
   Future<void> verifyOperator(String id) async {
     await _dio.post('/users/$id/verify');
   }
 
+  /// Get reports
   Future<Map<String, dynamic>> getReports(String type) async {
-    // type is "fleet" or "system" — matches the two backend endpoints
     final endpoint = type == 'fleet' ? '/reports/fleet' : '/reports/system';
     final response = await _dio.get(endpoint);
     return response.data as Map<String, dynamic>;

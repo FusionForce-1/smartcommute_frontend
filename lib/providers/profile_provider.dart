@@ -1,9 +1,4 @@
-// lib/providers/profile_provider.dart
-//
-// State for the commuter's Profile tab: profile + stats, saved routes and
-// notification choices. Changes show immediately and are rolled back if
-// the backend refuses them. Guests have no profile, so nothing loads.
-
+// Profile provider
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -14,7 +9,9 @@ import '../services/api_error.dart';
 import '../services/profile_service.dart';
 import 'load_state.dart';
 
+/// Profile provider
 class ProfileProvider extends ChangeNotifier {
+  /// Create profile
   ProfileProvider({required ProfileService service, required this.isGuest}) : _service = service;
 
   final ProfileService _service;
@@ -28,18 +25,18 @@ class ProfileProvider extends ChangeNotifier {
   String? _errorMessage;
   bool _disposed = false;
 
-  /// For screens that call the account endpoints directly (Privacy & Security).
   ProfileService get service => _service;
 
   LoadState get state => _state;
   CommuterProfile? get profile => _profile;
   List<SavedRoute> get savedRoutes => _savedRoutes;
 
-  /// The commuter's latest ride reviews, newest first.
   List<RideReview> get reviews => _reviews;
   String? get errorMessage => _errorMessage;
+  /// Is enabled?
   bool isEnabled(NotificationPref pref) => _prefs[pref] ?? false;
 
+  /// Load profile
   Future<void> load() async {
     if (isGuest || _state == LoadState.loading) return;
     _state = LoadState.loading;
@@ -61,7 +58,6 @@ class ProfileProvider extends ChangeNotifier {
       _state = LoadState.error;
     }
     _notify();
-    // Separately: an older backend without /reviews must not break the profile.
     try {
       _reviews = await _service.myReviews();
       _notify();
@@ -70,7 +66,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Submit review
   Future<String?> submitReview({
     required String routeId,
     String? vehicleId,
@@ -91,7 +87,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Profile rename
   Future<String?> rename(String name) async {
     try {
       _profile = await _service.updateName(name.trim());
@@ -102,7 +98,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Add saved route
   Future<String?> addSavedRoute({
     required String label,
     required String routeId,
@@ -129,7 +125,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Remove saved route
   Future<String?> removeSavedRoute(SavedRoute route) async {
     final before = _savedRoutes;
     _savedRoutes = [for (final r in _savedRoutes) if (r.id != route.id) r];
@@ -146,7 +142,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Set notification pref
   Future<String?> setNotificationPref(NotificationPref pref, bool enabled) async {
     _prefs = {..._prefs, pref: enabled};
     _notify();
@@ -160,8 +156,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
-  /// Logs a trip the commuter set out on. Best-effort: a failure only
-  /// means the Trips count misses one, so it is not shown to the user.
+  /// Record trip
   Future<void> recordTrip(RouteOption option, {required String from, required String to}) async {
     if (isGuest) return;
     try {
@@ -179,6 +174,7 @@ class ProfileProvider extends ChangeNotifier {
     }
   }
 
+  /// Adjust stats
   void _adjustStats({int trips = 0, int savedRoutes = 0, int reviews = 0}) {
     final profile = _profile;
     if (profile == null) return;
@@ -191,10 +187,12 @@ class ProfileProvider extends ChangeNotifier {
     );
   }
 
+  /// Notify profile
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _disposed = true;

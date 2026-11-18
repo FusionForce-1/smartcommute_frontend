@@ -1,10 +1,8 @@
-// js/admin/views/users.js
-//
-// Users: per-role counts and every account, filterable by role.
-
+// Admin users view
 AdminRouter.register('users', {
   title: 'Users',
 
+  // Mount the view
   mount(el) {
     const PAGE_SIZE = 50;
     const ROLE_FILTERS = [
@@ -38,6 +36,7 @@ AdminRouter.register('users', {
     const filtersEl = el.querySelector('#users-filters');
     const tableEl = el.querySelector('#users-table');
 
+    // Load stats
     function loadStats() {
       AdminApi.userStats()
         .then((s) => statsEl.innerHTML = AdminUi.statGrid([
@@ -51,15 +50,18 @@ AdminRouter.register('users', {
         ]));
     }
 
+    // Render filters
     function renderFilters() {
       filtersEl.innerHTML = AdminUi.filterChips(ROLE_FILTERS, role, 'role');
     }
 
+    // Render table
     function renderTable() {
       tableEl.innerHTML = AdminUi.usersTable(users, { firstColumn: 'User', currentEmail: Session.email })
         + (hasMore ? '<div class="load-more"><button type="button" class="btn-sm" data-load-more>Load more</button></div>' : '');
     }
 
+    // Load first page
     function loadFirstPage() {
       AdminUi.loadInto(tableEl, () => AdminApi.listUsers({ role, limit: PAGE_SIZE }), (page) => {
         users = page;
@@ -68,6 +70,7 @@ AdminRouter.register('users', {
       });
     }
 
+    // Load next page
     async function loadNextPage(button) {
       button.disabled = true;
       try {
@@ -95,6 +98,7 @@ AdminRouter.register('users', {
     });
 
     UserActions.bind(tableEl, {
+      // Find user
       findUser: (id) => users.find((u) => u.id === id),
       onChanged: () => {
         loadStats();

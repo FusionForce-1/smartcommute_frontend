@@ -1,12 +1,4 @@
-// lib/providers/notices_provider.dart
-//
-// State for the commuter's Notifications screen: the notices operators sent
-// about routes they saved or rode, the selected filter (asked of the server,
-// so paging stays right), paging, and read / unread (saved on the backend).
-// [checkForNew] looks at the unread count — on a timer while the app is in
-// front ([startPolling]) and when it comes back — and reloads when it grew.
-// Guests have no inbox, so nothing is fetched for them.
-
+// Notices provider
 import 'dart:async';
 import 'dart:math';
 
@@ -17,7 +9,9 @@ import '../services/api_error.dart';
 import '../services/notices_service.dart';
 import 'load_state.dart';
 
+/// Notices provider
 class NoticesProvider extends ChangeNotifier {
+  /// Create notices
   NoticesProvider({
     required NoticesService service,
     required this.isGuest,
@@ -37,7 +31,7 @@ class NoticesProvider extends ChangeNotifier {
   int _unreadCount = 0;
   bool _hasMore = false;
   bool _loadingMore = false;
-  int _generation = 0;   // bumped by each load; older answers are dropped
+  int _generation = 0;
   Timer? _poll;
   bool _disposed = false;
 
@@ -46,13 +40,11 @@ class NoticesProvider extends ChangeNotifier {
   NoticeFilter get filter => _filter;
   String? get errorMessage => _errorMessage;
 
-  /// Unread across every category, not just the filtered list.
   int get unreadCount => _unreadCount;
   bool get hasMore => _hasMore;
   bool get loadingMore => _loadingMore;
 
-  /// First call shows a spinner; later calls (pull to refresh, new notices)
-  /// keep the current list on screen if they fail.
+  /// Load notices
   Future<void> load() async {
     if (isGuest) {
       _state = LoadState.ready;
@@ -83,7 +75,7 @@ class NoticesProvider extends ChangeNotifier {
     _notify();
   }
 
-  /// The next page of older notices.
+  /// Load more
   Future<void> loadMore() async {
     if (isGuest || !_hasMore || _loadingMore) return;
     final generation = _generation;
@@ -92,7 +84,6 @@ class NoticesProvider extends ChangeNotifier {
     try {
       final page = await _service.inbox(category: _filter.category, skip: _notices.length, limit: pageSize);
       if (generation == _generation) {
-        // A notice that arrived meanwhile shifts the pages: skip repeats.
         final known = {for (final n in _notices) n.id};
         _notices = [..._notices, ...page.where((n) => !known.contains(n.id))];
         _hasMore = page.length == pageSize;
@@ -105,6 +96,7 @@ class NoticesProvider extends ChangeNotifier {
     }
   }
 
+  /// Set filter
   void setFilter(NoticeFilter filter) {
     if (filter == _filter) return;
     _filter = filter;
@@ -113,7 +105,7 @@ class NoticesProvider extends ChangeNotifier {
     unawaited(load());
   }
 
-  /// Reloads if the unread count went up (a new notice); cheap enough to poll.
+  /// Check for new
   Future<void> checkForNew() async {
     if (isGuest) return;
     try {
@@ -125,22 +117,23 @@ class NoticesProvider extends ChangeNotifier {
         _notify();
       }
     } catch (_) {
-      // Try again next time.
     }
   }
 
+  /// Start polling
   void startPolling() {
     if (isGuest) return;
     _poll?.cancel();
     _poll = Timer.periodic(pollInterval, (_) => checkForNew());
   }
 
+  /// Stop polling
   void stopPolling() {
     _poll?.cancel();
     _poll = null;
   }
 
-  /// Marks one notice read right away; restores it if the backend refuses.
+  /// Mark read
   Future<void> markRead(CommuterNotice notice) async {
     if (isGuest || notice.isRead) return;
     _replace(notice.id, notice.markedRead());
@@ -155,7 +148,7 @@ class NoticesProvider extends ChangeNotifier {
     }
   }
 
-  /// Returns an error message, or null on success.
+  /// Mark all read
   Future<String?> markAllRead() async {
     if (isGuest || _unreadCount == 0) return null;
     final before = _notices;
@@ -174,14 +167,17 @@ class NoticesProvider extends ChangeNotifier {
     }
   }
 
+  /// Notices replace
   void _replace(String id, CommuterNotice notice) {
     _notices = [for (final n in _notices) n.id == id ? notice : n];
   }
 
+  /// Notify notices
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _disposed = true;

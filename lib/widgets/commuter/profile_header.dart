@@ -1,27 +1,26 @@
-// lib/widgets/commuter/profile_header.dart
-//
-// Teal profile banner: initials avatar, name (with edit button), email,
-// role badge and the Trips / Saved Routes / Reviews counters.
-
+// Profile header
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/commuter_profile.dart';
 
+/// Profile header
 class ProfileHeader extends StatelessWidget {
+  /// Create profile header
   const ProfileHeader({super.key, required this.profile, required this.onEditName});
 
   final CommuterProfile profile;
   final VoidCallback onEditName;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final email = profile.email;
     final role = profile.role;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // white status-bar icons on teal
+      value: SystemUiOverlayStyle.light,
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.brandTeal,
@@ -93,13 +92,15 @@ class ProfileHeader extends StatelessWidget {
   }
 }
 
-/// Initials in a white-ringed circle on the teal header.
+/// Profile avatar widget
 class ProfileAvatar extends StatelessWidget {
+  /// Create profile avatar
   const ProfileAvatar({super.key, required this.initials, this.size = 104});
 
   final String initials;
   final double size;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -119,12 +120,14 @@ class ProfileAvatar extends StatelessWidget {
   }
 }
 
-/// "Commuter" / "Driver" pill.
+/// Role badge
 class RoleBadge extends StatelessWidget {
+  /// Create role badge
   const RoleBadge({super.key, required this.label});
 
   final String label;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -138,12 +141,15 @@ class RoleBadge extends StatelessWidget {
   }
 }
 
+/// Stat widget
 class _Stat extends StatelessWidget {
+  /// Create stat
   const _Stat({required this.value, required this.label});
 
   final int value;
   final String label;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Expanded(

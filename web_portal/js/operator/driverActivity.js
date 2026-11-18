@@ -1,13 +1,5 @@
-// js/operator/driverActivity.js
-//
-// Driver monitoring panel: tap a driver (Drivers roster row, or "Driver
-// activity" in a Fleet Map vehicle popup) to fetch GET /drivers/{id}/activity
-// and show their Driver Activity Log next to a map focused on their Current
-// Active Location. While open it re-fetches every REFRESH_MS so the marker
-// follows the vehicle; closing the modal stops that and removes the map.
-//
-// Usage: DriverActivity.open(driverId, { title: 'Juan Dela Cruz' })
-
+// Operator driver activity
+// Driver activity
 const DriverActivity = (() => {
   const esc = AdminUi.escapeHtml;
   const REFRESH_MS = 15000;
@@ -21,10 +13,9 @@ const DriverActivity = (() => {
   const EVENT_TONE = { shift_started: 'green', status_changed: 'amber', crowd_reported: 'blue', shift_ended: '' };
   const EVENT_LABEL = { shift_started: 'Shift', status_changed: 'Status', crowd_reported: 'Crowd', shift_ended: 'Shift end' };
 
-  // Guards against a slow response for a driver tapped earlier landing in
-  // the modal of the driver tapped since.
   let session = 0;
 
+  // Header HTML
   function headerHtml(a) {
     const duty = DUTY[a.duty_status] || DUTY.unavailable;
     return `
@@ -35,6 +26,7 @@ const DriverActivity = (() => {
       </div>`;
   }
 
+  // Location HTML
   function locationHtml(loc) {
     if (!loc) return '<p class="op-card__sub" style="margin:8px 0 0;">No GPS location yet for this driver\'s vehicle.</p>';
     return `
@@ -44,6 +36,7 @@ const DriverActivity = (() => {
       </p>`;
   }
 
+  // Log HTML
   function logHtml(events) {
     if (!events.length) return AdminUi.stateMessage('No shift activity recorded yet.');
     return `
@@ -59,6 +52,7 @@ const DriverActivity = (() => {
       </div>`;
   }
 
+  // Open driver activity
   function open(driverId, { title = 'Driver Activity' } = {}) {
     const mine = ++session;
     let map = null;
@@ -82,7 +76,7 @@ const DriverActivity = (() => {
       onClose: () => {
         clearInterval(timer);
         if (map) map.remove();
-        if (session === mine) session++; // drop any in-flight response
+        if (session === mine) session++;
       },
     });
 
@@ -97,7 +91,7 @@ const DriverActivity = (() => {
       mapEl.innerHTML = AdminUi.stateMessage('The map could not load. Check your internet connection.', { error: true });
     }
 
-    /** Puts the marker on the driver's latest fix; `focus` also centers the map on it. */
+    // Show location
     function showLocation(loc, { focus }) {
       if (!map) return;
       if (!loc) {
@@ -123,13 +117,13 @@ const DriverActivity = (() => {
       else if (!map.getBounds().contains(latLng)) map.panTo(latLng);
     }
 
+    // Load driver activity
     async function load({ focus }) {
       let activity;
       try {
         activity = await OperatorApi.driverActivity(driverId);
       } catch (err) {
         if (session !== mine) return;
-        // Keep the last good data on a failed background refresh.
         if (!focus) return;
         modal.querySelector('#da-log').innerHTML = AdminUi.stateMessage(err.message || 'Could not load this driver\'s activity.', { error: true });
         return;
@@ -141,8 +135,6 @@ const DriverActivity = (() => {
       showLocation(activity.current_location, { focus });
     }
 
-    // Leaflet measures its container, which only has a size once the
-    // modal is in the page: fix the size, then load and focus.
     if (map) setTimeout(() => map.invalidateSize(), 0);
     load({ focus: true });
     timer = setInterval(() => load({ focus: false }), REFRESH_MS);

@@ -1,3 +1,4 @@
+// Google auth services
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -5,7 +6,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../config/env_config.dart';
 
+/// Google auth service
 class GoogleAuthService {
+  /// Create Google auth
   GoogleAuthService._();
 
   static final GoogleAuthService instance = GoogleAuthService._();
@@ -17,25 +20,20 @@ class GoogleAuthService {
 
   Completer<String?>? _tokenCompleter;
 
+  /// Google auth initialize
   Future<void> initialize() async {
-    // Web gets its client ID from web/index.html; Android must be told the
-    // Web client ID explicitly, or Google returns no ID token.
     await _googleSignIn.initialize(
       serverClientId: kIsWeb ? null : EnvConfig.googleWebClientId,
     );
 
     _authSubscription ??= _googleSignIn.authenticationEvents.listen(
       _handleAuthEvent,
-      // Google reports popup-closed, origin-not-allowed, etc. as stream
-      // errors. Without this handler they were uncaught and the waiting
-      // caller never heard back.
       onError: _handleAuthError,
     );
   }
 
+  /// Sign get ID token
   Future<String?> signInAndGetIdToken() {
-    // Reuse a pending request instead of replacing it — replacing it
-    // would leave the earlier caller waiting forever.
     final pending = _tokenCompleter;
     if (pending != null && !pending.isCompleted) return pending.future;
 
@@ -43,6 +41,7 @@ class GoogleAuthService {
     return _tokenCompleter!.future;
   }
 
+  /// Handle auth event
   void _handleAuthEvent(
     GoogleSignInAuthenticationEvent event,
   ) {
@@ -65,11 +64,11 @@ class GoogleAuthService {
     }
   }
 
+  /// Handle auth error
   void _handleAuthError(Object error) {
     final completer = _tokenCompleter;
     if (completer == null || completer.isCompleted) return;
 
-    // User closing the popup isn't an error worth showing.
     if (error is GoogleSignInException &&
         error.code == GoogleSignInExceptionCode.canceled) {
       completer.complete(null);
@@ -78,6 +77,7 @@ class GoogleAuthService {
     }
   }
 
+  /// Clean up resources
   Future<void> dispose() async {
     await _authSubscription?.cancel();
     _authSubscription = null;

@@ -1,21 +1,14 @@
-// js/operator/views/fleetMap.js
-//
-// Fleet Map: Leaflet map of the operator's vehicles (live over
-// /ws/live), plus Active Vehicles, Route Alerts and Recent Feedback.
-
+// Operator fleet map view
 OperatorRouter.register('fleet', {
   title: 'Fleet Map',
   heading: 'Fleet Overview',
 
+  // Mount the view
   mount(el) {
     const CEBU = [10.3157, 123.8854];
     const POLL_MS = 30000;
     const RECENT_PING_MS = 10 * 60 * 1000;
     const ALERT_RECENT_MS = 24 * 60 * 60 * 1000;
-    // Green only while GPS is actually arriving: the stored status stays
-    // "active" when a tracker is switched off or never connected (the
-    // backend only notices a stop while it is running), so the map goes by
-    // how fresh the last fix is. Trackers send one a second.
     const GPS_LIVE_MS = 60 * 1000;
     const MARKER_COLORS = { active: '#27AE60', maintenance: '#F5A623', inactive: '#7D868E', signal_lost: '#D72F33' };
     const esc = AdminUi.escapeHtml;
@@ -26,7 +19,7 @@ OperatorRouter.register('fleet', {
     let socket = null;
     let reconnectTimer = null;
     let stopped = false;
-    const markers = new Map(); // vehicle_id -> L.Marker
+    const markers = new Map();
 
     el.innerHTML = `
       <div class="op-map" id="fleet-map" role="region" aria-label="Fleet map"></div>
@@ -60,7 +53,6 @@ OperatorRouter.register('fleet', {
     const feedbackEl = el.querySelector('#panel-feedback');
     const liveEl = el.querySelector('#fleet-live');
 
-    // ---------- Map ----------
 
     const map = window.L ? L.map(el.querySelector('#fleet-map')).setView(CEBU, 13) : null;
     if (map) {
@@ -73,13 +65,13 @@ OperatorRouter.register('fleet', {
     }
     const vehicleLayer = map ? L.layerGroup().addTo(map) : null;
 
+    // Route label
     const routeLabel = (id) => {
       const r = routes.find((x) => x.id === id);
       return r ? `${r.code} – ${r.name}` : 'Unknown route';
     };
 
-    // The PUV seen from above, with a status dot; it turns to face the way
-    // it moved (see faceTravel), so the vehicle itself shows its direction.
+    // Marker icon
     function markerIcon(status) {
       const color = MARKER_COLORS[status] || MARKER_COLORS.inactive;
       return L.divIcon({
@@ -92,7 +84,7 @@ OperatorRouter.register('fleet', {
       });
     }
 
-    // Points the PUV along its last real movement (8 m+, to ignore GPS jitter).
+    // Face travel
     function faceTravel(marker, latLng) {
       const from = marker._opAnchor;
       if (!from) { marker._opAnchor = latLng; return; }
@@ -103,15 +95,16 @@ OperatorRouter.register('fleet', {
       applyHeading(marker);
     }
 
+    // Apply heading
     function applyHeading(marker) {
       const img = marker.getElement()?.querySelector('.op-puv__img');
       if (img && marker._opHeading != null) img.style.transform = `rotate(${marker._opHeading}deg)`;
     }
 
+    // Popup HTML
     function popupHtml(v) {
       const ping = v.last_position?.timestamp ? OperatorUi.timeAgo(v.last_position.timestamp) : 'No GPS yet';
       const from = v.last_position?.source === 'phone' ? " (driver's phone: tracker offline)" : '';
-      // Driver monitoring and playback from the map (see the click hook below).
       const activity = v.driver_id
         ? `<button type="button" class="btn-sm btn-sm--teal"
              data-driver-activity="${esc(v.driver_id)}" data-plate="${esc(v.plate_number)}">Driver activity</button>`
@@ -125,10 +118,6 @@ OperatorRouter.register('fleet', {
           <button type="button" class="btn-sm" data-playback="${esc(v.vehicle_id)}">Playback</button></div>`;
     }
 
-    // Buttons inside a vehicle popup. Listened for on the map in the capture
-    // phase: Leaflet stops clicks in popups from bubbling, and the popup's
-    // content is refreshed with live GPS, which would drop a listener
-    // attached to the button itself.
     if (map) {
       map.getContainer().addEventListener('click', (e) => {
         const activity = e.target.closest?.('[data-driver-activity]');
@@ -138,18 +127,19 @@ OperatorRouter.register('fleet', {
           DriverActivity.open(activity.dataset.driverActivity, { title: `Driver of ${activity.dataset.plate} — Activity` });
         } else if (playback) {
           e.preventDefault();
-          try { sessionStorage.setItem(PLAYBACK_VEHICLE_KEY, playback.dataset.playback); } catch { /* private mode */ }
+          try { sessionStorage.setItem(PLAYBACK_VEHICLE_KEY, playback.dataset.playback); } catch {  }
           location.hash = '#/playback';
         }
       }, true);
     }
 
+    // GPS live
     function gpsLive(v, now = Date.now()) {
       const t = OperatorUi.parseDate(v.last_position?.timestamp);
       return Boolean(t) && now - t <= GPS_LIVE_MS;
     }
 
-    /** What the map shows: the operator's maintenance / inactive first, then whether GPS is live. */
+    // Marker status
     function markerStatus(v, now = Date.now()) {
       if (v.suspended) return 'inactive';
       if (v.status === 'maintenance' || v.status === 'inactive') return v.status;
@@ -158,6 +148,7 @@ OperatorRouter.register('fleet', {
 
     const STATUS_LABEL = { active: 'GPS live', signal_lost: 'GPS off / signal lost', maintenance: 'maintenance', inactive: 'inactive' };
 
+    // Draw vehicles
     function drawVehicles({ fit = false } = {}) {
       if (!map) return;
       const seen = new Set();
@@ -177,8 +168,6 @@ OperatorRouter.register('fleet', {
         } else {
           marker.setLatLng(latLng);
           faceTravel(marker, latLng);
-          // Rebuilding the icon on every GPS update swapped the element under
-          // the pointer, so taps on a moving jeep were lost: only on a change.
           if (marker._opStatus !== status) {
             marker.setIcon(markerIcon(status));
             marker._opStatus = status;
@@ -199,14 +188,15 @@ OperatorRouter.register('fleet', {
       }
     }
 
-    // ---------- Panels ----------
 
+    // Render vehicles
     function renderVehicles() {
       const total = fleet.length;
       if (!total) {
         vehiclesEl.innerHTML = AdminUi.stateMessage('No vehicles in your fleet yet.');
         return;
       }
+      // Count fleet map
       const count = (fn) => fleet.filter(fn).length;
       const inService = count((v) => markerStatus(v) === 'active' && v.route_status !== 'suspended');
       const now = Date.now();
@@ -229,12 +219,12 @@ OperatorRouter.register('fleet', {
         <a class="op-link" href="#/vehicles">Manage vehicles →</a>`;
     }
 
+    // Render alerts
     function renderAlerts() {
       const troubled = new Map();
       fleet.forEach((v) => {
         if (v.route_status === 'congested' || v.route_status === 'suspended') troubled.set(v.route_id, v.route_status);
       });
-      // Service alerts sent in the last day and not withdrawn (notices have no "resolved").
       const dayAgo = Date.now() - ALERT_RECENT_MS;
       const open = alerts.filter((a) => a.category === 'service_alert' && !a.withdrawn_at
         && (OperatorUi.parseDate(a.created_at) || 0) >= dayAgo);
@@ -267,10 +257,9 @@ OperatorRouter.register('fleet', {
       alertsEl.insertAdjacentHTML('beforeend', '<a class="op-link" href="#/announcements">Post an announcement →</a>');
     }
 
-    // Newest first: route reports (/feedback/mine) and ride reviews
-    // (/reviews/operator) merged into one list.
     const FEEDBACK_SHOWN = 5;
 
+    // Load feedback
     async function loadFeedback() {
       const [reports, reviews] = await Promise.all([
         OperatorApi.myFeedback({ limit: FEEDBACK_SHOWN }).catch(() => null),
@@ -285,6 +274,7 @@ OperatorRouter.register('fleet', {
       return items.slice(0, FEEDBACK_SHOWN);
     }
 
+    // Feedback item HTML
     function feedbackItemHtml(item) {
       const when = `<span>· ${esc(OperatorUi.timeAgo(item.at))}</span>`;
       if (item.kind === 'report') {
@@ -314,6 +304,7 @@ OperatorRouter.register('fleet', {
         </div>`;
     }
 
+    // Render feedback
     function renderFeedback(list) {
       if (!list.length) {
         feedbackEl.innerHTML = AdminUi.stateMessage('No commuter feedback on your routes yet.');
@@ -324,9 +315,10 @@ OperatorRouter.register('fleet', {
         <a class="op-link" href="#/reports">See all feedback →</a>`;
     }
 
-    // ---------- Loading ----------
 
+    // Load fleet
     async function loadFleet({ first = false } = {}) {
+      // Load fleet map
       const load = async () => {
         const [f, r, a] = await Promise.all([
           OperatorApi.fleet(),
@@ -335,6 +327,7 @@ OperatorRouter.register('fleet', {
         ]);
         return { f, r, a };
       };
+      // Render the view
       const render = ({ f, r, a }) => {
         fleet = f;
         routes = r;
@@ -354,13 +347,12 @@ OperatorRouter.register('fleet', {
         try {
           render(await load());
         } catch {
-          // Keep showing the last good data between polls.
         }
       }
     }
 
-    // ---------- Live updates ----------
 
+    // Connect live
     function connectLive() {
       if (stopped) return;
       const url = `${API_BASE_URL.replace(/^http/, 'ws')}/ws/live`;
@@ -375,7 +367,7 @@ OperatorRouter.register('fleet', {
         let msg;
         try { msg = JSON.parse(event.data); } catch { return; }
         const vehicle = fleet.find((v) => v.vehicle_id === msg.vehicle_id);
-        if (!vehicle) return; // another operator's vehicle
+        if (!vehicle) return;
         if (typeof msg.lat === 'number' && typeof msg.lng === 'number') {
           vehicle.last_position = { lat: msg.lat, lng: msg.lng, timestamp: msg.ts || new Date().toISOString() };
         }
@@ -391,16 +383,14 @@ OperatorRouter.register('fleet', {
       });
     }
 
-    // Feedback rows show route names, so they load after the routes.
     feedbackEl.innerHTML = AdminUi.stateMessage('Loading…');
     loadFleet({ first: true }).then(() => {
       if (!stopped) AdminUi.loadInto(feedbackEl, loadFeedback, renderFeedback);
     });
     connectLive();
-    // New feedback shows up without reloading the page.
+    // Refresh feedback
     const refreshFeedback = () => loadFeedback().then((list) => { if (!stopped) renderFeedback(list); }).catch(() => {});
     const poll = setInterval(() => { loadFleet(); refreshFeedback(); }, POLL_MS);
-    // A tracker that stops sending turns red within ~15 s, between polls.
     const staleCheck = setInterval(() => { drawVehicles(); renderVehicles(); }, 15000);
 
     return () => {

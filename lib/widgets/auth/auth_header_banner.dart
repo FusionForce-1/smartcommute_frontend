@@ -1,13 +1,11 @@
-// lib/widgets/auth/auth_header_banner.dart
-//
-// Teal curved banner shared by ForgotPasswordScreen, VerifyOtpScreen and
-// RegisterScreen. Icons come from AppIcons (not inline Icons.xxx).
-
+// Auth header banner
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 
+/// Auth header banner
 class AuthHeaderBanner extends StatelessWidget {
+  /// Create auth header banner
   const AuthHeaderBanner({
     super.key,
     required this.title,
@@ -19,12 +17,11 @@ class AuthHeaderBanner extends StatelessWidget {
   final String title;
   final VoidCallback? onBack;
 
-  /// [big] renders the large two-line "FORGOT / PASSWORD" title.
   final bool big;
 
-  /// Register mockup centers "CREATE YOUR ACCOUNT" on the banner.
   final bool centerTitle;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(

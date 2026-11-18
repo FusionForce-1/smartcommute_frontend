@@ -1,13 +1,8 @@
-// js/operator/views/revenueReport.js
-//
-// Revenue Report section of the Reports page. Revenue comes from the daily
-// remittance log: what each vehicle brought in each day, recorded here.
-// Shows period totals, a daily revenue chart, breakdowns by route /
-// vehicle / driver, and the log itself (record, edit, delete, export).
-
+// Operator revenue report view
+// Revenue report
 const RevenueReport = (() => {
   const esc = AdminUi.escapeHtml;
-  const BAR_COLOR = '#1F7FB5'; // validated: lightness band, chroma floor, 3:1 on white
+  const BAR_COLOR = '#1F7FB5';
   const RANGES = [
     { value: '7', label: 'Last 7 days' },
     { value: '30', label: 'Last 30 days' },
@@ -15,23 +10,29 @@ const RevenueReport = (() => {
     { value: 'custom', label: 'Custom' },
   ];
 
+  // Revenue report peso
   const peso = (n) => `₱${Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Peso short
   const pesoShort = (n) => {
     if (n >= 1e6) return `₱${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
     if (n >= 1e3) return `₱${(n / 1e3).toFixed(1).replace(/\.0$/, '')}k`;
     return `₱${Math.round(n)}`;
   };
 
-  /** Local calendar date as YYYY-MM-DD (the portal is used in Philippine time). */
+  // ISO day
   const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Today ISO
   const todayIso = () => isoDay(new Date());
+  // Add days
   const addDays = (iso, n) => {
     const d = new Date(`${iso}T00:00:00`);
     d.setDate(d.getDate() + n);
     return isoDay(d);
   };
+  // Day label
   const dayLabel = (iso, opts = { month: 'short', day: 'numeric' }) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', opts);
 
+  // Range for
   function rangeFor(value, custom) {
     const today = todayIso();
     if (value === '7') return { start: addDays(today, -6), end: today };
@@ -40,9 +41,8 @@ const RevenueReport = (() => {
     return { start: addDays(today, -29), end: today };
   }
 
-  // ---------- Chart ----------
 
-  /** Single-series daily column chart as inline SVG, with a hover tooltip. */
+  // Chart SVG
   function chartSvg(days) {
     const W = 900;
     const H = 260;
@@ -51,7 +51,6 @@ const RevenueReport = (() => {
     const plotH = H - pad.top - pad.bottom;
     const max = Math.max(...days.map((d) => d.amount), 0);
 
-    // Up to 4 "nice" ticks.
     const rawStep = max > 0 ? max / 3 : 1;
     const mag = 10 ** Math.floor(Math.log10(rawStep));
     const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= rawStep) || rawStep;
@@ -59,9 +58,10 @@ const RevenueReport = (() => {
     const ticks = [];
     for (let v = 0; v <= top + 1e-9; v += step) ticks.push(v);
 
+    // Revenue report y
     const y = (v) => pad.top + plotH - (v / top) * plotH;
     const band = plotW / days.length;
-    const barW = Math.max(2, Math.min(24, band - 2)); // <= 24px, 2px surface gap
+    const barW = Math.max(2, Math.min(24, band - 2));
     const labelEvery = Math.ceil(days.length / 8);
 
     const grid = ticks.map((t) => `
@@ -72,15 +72,12 @@ const RevenueReport = (() => {
       const x = pad.left + i * band + (band - barW) / 2;
       const h = Math.max(0, y(0) - y(d.amount));
       const r = Math.min(4, barW / 2, h);
-      // Rounded data-end (top), square at the baseline.
       const path = h > 0
         ? `M${x},${y(0)} V${y(0) - h + r} Q${x},${y(0) - h} ${x + r},${y(0) - h} H${x + barW - r} Q${x + barW},${y(0) - h} ${x + barW},${y(0) - h + r} V${y(0)} Z`
         : '';
-      // Counted back from the last day, so it is always labelled and spacing stays even.
       const label = (days.length - 1 - i) % labelEvery === 0
         ? `<text x="${pad.left + i * band + band / 2}" y="${H - 8}" text-anchor="middle" class="op-chart__tick">${esc(dayLabel(d.date))}</text>`
         : '';
-      // Hit target spans the full band and plot height.
       return `
         ${path ? `<path d="${path}" fill="${BAR_COLOR}" />` : ''}
         <rect class="op-chart__hit" x="${pad.left + i * band}" y="${pad.top}" width="${band}" height="${plotH}"
@@ -97,6 +94,7 @@ const RevenueReport = (() => {
       <div class="op-chart__tooltip" hidden></div>`;
   }
 
+  // Bind tooltip
   function bindTooltip(chartEl, days) {
     const tip = chartEl.querySelector('.op-chart__tooltip');
     chartEl.querySelectorAll('.op-chart__hit').forEach((hit) => {
@@ -122,8 +120,8 @@ const RevenueReport = (() => {
     });
   }
 
-  // ---------- Breakdowns ----------
 
+  // Revenue report breakdown
   function breakdown(title, groups) {
     const rows = groups.length
       ? groups.slice(0, 8).map((g) => `
@@ -140,8 +138,8 @@ const RevenueReport = (() => {
     return `<section class="op-card"><h3>${esc(title)}</h3>${rows}</section>`;
   }
 
-  // ---------- Mount ----------
 
+  // Mount the view
   function mount(container) {
     let range = '7';
     const custom = { start: addDays(todayIso(), -29), end: todayIso() };
@@ -205,11 +203,13 @@ const RevenueReport = (() => {
     endInput.value = custom.end;
     startInput.max = endInput.max = todayIso();
 
+    // Render ranges
     function renderRanges() {
       rangesEl.innerHTML = AdminUi.filterChips(RANGES, range, 'range');
       customEl.style.display = range === 'custom' ? 'flex' : 'none';
     }
 
+    // Render KPIs
     function renderKpis() {
       const s = summary;
       kpisEl.innerHTML = OperatorUi.stats([
@@ -220,6 +220,7 @@ const RevenueReport = (() => {
       ]);
     }
 
+    // Render summary
     function renderSummary() {
       const s = summary;
       const { start, end } = s;
@@ -237,6 +238,7 @@ const RevenueReport = (() => {
       ].join('');
     }
 
+    // Render log
     function renderLog() {
       const total = log.reduce((n, r) => n + r.amount, 0);
       logSub.textContent = `${log.length} ${log.length === 1 ? 'remittance' : 'remittances'} · ${peso(total)}`;
@@ -269,6 +271,7 @@ const RevenueReport = (() => {
         </div>`;
     }
 
+    // Load revenue report
     async function load() {
       const current = rangeFor(range, custom);
       summary = null;
@@ -292,15 +295,15 @@ const RevenueReport = (() => {
       }
     }
 
-    // Vehicles and drivers for the record/edit forms.
     Promise.all([OperatorApi.fleet().catch(() => []), OperatorApi.drivers().catch(() => [])])
       .then(([f, d]) => { fleet = f; drivers = d; });
 
-    // ---------- Forms ----------
 
+    // Driver options
     const driverOptions = (selected) => `<option value="">No driver recorded</option>${drivers
       .map((d) => `<option value="${esc(d.id)}"${d.id === selected ? ' selected' : ''}>${esc(OperatorUi.driverName(d))} (${esc(d.driver_code)})</option>`).join('')}`;
 
+    // Numbers fields
     function numbersFields(r = {}) {
       return `
         <div class="form-field">
@@ -323,9 +326,11 @@ const RevenueReport = (() => {
         </div>`;
     }
 
+    // Read numbers
     function readNumbers(m) {
       const amount = Number(m.querySelector('#rm-amount').value);
       if (!(amount > 0)) throw new Error('Enter the amount remitted.');
+      // Optional int
       const optionalInt = (id) => {
         const raw = m.querySelector(id).value.trim();
         if (!raw) return null;
@@ -341,6 +346,7 @@ const RevenueReport = (() => {
       };
     }
 
+    // Open record
     function openRecord() {
       if (!fleet.length) {
         AdminModal.open({
@@ -394,7 +400,6 @@ const RevenueReport = (() => {
           },
         ],
       });
-      // Default the driver to whoever is assigned to the chosen vehicle.
       modal.querySelector('#rm-vehicle').addEventListener('change', (e) => {
         const vehicle = fleet.find((v) => v.vehicle_id === e.target.value);
         modal.querySelector('#rm-driver').value = vehicle?.driver_id || '';
@@ -402,6 +407,7 @@ const RevenueReport = (() => {
       modal.querySelector('#rm-amount').focus();
     }
 
+    // Open edit
     function openEdit(r) {
       AdminModal.open({
         title: `Edit Remittance — ${r.plate_number}`,
@@ -428,7 +434,6 @@ const RevenueReport = (() => {
               if (!day) throw new Error('Choose the date.');
               const changes = { date: day, ...readNumbers(m) };
               const driverId = m.querySelector('#rm-driver').value || null;
-              // Keep a removed driver's saved name unless a different one is picked.
               if (driverId !== r.driver_id && (driverId || drivers.some((d) => d.id === r.driver_id))) {
                 changes.driver_id = driverId;
               }
@@ -442,6 +447,7 @@ const RevenueReport = (() => {
       });
     }
 
+    // Confirm delete
     function confirmDelete(r) {
       AdminModal.confirm({
         title: 'Delete remittance?',
@@ -455,7 +461,9 @@ const RevenueReport = (() => {
       });
     }
 
+    // Export CSV
     function exportCsv() {
+      // Revenue report cell
       const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const lines = [
         ['Date', 'Vehicle', 'Route', 'Driver', 'Trips', 'Passengers', 'Amount (PHP)', 'Notes'].map(cell).join(','),
@@ -471,7 +479,6 @@ const RevenueReport = (() => {
       URL.revokeObjectURL(url);
     }
 
-    // ---------- Events ----------
 
     rangesEl.addEventListener('click', (e) => {
       const chip = e.target.closest('[data-range]');

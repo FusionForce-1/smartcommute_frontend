@@ -1,8 +1,4 @@
-// lib/screens/auth/forgot_password_screen.dart
-//
-// Emae D. Calonia — Flutter Forgot Password.
-// Shield + lock icon, email field, Send OTP.
-
+// Forgot password screen
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
@@ -11,33 +7,38 @@ import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
 
+/// Forgot password screen
 class ForgotPasswordScreen extends StatefulWidget {
+  /// Create forgot password
   const ForgotPasswordScreen({
     super.key,
     this.onSendOtp,
     this.onBack,
   });
 
-  /// Emails a reset code (POST /auth/forgot-password).
   final Future<void> Function(String email)? onSendOtp;
   final VoidCallback? onBack;
 
+  /// Create widget state
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
+/// Forgot password state
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Clean up resources
   @override
   void dispose() {
     _email.dispose();
     super.dispose();
   }
 
+  /// Handle send OTP
   Future<void> _handleSendOtp() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -56,6 +57,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,9 +130,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 }
 
+/// Shield lock mark widget
 class _ShieldLockMark extends StatelessWidget {
+  /// Create shield lock mark
   const _ShieldLockMark();
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return SizedBox(

@@ -1,9 +1,4 @@
-// lib/router/app_router.dart
-//
-// Emae D. Calonia — navigation for the auth screens and into each role's
-// dashboard. Google Sign-In: the Google button signs in by itself, and
-// _setUpGoogleSignIn() below turns its result into a session.
-
+// App router
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -20,42 +15,37 @@ import '../screens/driver/driver_dashboard.dart';
 import '../services/api_service.dart' show TwoFactorRequired;
 import '../services/google_auth_services.dart';
 
-/// Operators manage their fleet in the web portal, not in this app.
 const String _operatorUseWebPortal =
     'Operator accounts use the Smart Commute web portal. '
     'Please sign in there to manage your fleet.';
 
+/// Smart commute auth app
 class SmartCommuteAuthApp extends StatefulWidget {
+  /// Create smart commute auth
   const SmartCommuteAuthApp({super.key});
 
+  /// Create widget state
   @override
   State<SmartCommuteAuthApp> createState() => _SmartCommuteAuthAppState();
 }
 
+/// Smart commute auth state
 class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
-  // Held directly as a field instead of via context.read() — this
-  // widget's own `context` sits ABOVE where ChangeNotifierProvider and
-  // MaterialApp get created (they're built INSIDE build() below), so
-  // context.read<AuthProvider>() from here can never find it. Holding
-  // the instance directly sidesteps needing a context at all.
   final AuthProvider _authProvider = AuthProvider();
 
-  // Same reasoning for navigation: Navigator.of(context) needs a
-  // context that's a DESCENDANT of the Navigator MaterialApp creates.
-  // This widget's own context isn't. A GlobalKey lets us reach the
-  // Navigator directly regardless of where we're calling from.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
-  // Same idea for SnackBars shown from the Google callback above.
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
+  /// Initialize widget state
   @override
   void initState() {
     super.initState();
     _setUpGoogleSignIn();
   }
 
+  /// Set up Google sign in
   Future<void> _setUpGoogleSignIn() async {
     try {
       await GoogleAuthService.instance.initialize();
@@ -67,20 +57,10 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
     _listenForNextGoogleSignIn();
   }
 
-  // signInAndGetIdToken() resolves ONCE per call — it's a one-shot
-  // listener, not a persistent subscription. The first time this ran,
-  // it correctly caught your Register-screen Google click and routed
-  // you in. But after that single Future resolved, nothing was left
-  // listening, so the NEXT Google click (from Login) had no one to
-  // report back to. Calling this again after every result — success
-  // or not — keeps a fresh listener always armed for the next attempt.
-  //
-  // Re-arming happens in whenComplete so it also runs when the sign-in
-  // FAILS — previously a single backend rejection (e.g. 401) skipped the
-  // re-arm and Google sign-in silently stopped working until reload.
+  /// Listen next Google sign
   void _listenForNextGoogleSignIn() {
     GoogleAuthService.instance.signInAndGetIdToken().then((idToken) async {
-      if (idToken == null) return; // user closed the popup
+      if (idToken == null) return;
       await _authProvider.loginWithGoogle(idToken);
       _navigateToDashboard(_authProvider.role);
     }).catchError((Object e) {
@@ -89,10 +69,11 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
         SnackBar(content: Text(_googleErrorMessage(e))),
       );
     }).whenComplete(() {
-      if (mounted) _listenForNextGoogleSignIn(); // re-arm for next time
+      if (mounted) _listenForNextGoogleSignIn();
     });
   }
 
+  /// Google error message
   static String _googleErrorMessage(Object e) {
     if (e is DioException) {
       final status = e.response?.statusCode;
@@ -113,12 +94,10 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
     return 'Google sign-in failed. Try again.';
   }
 
-  // Uses the GlobalKey instead of a BuildContext — works correctly
-  // even when called from outside the widget tree (like the callback
-  // above), unlike Navigator.of(context) would from this State.
+  /// Navigate to dashboard
   void _navigateToDashboard(String? role, {bool isGuest = false}) {
     final navigator = _navigatorKey.currentState;
-    if (navigator == null) return; // not mounted yet — shouldn't happen in practice
+    if (navigator == null) return;
     if (role == 'operator') {
       _authProvider.logout();
       _scaffoldMessengerKey.currentState?.showSnackBar(
@@ -139,19 +118,17 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
     navigator.pushReplacement(MaterialPageRoute(builder: (_) => destination));
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     GoogleAuthService.instance.dispose();
     super.dispose();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<AuthProvider>.value(
-      // .value (not create:) because we already constructed this
-      // instance above as a field — using create: here would make a
-      // SECOND, different AuthProvider that _setUpGoogleSignIn()
-      // never touches, leaving the UI watching the wrong instance.
       value: _authProvider,
       child: MaterialApp(
         navigatorKey: _navigatorKey,
@@ -165,7 +142,7 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   }
 }
 
-/// Routes to the role-appropriate test dashboard after authentication.
+/// Open dashboard for role
 void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = false}) {
   if (role == 'operator') {
     context.read<AuthProvider>().logout();
@@ -190,9 +167,12 @@ void _openDashboardForRole(BuildContext context, String? role, {bool isGuest = f
   );
 }
 
+/// Login screen host widget
 class LoginScreenHost extends StatelessWidget {
+  /// Create login host
   const LoginScreenHost({super.key});
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
@@ -201,7 +181,6 @@ class LoginScreenHost extends StatelessWidget {
         try {
           await auth.login(email, password, rememberMe: rememberMe);
         } on TwoFactorRequired catch (challenge) {
-          // Password was right; the account wants the emailed code too.
           if (!context.mounted) return;
           await Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => TwoFactorLoginHost(challenge: challenge)),
@@ -229,9 +208,12 @@ class LoginScreenHost extends StatelessWidget {
   }
 }
 
+/// Register screen host widget
 class RegisterScreenHost extends StatelessWidget {
+  /// Create register host
   const RegisterScreenHost({super.key});
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
@@ -244,12 +226,6 @@ class RegisterScreenHost extends StatelessWidget {
           email: email,
           password: password,
         );
-        // registerCommuter() only creates the account — your backend's
-        // /auth/register does NOT return tokens, so the user isn't
-        // actually logged in yet at this point. We immediately log
-        // them in with the same credentials they just typed, so
-        // registering feels like one continuous action instead of
-        // "create account, then go type your password again."
         await auth.login(email, password);
         if (!context.mounted) return;
         _openDashboardForRole(context, auth.role);
@@ -258,9 +234,12 @@ class RegisterScreenHost extends StatelessWidget {
   }
 }
 
+/// Forgot password host widget
 class ForgotPasswordHost extends StatelessWidget {
+  /// Create forgot password host
   const ForgotPasswordHost({super.key});
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
@@ -279,18 +258,19 @@ class ForgotPasswordHost extends StatelessWidget {
   }
 }
 
+/// Verify OTP host widget
 class VerifyOtpHost extends StatelessWidget {
+  /// Create verify OTP host
   const VerifyOtpHost({super.key, required this.email});
 
   final String email;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return VerifyOtpScreen(
       email: email,
       onBack: () => Navigator.of(context).pop(),
-      // The backend checks the code together with the new password, so
-      // the code is carried to the next screen rather than sent here.
       onVerifyOtp: (otp) async {
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -302,12 +282,15 @@ class VerifyOtpHost extends StatelessWidget {
   }
 }
 
+/// Set new password host widget
 class SetNewPasswordHost extends StatelessWidget {
+  /// Create set new password
   const SetNewPasswordHost({super.key, required this.email, required this.otp});
 
   final String email;
   final String otp;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();
@@ -331,12 +314,14 @@ class SetNewPasswordHost extends StatelessWidget {
   }
 }
 
-/// Second sign-in step for accounts with two-factor authentication on.
+/// Two factor login host widget
 class TwoFactorLoginHost extends StatelessWidget {
+  /// Create two factor login
   const TwoFactorLoginHost({super.key, required this.challenge});
 
   final TwoFactorRequired challenge;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final auth = context.read<AuthProvider>();

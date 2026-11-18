@@ -1,8 +1,4 @@
-// lib/screens/auth/verify_otp_screen.dart
-//
-// Emae D. Calonia — Flutter Verify OTP.
-// Envelope icon, destination email, 6-digit code, Verify OTP.
-
+// Verify OTP screen
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../config/theme_config.dart';
@@ -12,7 +8,9 @@ import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
 
+/// Verify OTP screen
 class VerifyOtpScreen extends StatefulWidget {
+  /// Create verify OTP
   const VerifyOtpScreen({
     super.key,
     required this.email,
@@ -23,30 +21,31 @@ class VerifyOtpScreen extends StatefulWidget {
 
   final String email;
 
-  /// Banner heading; the two-factor sign-in step reuses this screen.
   final String title;
 
-  /// Password reset: opens SetNewPasswordScreen with the code, which then
-  /// calls POST /auth/reset-password. Two-factor sign-in: POST /auth/login/verify.
   final Future<void> Function(String otp)? onVerifyOtp;
   final VoidCallback? onBack;
 
+  /// Create widget state
   @override
   State<VerifyOtpScreen> createState() => _VerifyOtpScreenState();
 }
 
+/// Verify OTP state
 class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otp = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Clean up resources
   @override
   void dispose() {
     _otp.dispose();
     super.dispose();
   }
 
+  /// Handle verify
   Future<void> _handleVerify() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -67,6 +66,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(

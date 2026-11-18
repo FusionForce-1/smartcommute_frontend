@@ -1,14 +1,4 @@
-// lib/screens/auth/login_screen.dart
-//
-// Emae D. Calonia — Flutter Login (Commuter / Driver).
-// Logo lockup over an ice-blue panel (72% of the height, rounded bottom)
-// on teal; sizes follow the screen. Wide screens (web, tablets) keep the
-// stacked layout centred; only short rotated phones put the logo beside
-// the card.
-// Remember Me, Forgot Password, Login, Continue as Guest, Google, register link.
-//
-// This screen is UI-only. Wire AuthProvider from the parent (see auth_app.dart).
-
+// Login screen
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
@@ -18,7 +8,9 @@ import '../../widgets/auth/google_signin_button.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
 
+/// Login screen
 class LoginScreen extends StatefulWidget {
+  /// Create login
   const LoginScreen({
     super.key,
     this.onLogin,
@@ -27,23 +19,23 @@ class LoginScreen extends StatefulWidget {
     this.onCreateAccount,
   });
 
-  /// Signs in (POST /auth/login); throws when the details are wrong.
   final Future<void> Function(
     String email,
     String password,
     bool rememberMe,
   )? onLogin;
 
-  /// Browses as a guest: no account, nothing saved.
   final VoidCallback? onGuestContinue;
 
   final VoidCallback? onForgotPassword;
   final VoidCallback? onCreateAccount;
 
+  /// Create widget state
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+/// Login state
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
@@ -52,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Clean up resources
   @override
   void dispose() {
     _emailController.dispose();
@@ -59,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Handle login
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -81,34 +75,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Share of the screen height covered by the ice-blue top panel —
-  /// the mockup's split sits at ~72%.
   static const double _panelFraction = 0.72;
 
-  /// Cards wider than this look stretched on large phones / foldables.
   static const double _maxCardWidth = 420;
 
-  /// Width of the phone the mockup was drawn for. Every size below is the
-  /// mockup's pixel measurement times [_scaleFor] — so a 360-wide phone gets
-  /// the same proportions, just smaller.
   static const double _designWidth = 414;
 
+  /// Scale for
   static double _scaleFor(Size size) =>
       (size.shortestSide / _designWidth).clamp(0.8, 1.2);
 
-  /// Below this height the stacked logo + card can't fit, so the logo
-  /// moves beside the card. Only rotated phones are this short — desktop
-  /// browsers and tablets keep the stacked mobile design.
   static const double _minStackedHeight = 560;
 
   double _stableWidth = 0;
   double _stableHeight = 0;
 
-  /// Screen size with the on-screen keyboard ignored. Mobile browsers
-  /// shrink the window when the keyboard opens, which would flip the
-  /// layout to landscape and squash the panel mid-typing. The keyboard
-  /// never changes the width, so only a width change (rotation, resize)
-  /// or a taller window resets the height.
+  /// Layout size
   Size _layoutSize(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
     if (size.width != _stableWidth || size.height > _stableHeight) {
@@ -118,6 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Size(_stableWidth, _stableHeight);
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,19 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Logo over card, anchored to the bottom like the mockup (card ends 56px
-  /// above the bottom of an 896-tall screen); extra height on taller phones
-  /// goes above the logo. Scrolls when it doesn't fit (small phones,
-  /// keyboard open).
+  /// Build portrait
   Widget _buildPortrait(Size size, double scale) {
     final gutter = (32 * scale).clamp(16.0, 40.0);
-    // Vertical spacing follows the screen height, as the mockup's 896.
     final vScale = (size.height / 896).clamp(0.6, 1.2);
-    // Shrinks faster than the screen on short phones so the card still fits.
     final logoHeight = (size.height * 0.26 * vScale).clamp(80.0, 240.0);
     final gap = 58 * vScale;
     final bottom = 56 * vScale;
-    // Content is bottom-anchored, so top padding only matters when tight.
     const top = 12.0;
     return LayoutBuilder(
       builder: (context, viewport) => SingleChildScrollView(
@@ -195,14 +172,12 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Rotated phones are too short to stack, so the logo sits beside the card.
+  /// Build landscape
   Widget _buildLandscape(Size size, double scale) {
     final gutter = (size.width * 0.04).clamp(16.0, 32.0);
     final logoHeight = (size.height * 0.35).clamp(80.0, 200.0);
     return Row(
       children: [
-        // Centre the logo within the ice-blue panel, not the full height,
-        // so the tagline doesn't sit on the panel/teal edge.
         Expanded(
           child: Padding(
             padding: EdgeInsets.only(
@@ -221,6 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Constrained card
   Widget _constrainedCard(double scale) {
     return Center(
       child: ConstrainedBox(
@@ -230,8 +206,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// The mockup's buttons are short rounded rectangles, not the app-wide
-  /// pills — override the theme for this card only.
+  /// Card theme
   ThemeData _cardTheme(double scale) {
     final theme = Theme.of(context);
     final shape = WidgetStatePropertyAll(
@@ -273,6 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// Build card
   Widget _buildCard(double scale) {
     final fieldHeight = 35 * scale;
     final fieldRadius = 12 * scale;

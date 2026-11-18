@@ -1,18 +1,9 @@
+// Vehicle live update
 import 'package:latlong2/latlong.dart';
 
-// lib/models/vehicle_live_update.dart
-// One frame from WSS /ws/live (broadcast by the backend's gps_ingestion).
-//
-//   {"vehicle_id", "lat", "lng", "speed", "heading", "ts",
-//    "status", "crowd", "eta_next_stop", "next_stop", "traffic",
-//    "duty_status", "source"}
-//
-// When a shift ends (by the driver, or because the GPS stayed off) a frame
-// with "shift_ended": true tells live maps to drop the jeep.
-//
-// signal_lost frames have NO lat/lng/ts — only vehicle_id + status —
-// so [location] and [timestamp] are nullable.
+/// Vehicle live update
 class VehicleLiveUpdate {
+  /// Create vehicle live update
   const VehicleLiveUpdate({
     required this.vehicleId,
     required this.status,
@@ -30,28 +21,26 @@ class VehicleLiveUpdate {
   });
 
   final String vehicleId;
-  final String status; // "en_route" | "signal_lost"
+  final String status;
   final LatLng? location;
-  final double? speed; // km/h
-  final double? heading; // degrees from north
-  final DateTime? timestamp; // device fix time, UTC
-  final String? crowd; // low | medium | high
-  final int? etaNextStop; // minutes at current traffic speed, -1 when unknown
-  final String? nextStop; // name of the stop the jeep reaches next
-  final String? traffic; // "light" | "moderate" | "heavy" on this route now
-  final String? dutyStatus; // driver's Route Status: on_route | delayed | unavailable
+  final double? speed;
+  final double? heading;
+  final DateTime? timestamp;
+  final String? crowd;
+  final int? etaNextStop;
+  final String? nextStop;
+  final String? traffic;
+  final String? dutyStatus;
 
-  /// Where the fix came from: "tracker", or "phone" while the tracker is offline.
   final String? source;
 
-  /// The driver's shift is over: the jeep is off the map until the next one.
   final bool shiftEnded;
 
   bool get isSignalLost => status == 'signal_lost';
 
-  /// The driver marked the trip Unavailable, so it can't be boarded.
   bool get isUnavailable => dutyStatus == 'unavailable';
 
+  /// Parse from JSON
   factory VehicleLiveUpdate.fromJson(Map<String, dynamic> json) {
     final lat = json['lat'] as num?;
     final lng = json['lng'] as num?;
@@ -75,12 +64,8 @@ class VehicleLiveUpdate {
     );
   }
 
-  /// Applies [update] on top of this (the previous state for the same
-  /// vehicle). Returns null if [update] is an older fix that arrived out
-  /// of order and should be ignored.
+  /// Merge vehicle live
   VehicleLiveUpdate? merge(VehicleLiveUpdate update) {
-    // Status-only frame (signal_lost): keep the last known position so
-    // the marker stays on the map, just flag it.
     if (update.location == null) {
       return VehicleLiveUpdate(
         vehicleId: vehicleId,
@@ -104,8 +89,7 @@ class VehicleLiveUpdate {
   }
 }
 
-/// Parses backend datetimes. Python's str(datetime) uses a space instead
-/// of "T", and naive datetimes have no offset even though they are UTC.
+/// Parse server time
 DateTime? parseServerTime(dynamic value) {
   if (value is! String || value.isEmpty) return null;
   var s = value.replaceFirst(' ', 'T');

@@ -1,8 +1,6 @@
-// js/views/login.js
-//
-// Operator / Admin web login. UI by Emae; HTTP by Velez (AuthModule).
-
+// Views login view
 Router.register('login', {
+  // Render the view
   render(params = {}) {
     return `
       <div class="auth-page">
@@ -51,6 +49,7 @@ Router.register('login', {
       </div>`;
   },
 
+  // Initialize the page
   init() {
     wirePasswordToggle('login-password');
 
@@ -59,6 +58,7 @@ Router.register('login', {
       AuthPopup.openForgotPassword();
     });
 
+    // Show login error
     function showLoginError(message) {
       const banner = document.querySelector('#login-error .error-banner__text');
       if (banner) banner.textContent = message || 'Invalid email or password.';
@@ -108,13 +108,8 @@ Router.register('login', {
   },
 });
 
-// Sends a signed-in user to the right portal. Shared by Login and Register.
 const PortalRedirect = {
-  /**
-   * Admin → admin portal. Operator → operator portal, after collecting the
-   * company profile if it was never saved. Anyone else is signed back out:
-   * commuters and drivers use the mobile app.
-   */
+  // After login
   async afterLogin(role) {
     if (role === 'admin') {
       window.location.href = 'admin/admin.html';

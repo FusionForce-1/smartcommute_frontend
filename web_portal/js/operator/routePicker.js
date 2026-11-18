@@ -1,25 +1,7 @@
-// js/operator/routePicker.js
-//
-// Origin → Destination picker for "Create New Route": a map where the
-// operator drops pin A (origin) and pin B (destination), drags them to
-// adjust, or searches when they can't find the spot.
-//
-//  * Click the map: places the pin being set (A first, then B).
-//  * Drag a pin: moves it; the place name is looked up again.
-//  * Type in a box: your saved stops and ~6,000 Metro Cebu landmarks
-//    (malls, terminals, schools, churches, barangays... from the same
-//    OpenStreetMap data the map shows: data/cebu_landmarks.json, built by
-//    Smart-Commute-Backend/tools/build_landmarks.py) appear instantly,
-//    nearest the area on screen first. Enter / Search also asks
-//    OpenStreetMap online (Nominatim) for anything not in that list.
-//  * With both pins down, the road path between them is drawn (OSRM) and
-//    can be saved as the route's line, so the route shows up on the
-//    commuter map right away.
-//
-// Nominatim's usage policy: no search-as-you-type and at most one request
-// a second — searches only run on Enter / Search, through a 1 s queue.
-
+// Operator route picker
+// Route picker
 const RoutePicker = (() => {
+  // Route picker esc
   const esc = (s) => AdminUi.escapeHtml(String(s ?? ''));
   const NOMINATIM = 'https://nominatim.openstreetmap.org';
   const OSRM = 'https://router.project-osrm.org/route/v1/driving';
@@ -31,9 +13,9 @@ const RoutePicker = (() => {
     b: { label: 'Destination', letter: 'B', color: '#C8372D', placeholder: 'End terminal — type to search, or click the map' },
   };
 
-  // ---------- Nominatim, one request a second ----------
 
   let lastCall = 0;
+  // Route picker nominatim
   async function nominatim(path, params) {
     const wait = lastCall + 1100 - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -44,7 +26,7 @@ const RoutePicker = (() => {
     return res.json();
   }
 
-  /** "Carbon Market, Cebu City" from a Nominatim result. */
+  // Place label
   function placeLabel(r) {
     const a = r.address || {};
     const what = r.name || a.amenity || a.building || a.shop || a.tourism || a.road || a.neighbourhood;
@@ -56,13 +38,13 @@ const RoutePicker = (() => {
       .join(', ').slice(0, 80);
   }
 
-  // ---------- Landmarks, searched as you type ----------
 
-  /** Lowercase, no accents or punctuation: "Santo Niño" -> "santo nino". */
+  // Fold route picker
   const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-  let landmarks = null;   // promise of [{ name, folded, words, lat, lng, kind }]
+  let landmarks = null;
+  // Load landmarks
   function loadLandmarks() {
     if (!landmarks) {
       landmarks = fetch(new URL('../data/cebu_landmarks.json', location.href).href)
@@ -76,11 +58,7 @@ const RoutePicker = (() => {
     return landmarks;
   }
 
-  /**
-   * Places whose words start with every word typed ("sm ceb" -> SM City
-   * Cebu), best first: whole name starts with it, then word starts, then
-   * anywhere in the name; nearer `center` first within each. One per name.
-   */
+  // Match places
   function matchPlaces(list, text, center, limit) {
     const query = fold(text);
     if (query.length < 2) return [];
@@ -100,7 +78,7 @@ const RoutePicker = (() => {
     const out = [];
     for (const { p, km } of scored) {
       const key = p.folded;
-      if (seen.has(key)) continue;   // e.g. one stop on each side of the road
+      if (seen.has(key)) continue;
       seen.add(key);
       out.push({ p, km });
       if (out.length >= limit) break;
@@ -108,8 +86,10 @@ const RoutePicker = (() => {
     return out;
   }
 
+  // Route picker away
   const away = (km) => (km < 1 ? `${Math.round(km * 1000)} m away` : `${km.toFixed(1)} km away`);
 
+  // Pin icon
   function pinIcon(side) {
     const s = SIDES[side];
     return L.divIcon({
@@ -122,21 +102,18 @@ const RoutePicker = (() => {
     });
   }
 
-  /**
-   * Builds the picker inside `container`. `onChange()` fires whenever a pin,
-   * a name or the path changes. Returns { value(), destroy() }.
-   */
+  // Mount the view
   function mount(container, { onChange = () => {} } = {}) {
     const state = {
       a: { name: '', latlng: null, auto: false, marker: null },
       b: { name: '', latlng: null, auto: false, marker: null },
-      target: 'a',          // which pin a map click places
-      path: null,           // [[lng, lat], ...]: by road, or the straight line if no road was found
-      vias: [],             // points the route must pass through, in order: { latlng, marker }
+      target: 'a',
+      path: null,
+      vias: [],
     };
     let stops = [];
-    let pathLine = null;    // the road path (solid blue)
-    let straightLine = null; // A -> via points -> B (dashed): shown at once, follows drags live
+    let pathLine = null;
+    let straightLine = null;
     let pathTimer = null;
     let pathRequest = 0;
 
@@ -170,15 +147,14 @@ const RoutePicker = (() => {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors',
     }).addTo(map);
-    // The form slides in; let Leaflet measure its box once it's laid out.
     setTimeout(() => map.invalidateSize(), 0);
 
     ApiClient.get('/stops').then((list) => { stops = Array.isArray(list) ? list : []; }).catch(() => {});
     let places = [];
     loadLandmarks().then((list) => { places = list; });
 
-    // ---------- Pins ----------
 
+    // Route picker hint
     function hint() {
       const missing = ['a', 'b'].filter((s) => !state[s].latlng);
       $('#rp-hint').innerHTML = missing.length
@@ -187,6 +163,7 @@ const RoutePicker = (() => {
       container.querySelectorAll('[data-pin]').forEach((b) => b.classList.toggle('btn-sm--teal', b.dataset.pin === state.target && missing.length > 0));
     }
 
+    // Set point
     function setPoint(side, latlng, { name, auto = true, pan = false } = {}) {
       const s = state[side];
       s.latlng = L.latLng(latlng);
@@ -194,7 +171,7 @@ const RoutePicker = (() => {
         s.marker = L.marker(s.latlng, { icon: pinIcon(side), draggable: true, keyboard: true, title: SIDES[side].label }).addTo(map);
         s.marker.on('drag', () => {
           s.latlng = s.marker.getLatLng();
-          drawStraight();                  // the line follows the pin while dragging
+          drawStraight();
         });
         s.marker.on('dragend', () => {
           s.latlng = s.marker.getLatLng();
@@ -213,7 +190,6 @@ const RoutePicker = (() => {
         lookUpName(side);
       }
       if (pan) map.setView(s.latlng, Math.max(map.getZoom(), 16));
-      // Next click places the other pin if it's still missing.
       const other = side === 'a' ? 'b' : 'a';
       state.target = state[other].latlng ? side : other;
       hint();
@@ -221,14 +197,14 @@ const RoutePicker = (() => {
       onChange();
     }
 
-    /** Fills the box with the place name at the pin, unless the operator typed their own. */
+    // Look up name
     async function lookUpName(side) {
       const s = state[side];
       if (s.name && !s.auto) return;
       const at = s.latlng;
       try {
         const r = await nominatim('reverse', { lat: at.lat, lon: at.lng, zoom: 17, addressdetails: 1 });
-        if (!s.latlng || !s.latlng.equals(at)) return;   // moved again meanwhile
+        if (!s.latlng || !s.latlng.equals(at)) return;
         if (s.name && !s.auto) return;
         s.name = placeLabel(r) || `${at.lat.toFixed(5)}, ${at.lng.toFixed(5)}`;
         s.auto = true;
@@ -246,15 +222,12 @@ const RoutePicker = (() => {
 
     map.on('click', (e) => setPoint(state.target, e.latlng));
 
-    // ---------- The line from Origin to Destination ----------
-    //
-    // Dashed: straight from A through the via points to B, drawn the moment
-    // both pins exist. Solid blue: the road path through the same points
-    // (OSRM). If no road path is found, the dashed line is what's saved.
 
     const MAX_VIAS = 8;
+    // Route picker chain
     const chain = () => [state.a.latlng, ...state.vias.map((v) => v.latlng), state.b.latlng];
 
+    // Draw straight
     function drawStraight() {
       if (!state.a.latlng || !state.b.latlng) {
         if (straightLine) { straightLine.remove(); straightLine = null; }
@@ -269,6 +242,7 @@ const RoutePicker = (() => {
       straightLine.setStyle({ opacity: pathLine ? 0.35 : 0.9 });
     }
 
+    // Clear path
     function clearPath() {
       state.path = null;
       if (pathLine) { pathLine.remove(); pathLine = null; }
@@ -276,13 +250,14 @@ const RoutePicker = (() => {
       $('#rp-path').hidden = true;
     }
 
+    // Km between
     function kmBetween(points) {
       let m = 0;
       for (let i = 1; i < points.length; i++) m += map.distance(points[i - 1], points[i]);
       return (m / 1000).toFixed(1);
     }
 
-    /** No road path: the straight line (through the via points) is offered instead. */
+    // Use straight line
     function useStraightLine(note) {
       if (pathLine) { pathLine.remove(); pathLine = null; }
       drawStraight();
@@ -292,6 +267,7 @@ const RoutePicker = (() => {
       $('#rp-path').hidden = false;
     }
 
+    // Plan path
     function planPath({ fit = false } = {}) {
       clearTimeout(pathTimer);
       drawStraight();
@@ -306,7 +282,7 @@ const RoutePicker = (() => {
           const coordList = points.map((p) => `${p.lng},${p.lat}`).join(';');
           const res = await fetch(`${OSRM}/${coordList}?overview=full&geometries=geojson`);
           const data = await res.json();
-          if (id !== pathRequest) return;   // pins moved since
+          if (id !== pathRequest) return;
           const route = data.routes?.[0];
           if (!route) throw new Error('no road path');
           let coords = route.geometry.coordinates;
@@ -335,8 +311,8 @@ const RoutePicker = (() => {
       }, 400);
     }
 
-    // ---------- Via points: reshape the path ----------
 
+    // Via icon
     function viaIcon() {
       return L.divIcon({
         className: '',
@@ -346,7 +322,7 @@ const RoutePicker = (() => {
       });
     }
 
-    /** Inserts a via point into the stretch of A -> ... -> B it is closest to. */
+    // Add via
     function addVia(latlng) {
       if (state.vias.length >= MAX_VIAS) {
         $('#rp-hint').textContent = `Up to ${MAX_VIAS} points — remove one (click it) to add another.`;
@@ -365,11 +341,12 @@ const RoutePicker = (() => {
       via.marker.on('drag', () => { via.latlng = via.marker.getLatLng(); drawStraight(); });
       via.marker.on('dragend', () => { via.latlng = via.marker.getLatLng(); planPath(); onChange(); });
       via.marker.on('click', () => removeVia(via));
-      state.vias.splice(best, 0, via);   // between chain points `best` and `best + 1`
+      state.vias.splice(best, 0, via);
       planPath();
       onChange();
     }
 
+    // Remove via
     function removeVia(via) {
       via.marker.remove();
       state.vias = state.vias.filter((v) => v !== via);
@@ -377,8 +354,8 @@ const RoutePicker = (() => {
       onChange();
     }
 
-    // ---------- Typing and searching ----------
 
+    // Show suggestions
     function showSuggestions(side, items, note = '') {
       const ul = $(`#rp-suggest-${side}`);
       ul.innerHTML = items.map((it, i) => `
@@ -389,7 +366,7 @@ const RoutePicker = (() => {
       ul._items = items;
     }
 
-    /** Saved stops first, then landmarks; nearest the map's centre first. */
+    // Local matches
     function localMatches(text, limit = 8) {
       const center = map.getCenter();
       const savedStops = stops
@@ -404,6 +381,7 @@ const RoutePicker = (() => {
       }));
     }
 
+    // Search places
     async function searchPlaces(side) {
       const text = $(`#rp-${side}`).value.trim();
       if (text.length < 3) {
@@ -421,8 +399,6 @@ const RoutePicker = (() => {
           label: placeLabel(r), detail: String(r.display_name || '').split(',').slice(1, 4).join(',').trim(),
           lat: Number(r.lat), lng: Number(r.lon),
         }));
-        // OSM often has several entries with one name (a district, its
-        // boundary, a landmark): show each name once.
         const seen = new Set();
         const all = [...localMatches(text, 5), ...online].filter((p) => {
           const key = p.label.toLowerCase();
@@ -440,7 +416,7 @@ const RoutePicker = (() => {
       const side = e.target.id === 'rp-a' ? 'a' : e.target.id === 'rp-b' ? 'b' : null;
       if (!side) return;
       state[side].name = e.target.value.trim();
-      state[side].auto = false;                       // their own wording wins
+      state[side].auto = false;
       const typed = e.target.value.trim();
       const matches = localMatches(typed);
       showSuggestions(side, matches, typed.length < 3 ? ''
@@ -453,7 +429,7 @@ const RoutePicker = (() => {
       const side = e.target.id === 'rp-a' ? 'a' : e.target.id === 'rp-b' ? 'b' : null;
       if (!side) return;
       if (e.key === 'Enter') {
-        e.preventDefault();                           // don't submit the route form
+        e.preventDefault();
         searchPlaces(side);
       } else if (e.key === 'Escape') {
         showSuggestions(side, []);
@@ -499,7 +475,7 @@ const RoutePicker = (() => {
       }
     });
 
-    // Close suggestion lists when clicking elsewhere.
+    // Close lists
     const closeLists = (e) => {
       if (!container.contains(e.target) || e.target.closest('.rp-map')) {
         showSuggestions('a', []);
@@ -511,8 +487,9 @@ const RoutePicker = (() => {
     hint();
 
     return {
-      /** { origin, destination: {name, lng, lat}|null, path: [[lng,lat],...]|null } */
+      // Route picker value
       value() {
+        // Route picker point
         const point = (s) => (s.latlng ? { name: s.name, lng: s.latlng.lng, lat: s.latlng.lat } : null);
         return {
           origin: point(state.a) || (state.a.name ? { name: state.a.name } : null),
@@ -520,6 +497,7 @@ const RoutePicker = (() => {
           path: state.path && $('#rp-save-path').checked ? state.path : null,
         };
       },
+      // Tear down view
       destroy() {
         document.removeEventListener('mousedown', closeLists);
         clearTimeout(pathTimer);

@@ -1,8 +1,4 @@
-// lib/widgets/commuter/save_route_sheet.dart
-//
-// "+ Add" on the Profile tab: name a route ("Home → Office"), pick its
-// From / To stops and the jeepney route, then save it to the profile.
-
+// Save route sheet
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -13,8 +9,7 @@ import '../stop_search_sheet.dart';
 import 'commuter_field_box.dart';
 import 'commuter_primary_button.dart';
 
-/// [profile] is passed in because the sheet opens outside the dashboard's
-/// provider scope.
+/// Show save route sheet
 Future<void> showSaveRouteSheet(
   BuildContext context, {
   required ProfileProvider profile,
@@ -30,7 +25,9 @@ Future<void> showSaveRouteSheet(
   );
 }
 
+/// Save route sheet
 class SaveRouteSheet extends StatefulWidget {
+  /// Create save route sheet
   const SaveRouteSheet({
     super.key,
     required this.profile,
@@ -42,10 +39,12 @@ class SaveRouteSheet extends StatefulWidget {
   final List<TransportStop> stops;
   final List<TransportRoute> routes;
 
+  /// Create widget state
   @override
   State<SaveRouteSheet> createState() => _SaveRouteSheetState();
 }
 
+/// Save route sheet state
 class _SaveRouteSheetState extends State<SaveRouteSheet> {
   final _label = TextEditingController();
   TransportStop? _from;
@@ -54,14 +53,13 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
   bool _saving = false;
   String? _error;
 
+  /// Clean up resources
   @override
   void dispose() {
     _label.dispose();
     super.dispose();
   }
 
-  /// Routes serving both chosen stops; every route until both are chosen
-  /// (or when none serves both).
   List<TransportRoute> get _routeChoices {
     final from = _from;
     final to = _to;
@@ -75,6 +73,7 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
   bool get _canSave =>
       !_saving && _label.text.trim().isNotEmpty && _from != null && _to != null && _routeId != null;
 
+  /// Pick stop
   Future<void> _pickStop({required bool isFrom}) async {
     final stop = await showStopSearchSheet(context, widget.stops);
     if (stop == null || !mounted) return;
@@ -91,6 +90,7 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
     });
   }
 
+  /// Save save route
   Future<void> _save() async {
     final from = _from!;
     final to = _to!;
@@ -117,12 +117,12 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final error = _error;
 
     return Padding(
-      // Lift the form above the keyboard.
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
@@ -154,7 +154,7 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
             const SizedBox(height: AppSpacing.sm),
             const _Label('Route'),
             DropdownButtonFormField<String>(
-              key: ValueKey(_routeId), // reset when the choices narrow
+              key: ValueKey(_routeId),
               initialValue: _routeId,
               hint: const Text('Choose a route'),
               isExpanded: true,
@@ -178,11 +178,14 @@ class _SaveRouteSheetState extends State<SaveRouteSheet> {
   }
 }
 
+/// Label widget
 class _Label extends StatelessWidget {
+  /// Create label
   const _Label(this.text);
 
   final String text;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(

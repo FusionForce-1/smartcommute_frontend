@@ -1,8 +1,7 @@
-// lib/models/security_info.dart
-//
-// What the Privacy & Security page shows (GET /users/me/security).
-
+// Security info
+/// Security info
 class SecurityInfo {
+  /// Create security info
   const SecurityInfo({
     required this.twoFactorEnabled,
     required this.hasPassword,
@@ -11,6 +10,7 @@ class SecurityInfo {
     this.twoFactorBlocked,
   });
 
+  /// Parse from JSON
   factory SecurityInfo.fromJson(Map<String, dynamic> json) {
     final accepted = json['terms_accepted_at'] as String?;
     return SecurityInfo(
@@ -24,16 +24,14 @@ class SecurityInfo {
 
   final bool twoFactorEnabled;
 
-  /// Why this account can't use two-factor sign-in, or null if it can.
   final String? twoFactorBlocked;
 
-  /// False for Google sign-ups that never set a password of their own.
   final bool hasPassword;
 
-  /// Agreed to the current User Agreement / Privacy Policy.
   final bool termsCurrent;
   final DateTime? termsAcceptedAt;
 
+  /// Copy with changes
   SecurityInfo copyWith({bool? twoFactorEnabled}) => SecurityInfo(
         twoFactorEnabled: twoFactorEnabled ?? this.twoFactorEnabled,
         hasPassword: hasPassword,

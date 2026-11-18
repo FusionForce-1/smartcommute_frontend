@@ -1,8 +1,7 @@
-// lib/utils/time_ago.dart
-
+// Time ago
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/// "Just now", "2 min ago", "1 hr ago", "5 hrs ago", "Yesterday", "Oct 3".
+/// Time ago
 String timeAgo(DateTime time, {DateTime? now}) {
   final current = (now ?? DateTime.now()).toLocal();
   final local = time.toLocal();
@@ -21,7 +20,7 @@ const _longMonths = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-/// "October 29, 2026" in local time.
+/// Format long date
 String formatLongDate(DateTime time) {
   final local = time.toLocal();
   return '${_longMonths[local.month - 1]} ${local.day}, ${local.year}';

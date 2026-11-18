@@ -1,9 +1,4 @@
-// lib/screens/commuter/help_support_screen.dart
-//
-// Help & Support (Profile → Account): answers to common questions, the
-// User Agreement / Privacy Policy, and "Email us" once a support address
-// is set in lib/constants/support.dart.
-
+// Help support screen
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -12,10 +7,11 @@ import '../../constants/support.dart';
 import '../../widgets/auth/consent_checkbox.dart';
 import '../../widgets/commuter/settings_group.dart';
 
+/// Help support screen
 class HelpSupportScreen extends StatelessWidget {
+  /// Create help support
   const HelpSupportScreen({super.key, this.faqs = commuterFaqs});
 
-  /// (question, answer) pairs shown under "Frequently asked questions".
   final List<(String, String)> faqs;
 
   static const commuterFaqs = [
@@ -97,6 +93,7 @@ class HelpSupportScreen extends StatelessWidget {
     ),
   ];
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -164,11 +161,14 @@ class HelpSupportScreen extends StatelessWidget {
   }
 }
 
+/// Heading widget
 class _Heading extends StatelessWidget {
+  /// Create heading
   const _Heading(this.text);
 
   final String text;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Padding(

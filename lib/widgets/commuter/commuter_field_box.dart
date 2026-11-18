@@ -1,14 +1,11 @@
-// lib/widgets/commuter/commuter_field_box.dart
-//
-// White, thin-bordered box that looks like a text field. Shows a value
-// (or a grey hint) and reacts to taps — used where a picker opens
-// instead of a keyboard (From / To).
-
+// Commuter field box
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Commuter field box
 class CommuterFieldBox extends StatelessWidget {
+  /// Create commuter field box
   const CommuterFieldBox({
     super.key,
     required this.hint,
@@ -20,6 +17,7 @@ class CommuterFieldBox extends StatelessWidget {
   final String? value;
   final VoidCallback? onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final value = this.value;

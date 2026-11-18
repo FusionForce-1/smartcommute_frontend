@@ -1,14 +1,4 @@
-// lib/providers/trip_plan_provider.dart
-//
-// State sa Trip Planner: GPS origin, destination, preference, results.
-// Gi-own sa CommuterDashboard para mabasa sa "View fare estimate" tile
-// ang selectedOption bisan sirado na ang planner screen.
-//
-// Live updates (startLiveUpdates): while the results are on screen and the
-// origin is the commuter's GPS, the plan is quietly refreshed when they've
-// moved [replanDistanceMeters] and every [refreshInterval] (so live jeep
-// waits stay current). Their selected option is kept when it's still offered.
-
+// Trip plan provider
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -19,15 +9,16 @@ import '../models/trip_plan.dart';
 import '../services/location_source.dart';
 import '../services/trip_plan_service.dart';
 
+/// Trip plan status
 enum TripPlanStatus { idle, loading, success, empty, error }
 
+/// Trip plan provider
 class TripPlanProvider extends ChangeNotifier {
+  /// Create trip plan
   TripPlanProvider({
     required TripPlanService service,
     required LocationSource locationSource,
     this.isGuest = false,
-    // Covers a precise GPS attempt plus the quicker fallback
-    // (see GeolocatorLocationSource).
     Duration locateTimeout = const Duration(seconds: 25),
     Duration refreshInterval = const Duration(seconds: 45),
   })  : _service = service,
@@ -35,20 +26,16 @@ class TripPlanProvider extends ChangeNotifier {
         _locateTimeout = locateTimeout,
         _refreshInterval = refreshInterval;
 
-  /// Guests can plan trips, but no search history is kept for them.
   final bool isGuest;
 
-  /// Re-plan once the commuter is this far from where the plan was made.
   static const double replanDistanceMeters = 100;
 
-  /// Kung ingon ani ka duol ang destination, naa na sila.
   static const double alreadyThereMeters = 20;
 
   static const String _genericError = 'Something went wrong. Please try again.';
 
   final TripPlanService _service;
   final LocationSource _locationSource;
-  // Kung walay GPS fix (e.g. sulod sa building), dili mag-spin forever.
   final Duration _locateTimeout;
   final Duration _refreshInterval;
 
@@ -59,11 +46,9 @@ class TripPlanProvider extends ChangeNotifier {
   DateTime? _lastUpdated;
   String? _updateNotice;
 
-  /// Kapila ka recent search ang i-display.
   static const int maxRecentSearches = 3;
 
   LatLng? _origin;
-  // null = ang GPS location sa commuter; kung naa, stop nga gipili.
   String? _originLabel;
   bool _isLocating = false;
   String? _locationError;
@@ -79,20 +64,17 @@ class TripPlanProvider extends ChangeNotifier {
   String? _errorMessage;
   final List<TripPlace> _recentSearches = [];
 
-  // Mo-increment kada clear para ma-ignore ang daan nga response.
   int _requestId = 0;
   bool _disposed = false;
 
   LatLng? get origin => _origin;
 
-  /// Stop name for a chosen origin; null when the origin is the GPS location.
   String? get originLabel => _originLabel;
   bool get isLocating => _isLocating;
   String? get locationError => _locationError;
   LatLng? get destination => _destination;
   String? get destinationLabel => _destinationLabel;
 
-  /// The destination is a pin dropped on the map (not a searched place).
   bool get destinationFromMap => _destinationFromMap;
   TripPreference get preference => _preference;
   TripPlanStatus get status => _status;
@@ -100,23 +82,20 @@ class TripPlanProvider extends ChangeNotifier {
   RouteOption? get selectedOption => _selectedOption;
   String? get errorMessage => _errorMessage;
 
-  /// True while following the commuter's location (see [startLiveUpdates]).
   bool get isFollowingLocation => _positionSub != null;
   bool get isRefreshing => _isRefreshing;
 
-  /// When the shown options were last fetched.
   DateTime? get lastUpdated => _lastUpdated;
 
-  /// E.g. "Closer stop now: Capitol" after a refresh changed the best option.
   String? get updateNotice => _updateNotice;
 
+  /// Dismiss update notice
   void dismissUpdateNotice() {
     if (_updateNotice == null) return;
     _updateNotice = null;
     _notify();
   }
 
-  /// Newest first, session only.
   List<TripPlace> get recentSearches => List.unmodifiable(_recentSearches);
 
   bool get canSwap => _origin != null && _destination != null && !_isLocating;
@@ -127,6 +106,7 @@ class TripPlanProvider extends ChangeNotifier {
       !_isLocating &&
       _status != TripPlanStatus.loading;
 
+  /// Locate origin
   Future<void> locateOrigin() async {
     if (_isLocating) return;
     _isLocating = true;
@@ -154,11 +134,12 @@ class TripPlanProvider extends ChangeNotifier {
 
   bool get canOpenLocationSettings => _locationSource.canOpenSettings;
 
+  /// Open location settings
   Future<void> openLocationSettings() => _locationSource.openSettings();
 
-  /// Start from a chosen stop instead of the GPS location.
+  /// Set origin
   void setOrigin(LatLng origin, String label) {
-    stopLiveUpdates(); // a chosen stop doesn't move
+    stopLiveUpdates();
     _origin = origin;
     _originLabel = label;
     _locationError = null;
@@ -166,6 +147,7 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Swap origin and destination
   void swapOriginAndDestination() {
     if (!canSwap) return;
     final origin = _origin!;
@@ -180,6 +162,7 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Set destination
   void setDestination(LatLng destination, String label, {bool fromMap = false}) {
     _destination = destination;
     _destinationLabel = label;
@@ -188,6 +171,7 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Set preference
   void setPreference(TripPreference preference) {
     if (preference == _preference) return;
     _preference = preference;
@@ -195,6 +179,7 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Plan trip plan
   Future<void> plan() async {
     if (!canPlan) return;
     final origin = _origin!;
@@ -226,7 +211,6 @@ class TripPlanProvider extends ChangeNotifier {
       if (requestId != _requestId) return;
       _options = response.options;
       _status = _options.isEmpty ? TripPlanStatus.empty : TripPlanStatus.success;
-      // Best-ranked option starts selected.
       _selectedOption = _options.isEmpty ? null : _options.first;
       _plannedFrom = origin;
       _lastUpdated = DateTime.now();
@@ -242,16 +226,14 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Select option
   void selectOption(RouteOption option) {
     _selectedOption = option;
     _notify();
   }
 
-  // ── Live updates ──────────────────────────────────────────
 
-  /// Follows the commuter's GPS and keeps the plan current. Only for a GPS
-  /// origin; a chosen stop as origin doesn't move. Call [stopLiveUpdates]
-  /// when the results leave the screen.
+  /// Start live updates
   void startLiveUpdates() {
     if (_positionSub != null || _originLabel != null || _disposed) return;
     _positionSub = _locationSource
@@ -261,6 +243,7 @@ class TripPlanProvider extends ChangeNotifier {
     _notify();
   }
 
+  /// Stop live updates
   void stopLiveUpdates() {
     _positionSub?.cancel();
     _positionSub = null;
@@ -268,6 +251,7 @@ class TripPlanProvider extends ChangeNotifier {
     _refreshTimer = null;
   }
 
+  /// On position
   void _onPosition(LatLng position) {
     if (_originLabel != null) return;
     _origin = position;
@@ -278,8 +262,7 @@ class TripPlanProvider extends ChangeNotifier {
     }
   }
 
-  /// Re-plans without the loading state, keeping the current results on
-  /// screen. A failed background refresh keeps the last results.
+  /// Refresh trip plan
   Future<void> refresh() async {
     final origin = _origin;
     final destination = _destination;
@@ -309,13 +292,13 @@ class TripPlanProvider extends ChangeNotifier {
       _lastUpdated = DateTime.now();
       _updateNotice = _noticeFor(previousBest, _options.isEmpty ? null : _options.first);
     } catch (_) {
-      // Keep showing the last results.
     } finally {
       _isRefreshing = false;
       _notify();
     }
   }
 
+  /// Notice for
   static String? _noticeFor(RouteOption? before, RouteOption? now) {
     if (before == null || now == null) return null;
     if (now.signature != before.signature) return 'Better route now: ${now.routeSummary}';
@@ -323,6 +306,7 @@ class TripPlanProvider extends ChangeNotifier {
     return null;
   }
 
+  /// Remember search
   void _rememberSearch(TripPlace place) {
     if (isGuest) return;
     _recentSearches
@@ -333,6 +317,7 @@ class TripPlanProvider extends ChangeNotifier {
     }
   }
 
+  /// Clear results
   void _clearResults() {
     _requestId++;
     _plannedFrom = null;
@@ -344,6 +329,7 @@ class TripPlanProvider extends ChangeNotifier {
     _errorMessage = null;
   }
 
+  /// Message for
   static String _messageFor(DioException e) {
     if (e.response?.statusCode == 429) {
       return 'Too many route searches. Please wait a minute and try again.';
@@ -359,10 +345,12 @@ class TripPlanProvider extends ChangeNotifier {
     }
   }
 
+  /// Notify trip plan
   void _notify() {
     if (!_disposed) notifyListeners();
   }
 
+  /// Clean up resources
   @override
   void dispose() {
     _disposed = true;

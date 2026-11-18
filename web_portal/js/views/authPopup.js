@@ -1,8 +1,7 @@
-// js/views/authPopup.js
-//
-// Forgot Password + Verify OTP popup flow launched from Login.
-
+// Views auth popup view
+// Auth popup
 const AuthPopup = (() => {
+  // Forgot password content
   function forgotPasswordContent() {
     return `
       ${Components.popupIcon('forgotKey')}
@@ -22,14 +21,13 @@ const AuthPopup = (() => {
       ${Components.bottomLinkRow({ prompt: "Don't have an account?", linkText: 'Register', href: '#/register' })}`;
   }
 
+  // Init forgot password
   function initForgotPassword() {
     document.getElementById('forgot-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = document.getElementById('forgot-email').value.trim();
       hideError('forgot-error');
 
-      // TODO: Velez — AuthModule.forgotPassword(email) → POST /auth/forgot-password
-      // Mock adapter (Francis) already returns 404 for test@account.com.
       try {
         await AuthModule.forgotPassword(email);
         AuthPopup.openVerifyOtp(email);
@@ -49,6 +47,7 @@ const AuthPopup = (() => {
     });
   }
 
+  // Verify OTP content
   function verifyOtpContent(email) {
     return `
       ${Components.popupIcon('otpEnvelope')}
@@ -68,6 +67,7 @@ const AuthPopup = (() => {
       ${Components.bottomLinkRow({ prompt: "Don't have an account?", linkText: 'Register', href: '#/register' })}`;
   }
 
+  // Init verify OTP
   function initVerifyOtp(email) {
     document.getElementById('otp-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -79,8 +79,6 @@ const AuthPopup = (() => {
       }
       hideError('otp-error');
 
-      // The backend checks the code together with the new password, so the
-      // code is carried to the next step rather than sent here.
       AuthPopup.openSetNewPassword(email, otp);
     });
 
@@ -93,6 +91,7 @@ const AuthPopup = (() => {
     });
   }
 
+  // Set new password content
   function setNewPasswordContent() {
     return `
       ${Components.popupIcon('forgotKey')}
@@ -112,10 +111,12 @@ const AuthPopup = (() => {
       </form>`;
   }
 
+  // Init set new password
   function initSetNewPassword(email, otp) {
     wirePasswordToggle('new-password');
     wirePasswordToggle('new-password-repeat');
 
+    // Show password error
     const showPasswordError = (message) => {
       const banner = document.querySelector('#new-password-error .error-banner__text');
       if (banner) banner.textContent = message;
@@ -137,7 +138,6 @@ const AuthPopup = (() => {
       }
       hideError('new-password-error');
 
-      // A wrong or expired code is only caught here, by POST /auth/reset-password.
       try {
         await AuthModule.resetPassword(email, otp, password);
         AuthModal.close();
@@ -152,8 +152,8 @@ const AuthPopup = (() => {
     });
   }
 
-  // ---------- Two-factor sign-in ----------
 
+  // Sign in code content
   function signInCodeContent(sentTo) {
     return `
       ${Components.popupIcon('otpEnvelope')}
@@ -172,7 +172,9 @@ const AuthPopup = (() => {
       </form>`;
   }
 
+  // Init sign in code
   function initSignInCode({ email, rememberMe }) {
+    // Show code error
     const showCodeError = (message) => {
       const banner = document.querySelector('#signin-code-error .error-banner__text');
       if (banner) banner.textContent = message;
@@ -199,21 +201,24 @@ const AuthPopup = (() => {
     document.getElementById('signin-code-cancel').addEventListener('click', () => AuthModal.close());
   }
 
-  /** @param {{email, sentTo, rememberMe}} opts — sentTo is the masked address */
+  // Open sign in code
   function openSignInCode(opts) {
     AuthModal.setContent(signInCodeContent(opts.sentTo || opts.email), {
       onMount: () => initSignInCode(opts),
     });
   }
 
+  // Open forgot password
   function openForgotPassword() {
     AuthModal.setContent(forgotPasswordContent(), { onMount: initForgotPassword });
   }
 
+  // Open verify OTP
   function openVerifyOtp(email) {
     AuthModal.setContent(verifyOtpContent(email), { onMount: () => initVerifyOtp(email) });
   }
 
+  // Open set new password
   function openSetNewPassword(email, otp) {
     AuthModal.setContent(setNewPasswordContent(), { onMount: () => initSetNewPassword(email, otp) });
   }

@@ -1,13 +1,9 @@
-// lib/models/driver_dashboard.dart
-//
-// The signed-in driver's dashboard (GET /drivers/me): their assigned
-// vehicles and routes, the shift their operator started, their route
-// status, who they drive for, and their most recent route.
-
+// Driver dashboard
 import 'vehicle_live_update.dart' show parseServerTime;
 
-/// A vehicle the operator assigned to this driver, with its route.
+/// Assigned vehicle
 class AssignedVehicle {
+  /// Create assigned vehicle
   const AssignedVehicle({
     required this.id,
     required this.plateNumber,
@@ -27,16 +23,14 @@ class AssignedVehicle {
   final String? terminalA;
   final String? terminalB;
 
-  /// A GPS tracker is paired. The phone only backs one up: without it the
-  /// backend refuses the phone's GPS.
   final bool hasTracker;
 
-  /// "Talamban → Pier 1 Terminal", falling back to the route's name.
   String get routeLine {
     if (terminalA != null && terminalB != null) return '$terminalA → $terminalB';
     return routeName ?? 'Route details unavailable';
   }
 
+  /// Parse from JSON
   factory AssignedVehicle.fromJson(Map<String, dynamic> json) => AssignedVehicle(
         id: json['id'] as String,
         plateNumber: json['plate_number'] as String,
@@ -49,8 +43,9 @@ class AssignedVehicle {
       );
 }
 
-/// The shift the operator started; the driver reports crowd and passengers on it.
+/// Driver shift
 class DriverShift {
+  /// Create driver shift
   const DriverShift({
     required this.id,
     required this.vehicleId,
@@ -66,9 +61,9 @@ class DriverShift {
   final int crowdPercent;
   final int passengers;
 
-  /// Driven so far, from the GPS fixes the server had when this was loaded.
   final double distanceKm;
 
+  /// Copy with changes
   DriverShift copyWith({int? crowdPercent, int? passengers}) => DriverShift(
         id: id,
         vehicleId: vehicleId,
@@ -78,6 +73,7 @@ class DriverShift {
         distanceKm: distanceKm,
       );
 
+  /// Parse from JSON
   factory DriverShift.fromJson(Map<String, dynamic> json) => DriverShift(
         id: json['id'] as String,
         vehicleId: json['vehicle_id'] as String,
@@ -88,35 +84,41 @@ class DriverShift {
       );
 }
 
-/// The driver's Route Status during a shift; commuters see it on the map.
+/// Route status
 enum RouteStatus {
   onRoute('on_route', 'On-Route'),
   delayed('delayed', 'Delayed'),
   unavailable('unavailable', 'Unavailable');
 
+  /// Create route status
   const RouteStatus(this.apiValue, this.label);
 
   final String apiValue;
   final String label;
 
+  /// From API
   static RouteStatus fromApi(String? value) =>
       values.firstWhere((s) => s.apiValue == value, orElse: () => RouteStatus.unavailable);
 }
 
-/// Who the driver drives for.
+/// Driver operator
 class DriverOperator {
+  /// Create driver operator
   const DriverOperator({this.companyName, this.ownerName});
 
   final String? companyName;
   final String? ownerName;
 
+  /// Parse from JSON
   factory DriverOperator.fromJson(Map<String, dynamic> json) => DriverOperator(
         companyName: json['company_name'] as String?,
         ownerName: json['owner_name'] as String?,
       );
 }
 
+/// Driver dashboard data
 class DriverDashboardData {
+  /// Create driver dashboard data
   const DriverDashboardData({
     required this.name,
     required this.vehicles,
@@ -136,9 +138,9 @@ class DriverDashboardData {
   final RouteStatus routeStatus;
   final DriverOperator? operator;
 
-  /// The vehicle and route of the driver's last ended shift.
   final AssignedVehicle? recentRoute;
 
+  /// Parse from JSON
   factory DriverDashboardData.fromJson(Map<String, dynamic> json) => DriverDashboardData(
         name: json['name'] as String,
         driverCode: json['driver_code'] as String?,

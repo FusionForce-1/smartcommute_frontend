@@ -1,22 +1,19 @@
-// js/admin/adminActions.js
-//
-// Interactive flows shared by several views:
-//   UserActions     — Edit / Delete buttons in any users table
-//   OperatorReview  — "Operator Registration Details" modal (Approve / Decline)
-
+// Admin actions
 const ROLES = ['admin', 'operator', 'driver', 'commuter'];
 const ROLES_REQUIRING_VERIFICATION = ['operator', 'driver'];
 
-/** Status shown in the UI → fields the backend stores. */
 const STATUS_TO_FIELDS = {
   active: { is_active: true, is_verified: true },
   pending: { is_active: true, is_verified: false },
   suspended: { is_active: false },
 };
 
+// User actions
 const UserActions = (() => {
+  // Admin actions capitalize
   const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  // Status options
   function statusOptions(role, selected) {
     const statuses = ROLES_REQUIRING_VERIFICATION.includes(role)
       ? ['active', 'pending', 'suspended']
@@ -27,6 +24,7 @@ const UserActions = (() => {
       .join('');
   }
 
+  // Open edit
   function openEdit(user, onChanged) {
     const isSelf = user.email === Session.email;
     const lockAttr = isSelf ? ' disabled title="You cannot change your own role or status"' : '';
@@ -67,6 +65,7 @@ const UserActions = (() => {
       statusSelect.innerHTML = statusOptions(roleSelect.value, statusSelect.value);
     });
 
+    // Save admin actions
     async function save() {
       const name = modal.querySelector('#edit-name').value.trim();
       if (name.length < 2) throw new Error('Name must be at least 2 characters.');
@@ -83,6 +82,7 @@ const UserActions = (() => {
     }
   }
 
+  // Confirm delete
   function confirmDelete(user, onChanged) {
     AdminModal.confirm({
       title: 'Delete User',
@@ -96,10 +96,7 @@ const UserActions = (() => {
     });
   }
 
-  /**
-   * Wires Edit/Delete buttons inside `container` (event delegation, so the
-   * table can be re-rendered freely). `findUser(id)` returns the user object.
-   */
+  // Bind admin actions
   function bind(container, { findUser, onChanged }) {
     container.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action="edit-user"], [data-action="delete-user"]');
@@ -114,6 +111,7 @@ const UserActions = (() => {
   return { bind };
 })();
 
+// Operator review
 const OperatorReview = (() => {
   const STATUS_LABELS = {
     pending: 'Pending verification',
@@ -121,6 +119,7 @@ const OperatorReview = (() => {
     declined: 'Declined',
   };
 
+  // Admin actions details
   function details(profile) {
     const status = profile.status
       || (profile.declined_at ? 'declined' : profile.verified_at ? 'verified' : 'pending');
@@ -132,7 +131,6 @@ const OperatorReview = (() => {
       ['Franchise Number', profile.franchise_number],
       ['Status', STATUS_LABELS[status] || status],
     ];
-    // Only dates that really happened: a pending operator has neither yet.
     if (profile.verified_at) rows.push(['Verified At', AdminUi.formatDate(profile.verified_at)]);
     if (profile.declined_at) rows.push(['Declined At', AdminUi.formatDate(profile.declined_at)]);
 
@@ -146,8 +144,9 @@ const OperatorReview = (() => {
       </dl>`;
   }
 
-  /** Opens the review modal. Approve/Decline are hidden once a decision exists for that action. */
+  // Open admin actions
   function open(profile, onDone) {
+    // Decide admin actions
     const decide = (apiCall, verb) => async () => {
       await apiCall(profile.id);
       AdminModal.close();
@@ -166,7 +165,7 @@ const OperatorReview = (() => {
     AdminModal.open({ title: 'Operator Registration Details', body: details(profile), actions });
   }
 
-  /** Wires "Verify"/"Review" buttons in `container` to the modal. */
+  // Bind admin actions
   function bind(container, { findProfile, onDone }) {
     container.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action="review-operator"]');

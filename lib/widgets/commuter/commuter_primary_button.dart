@@ -1,13 +1,11 @@
-// lib/widgets/commuter/commuter_primary_button.dart
-//
-// Full-width teal call-to-action ("Find Routes", "View Selected Route on Map").
-// Pass a null [onPressed] to disable it.
-
+// Commuter primary button
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Commuter primary button
 class CommuterPrimaryButton extends StatelessWidget {
+  /// Create commuter primary button
   const CommuterPrimaryButton({
     super.key,
     required this.label,
@@ -17,6 +15,7 @@ class CommuterPrimaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return FilledButton(

@@ -1,22 +1,21 @@
-// lib/widgets/commuter/commuter_page_header.dart
-//
-// Teal header with a rounded bottom edge, a back arrow and a white title,
-// for commuter pages opened on top of the dashboard (e.g. Find Routes).
-
+// Commuter page header
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../config/theme_config.dart';
 
+/// Commuter page header
 class CommuterPageHeader extends StatelessWidget {
+  /// Create commuter header
   const CommuterPageHeader({super.key, required this.title});
 
   final String title;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light, // white status-bar icons on teal
+      value: SystemUiOverlayStyle.light,
       child: Container(
         decoration: const BoxDecoration(
           color: AppColors.brandTeal,

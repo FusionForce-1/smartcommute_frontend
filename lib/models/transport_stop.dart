@@ -1,9 +1,9 @@
+// Transport stop
 import 'package:latlong2/latlong.dart';
 
-// lib/models/transport_stop.dart
-// File ni siya nag represent sa Details unsa i request sa API para sa Transport Stop
-// Mao ning mga data i ask sa API
+/// Transport stop
 class TransportStop {
+  /// Create transport stop
   const TransportStop({
     required this.id,
     required this.name,
@@ -20,6 +20,7 @@ class TransportStop {
   final int sequence;
   final String? landmark;
 
+  /// Parse from JSON
   factory TransportStop.fromJson(Map<String, dynamic> json) {
     final location = json['location'] as Map<String, dynamic>;
     final coordinates =

@@ -1,12 +1,7 @@
-// lib/constants/legal_text.dart
-//
-// User Agreement + Privacy Policy shown from the register screen's consent
-// checkbox and Profile → Account. This is the COMMUTER version (the app
-// only registers commuters). The operator version lives in the web portal's
-// web_portal/js/legal.js; shared sections (account, acceptable use,
-// rights...) should stay alike.
-
+// Legal text
+/// Legal doc
 class LegalDoc {
+  /// Create legal doc
   const LegalDoc({
     required this.title,
     required this.updated,
@@ -18,7 +13,6 @@ class LegalDoc {
   final String updated;
   final String intro;
 
-  /// (heading, bullet points)
   final List<(String, List<String>)> sections;
 }
 

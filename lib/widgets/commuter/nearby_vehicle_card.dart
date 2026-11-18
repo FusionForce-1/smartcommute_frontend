@@ -1,18 +1,13 @@
-// lib/widgets/commuter/nearby_vehicle_card.dart
-//
-// One row in the Home tab's "Nearby Vehicles" list: route code chip,
-// "PUV <code>", route name, how far it is from the commuter in km, and when
-// it reaches them ([etaCaption] says to what the ETA runs) or that it passed.
-// When [onTap] is set the row is selectable (shows how to catch it on the
-// Live Map); [selected] highlights the vehicle being shown.
-
+// Nearby vehicle card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../services/boarding_planner.dart' show formatKm;
 import 'route_code_chip.dart';
 
+/// Nearby vehicle card
 class NearbyVehicleCard extends StatelessWidget {
+  /// Create nearby vehicle card
   const NearbyVehicleCard({
     super.key,
     required this.routeCode,
@@ -30,23 +25,21 @@ class NearbyVehicleCard extends StatelessWidget {
   final String routeName;
   final int? etaMinutes;
 
-  /// What [etaMinutes] runs to, e.g. "to reach you".
   final String? etaCaption;
 
-  /// It has already driven past the commuter.
   final bool passed;
 
-  /// Straight-line distance from the commuter, when their location is known.
   final double? distanceM;
 
-  /// The driver set their Route Status to Delayed.
   final bool delayed;
 
   final bool selected;
   final VoidCallback? onTap;
 
+  /// Format distance
   static String formatDistance(double metres) => '${formatKm(metres)} away';
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final eta = etaMinutes;

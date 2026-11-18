@@ -1,14 +1,12 @@
-// lib/widgets/auth/auth_text_field.dart
-//
-// Label + rounded TextFormField matching the auth mockups.
-// Visibility icons come from AppIcons.
-
+// Auth text field
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
 
+/// Auth text field
 class AuthTextField extends StatefulWidget {
+  /// Create auth text field
   const AuthTextField({
     super.key,
     required this.label,
@@ -36,27 +34,25 @@ class AuthTextField extends StatefulWidget {
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
 
-  /// Overrides the corner radius (default: [AppRadius.inputField], or
-  /// [AppRadius.inputPill] when [pill]).
   final double? radius;
 
-  /// Fixes the field's height (dense layout) — the Login mockup uses ~35.
   final double? height;
 
+  /// Create widget state
   @override
   State<AuthTextField> createState() => _AuthTextFieldState();
 }
 
+/// Auth text field state
 class _AuthTextFieldState extends State<AuthTextField> {
   late bool _obscured = widget.obscureText;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final radius = widget.radius ??
         (widget.pill ? AppRadius.inputPill : AppRadius.inputField);
     final height = widget.height;
-    // In the dense layout the icons set the box height. Only the box is
-    // sized — the error text lays out below it instead of squeezing it.
     final iconBox = height == null
         ? null
         : BoxConstraints.tightFor(width: height + 6, height: height);
@@ -114,12 +110,14 @@ class _AuthTextFieldState extends State<AuthTextField> {
   }
 }
 
-/// "── OR ──" divider used between email/password actions and Google.
+/// Or divider widget
 class OrDivider extends StatelessWidget {
+  /// Create or divider
   const OrDivider({super.key, this.label = 'OR'});
 
   final String label;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Row(

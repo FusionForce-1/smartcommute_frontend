@@ -1,11 +1,4 @@
-// lib/widgets/commuter/trip_route_layers.dart
-//
-// How a planned trip is drawn on a map: each leg's ridden line (one colour
-// per leg, so transfers stand out) and its board / alight stops. Shared by
-// the Selected Route screen and the Home map, so both look the same.
-// With a [TripProgress] (Home, while the commuter travels) the part of each
-// leg already travelled is drawn grey and only the rest in the leg's colour.
-
+// Trip route layers
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -16,16 +9,17 @@ import '../../models/transport_model.dart';
 import '../../models/trip_plan.dart';
 import '../../services/trip_progress.dart';
 
+/// Trip route layers
 class TripRouteLayers {
+  /// Create trip route
   TripRouteLayers._(this.lines, this.markers);
 
+  /// Create of trip route
   factory TripRouteLayers.of(RouteOption option, Map<String, TransportRoute> routesById, {TripProgress? progress}) {
     final lines = <Polyline>[];
     final markers = <Marker>[];
     for (var i = 0; i < option.legs.length; i++) {
       final leg = option.legs[i];
-      // Prefer the ridden part (board -> alight) from the recommender;
-      // fall back to the whole route line.
       final points = leg.path ?? routesById[leg.routeId]?.geometry;
       if (points != null && points.length > 1) {
         final split = progress?.state == null ? (done: const <LatLng>[], ahead: points) : progress!.split(i);
@@ -58,22 +52,18 @@ class TripRouteLayers {
     return TripRouteLayers._(lines, markers);
   }
 
-  /// One colour per leg.
   static const legColors = [AppColors.brandTeal, AppColors.accent, AppColors.primary];
 
-  /// The part of the route already travelled.
   static const travelledColor = Color(0xFFB0B8BF);
 
   final List<Polyline> lines;
   final List<Marker> markers;
 
-  /// Every point drawn, for fitting the camera to the trip.
   List<LatLng> get points => [
         for (final line in lines) ...line.points,
         for (final marker in markers) marker.point,
       ];
 
-  /// Frames the whole trip, or null when there is too little to frame.
   CameraFit? get cameraFit {
     final all = points;
     if (all.length < 2) return null;
@@ -84,6 +74,7 @@ class TripRouteLayers {
     );
   }
 
+  /// Stop marker
   static Marker _stopMarker(StopModel stop, IconData icon, Color color) {
     return Marker(
       point: LatLng(stop.location.lat, stop.location.lng),

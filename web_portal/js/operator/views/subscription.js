@@ -1,16 +1,6 @@
-// js/operator/views/subscription.js
-//
-// Subscription popup, opened from the header's Subscription button: the
-// operator's plan (3-month free trial on first sign-in, then PHP 1,000 /
-// year), with checkout through PayPal.
-//
-// PayPal round trip: "Pay with PayPal" -> POST /subscriptions/checkout with
-// this page as return_url -> PayPal's approval page -> back here with
-// ?paypal=return&token=<order id> -> POST /subscriptions/paypal/capture,
-// which takes the payment and adds a year. ?paypal=cancel means they backed out.
-// operatorApp.js reopens this popup on the way back from PayPal.
-
+// Operator subscription view
 const OperatorSubscription = {
+  // Open subscription
   open() {
     const esc = AdminUi.escapeHtml;
     let status = null;
@@ -28,12 +18,14 @@ const OperatorSubscription = {
     const cardEl = el.querySelector('#sub-card');
     const noticeEl = el.querySelector('#sub-notice');
 
+    // Subscription peso
     const peso = (centavos) =>
       `₱${(centavos / 100).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-    // Backend datetimes are UTC without an offset ("2026-10-12T08:00:00").
+    // Parse UTC
     const parseUtc = (iso) => (iso ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`) : null);
 
+    // Days left
     const daysLeft = (iso) => {
       const end = parseUtc(iso);
       if (!end) return null;
@@ -47,6 +39,7 @@ const OperatorSubscription = {
       free: { label: 'Free Plan', tone: '' },
     };
 
+    // Subscription notice
     function notice(text, tone) {
       noticeEl.innerHTML = text
         ? `<div class="op-card" style="border-left:4px solid var(--op-${tone || 'blue'});margin-bottom:16px;">
@@ -55,18 +48,18 @@ const OperatorSubscription = {
         : '';
     }
 
+    // Subscription row
     function row(label, value) {
       return `<div class="op-detail-row"><span>${esc(label)}</span><strong>${value}</strong></div>`;
     }
 
+    // Render the view
     function render() {
       const s = status;
       const meta = STATE[s.state] || { label: s.state, tone: '' };
       const price = `${peso(s.plan_price)} / year`;
       const months = Math.round(s.trial_days / 30);
 
-      // Coverage, step by step: free trial, then each paid year stacked
-      // after it — so "Jan 2028" is clearly 3 free months + 1 paid year.
       let coverage = '';
       const trialLeft = daysLeft(s.trial_ends_at);
       if (s.trial_ends_at && trialLeft > 0) {
@@ -81,7 +74,6 @@ const OperatorSubscription = {
       const coveredUntil = [s.paid_until, s.trial_ends_at].map(parseUtc).filter(Boolean).sort((a, b) => b - a)[0];
       if (coveredUntil && coveredUntil > Date.now() && s.paid_until) {
         const total = daysLeft(coveredUntil.toISOString());
-        // Nearest month: the 90-day trial is a couple of days short of 3 calendar months.
         const months = Math.round(total / 30.44);
         const y = Math.floor(months / 12), m = months % 12;
         const span = [y && `${y} year${y > 1 ? 's' : ''}`, m && `${m} month${m > 1 ? 's' : ''}`].filter(Boolean).join(' ') || `${total} days`;
@@ -126,6 +118,7 @@ const OperatorSubscription = {
       el.querySelector('#sub-trial')?.addEventListener('click', startTrial);
     }
 
+    // Load subscription
     async function load() {
       AdminUi.loadInto(cardEl, OperatorApi.subscription, (s) => {
         status = s;
@@ -133,6 +126,7 @@ const OperatorSubscription = {
       });
     }
 
+    // Start trial
     async function startTrial() {
       if (busy) return;
       busy = true;
@@ -147,14 +141,13 @@ const OperatorSubscription = {
       }
     }
 
+    // Pay subscription
     async function pay() {
       if (busy) return;
       busy = true;
       const btn = el.querySelector('#sub-pay');
       btn.disabled = true;
       btn.textContent = 'Opening checkout…';
-      // Come back to this exact address, so the login saved in this browser
-      // origin (localhost vs 127.0.0.1) is still there after PayPal.
       const here = `${location.origin}${location.pathname}`;
       try {
         const checkout = await OperatorApi.checkout({
@@ -162,12 +155,11 @@ const OperatorSubscription = {
           cancel_url: `${here}?paypal=cancel`,
         });
         if (status.payment_provider === 'mock') {
-          // Development stand-in: "pays" instantly through the backend.
           status = await OperatorApi.mockPay(checkout.checkout_url);
           notice('Test payment recorded (mock provider). Your plan is active.', 'green');
           render();
         } else {
-          window.location.assign(checkout.checkout_url);   // off to PayPal
+          window.location.assign(checkout.checkout_url);
           return;
         }
       } catch (err) {
@@ -178,7 +170,7 @@ const OperatorSubscription = {
       }
     }
 
-    /** Back from PayPal? Finish (or note the cancel), then tidy the address bar. */
+    // Handle return
     async function handleReturn() {
       const params = new URLSearchParams(location.search);
       const result = params.get('paypal');

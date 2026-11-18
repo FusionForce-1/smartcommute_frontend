@@ -1,14 +1,11 @@
-// lib/widgets/error_banner.dart
-//
-// E3. Flutter Reusable Widgets — ErrorBanner
-// Props: message, onRetry
-// Red banner at top of screen for API errors; optional Retry button.
-
+// Error banner
 import 'package:flutter/material.dart';
 import '../config/theme_config.dart';
 import '../constants/app_icons.dart';
 
+/// Error banner
 class ErrorBanner extends StatelessWidget {
+  /// Create error banner
   const ErrorBanner({
     super.key,
     required this.message,
@@ -18,6 +15,7 @@ class ErrorBanner extends StatelessWidget {
   final String message;
   final VoidCallback? onRetry;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(

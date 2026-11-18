@@ -1,17 +1,13 @@
-// js/admin/views/dashboard.js
-//
-// Dashboard: headline stats, newest user accounts, pending operator
-// verifications and the system health monitor.
-
+// Admin dashboard view
 AdminRouter.register('dashboard', {
   title: 'Dashboard',
 
+  // Mount the view
   mount(el) {
     const RECENT_USERS = 5;
-    const VISIBLE_PENDING = 2; // more than this and the list scrolls
+    const VISIBLE_PENDING = 2;
     const HEALTH_POLL_MS = 30000;
 
-    // undefined = still loading (skeleton), null = failed to load ("—")
     let stats;
     let health;
     let users = [];
@@ -32,11 +28,13 @@ AdminRouter.register('dashboard', {
     const pendingEl = el.querySelector('#dash-pending');
     const healthEl = el.querySelector('#dash-health');
 
+    // Card value
     const cardValue = (source, pick) => {
       if (source === undefined) return undefined;
       return source === null ? '—' : pick(source);
     };
 
+    // Render stats
     function renderStats() {
       statsEl.innerHTML = AdminUi.statGrid([
         ['Total Users', cardValue(stats, (s) => AdminUi.formatNumber(s.total_users))],
@@ -46,12 +44,14 @@ AdminRouter.register('dashboard', {
       ]);
     }
 
+    // Load stats
     function loadStats() {
       AdminApi.userStats()
         .then((s) => { stats = s; }, () => { stats = null; })
         .finally(renderStats);
     }
 
+    // Load users
     function loadUsers() {
       return AdminUi.loadInto(usersEl, () => AdminApi.listUsers({ limit: RECENT_USERS }), (list) => {
         users = list;
@@ -59,6 +59,7 @@ AdminRouter.register('dashboard', {
       });
     }
 
+    // Load pending
     function loadPending() {
       return AdminUi.loadInto(pendingEl, () => AdminApi.listOperators('pending'), (list) => {
         pending = list;
@@ -67,23 +68,23 @@ AdminRouter.register('dashboard', {
       });
     }
 
-    /** Show exactly VISIBLE_PENDING operators; the rest scroll inside the panel. */
+    // Fit pending
     function fitPending() {
       pendingEl.style.maxHeight = '';
       const items = pendingEl.querySelectorAll('.pending-item');
       if (items.length <= VISIBLE_PENDING) return;
       const lastVisible = items[VISIBLE_PENDING - 1].getBoundingClientRect().bottom;
-      // A little room under the last item, but less than the list gap so
-      // the next item stays hidden until scrolled to.
       pendingEl.style.maxHeight = `${lastVisible - pendingEl.getBoundingClientRect().top + 16}px`;
     }
 
+    // Render health
     function renderHealth(h) {
       health = h;
       renderStats();
       healthEl.innerHTML = AdminUi.healthList(h);
     }
 
+    // Load health
     function loadHealth() {
       AdminUi.loadInto(healthEl, AdminApi.systemHealth, renderHealth).then(() => {
         health ??= null;
@@ -91,6 +92,7 @@ AdminRouter.register('dashboard', {
       });
     }
 
+    // Refresh all
     function refreshAll() {
       loadStats();
       loadUsers();
@@ -98,10 +100,12 @@ AdminRouter.register('dashboard', {
     }
 
     UserActions.bind(usersEl, {
+      // Find user
       findUser: (id) => users.find((u) => u.id === id),
       onChanged: refreshAll,
     });
     OperatorReview.bind(pendingEl, {
+      // Find profile
       findProfile: (id) => pending.find((p) => p.id === id),
       onDone: refreshAll,
     });
@@ -110,11 +114,9 @@ AdminRouter.register('dashboard', {
     refreshAll();
     loadHealth();
 
-    // Keep the health monitor live without flashing a loading state.
     const timer = setInterval(() => {
       AdminApi.systemHealth().then(renderHealth).catch(() => {});
     }, HEALTH_POLL_MS);
-    // Names can wrap differently at another width, changing item heights.
     window.addEventListener('resize', fitPending);
     return () => {
       clearInterval(timer);

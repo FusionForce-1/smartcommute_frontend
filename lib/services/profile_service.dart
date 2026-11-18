@@ -1,10 +1,4 @@
-// lib/services/profile_service.dart
-//
-// The signed-in commuter's profile, saved routes, trips, notification
-// choices and Privacy & Security (/users/me, /users/me/saved-routes,
-// /users/me/trips, /users/me/settings, /users/me/security,
-// /users/me/password, /users/me/two-factor/*, /users/me/accept-terms).
-
+// Profile service
 import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -12,21 +6,26 @@ import '../models/commuter_profile.dart';
 import '../models/ride_review.dart';
 import '../models/security_info.dart';
 
+/// Profile service
 class ProfileService {
+  /// Create profile
   ProfileService(this._dio);
 
   final Dio _dio;
 
+  /// Profile profile
   Future<CommuterProfile> profile() async {
     final response = await _dio.get('/users/me');
     return CommuterProfile.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// Update name
   Future<CommuterProfile> updateName(String name) async {
     final response = await _dio.patch('/users/me', data: {'name': name});
     return CommuterProfile.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// Saved routes
   Future<List<SavedRoute>> savedRoutes() async {
     final response = await _dio.get('/users/me/saved-routes');
     return (response.data as List<dynamic>)
@@ -34,6 +33,7 @@ class ProfileService {
         .toList();
   }
 
+  /// Save route
   Future<SavedRoute> saveRoute({
     required String label,
     required String routeId,
@@ -53,9 +53,10 @@ class ProfileService {
     return SavedRoute.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// Delete saved route
   Future<void> deleteSavedRoute(String id) => _dio.delete('/users/me/saved-routes/$id');
 
-  /// Rates a ride: [vehicleId] null when the commuter didn't catch the plate.
+  /// Submit review
   Future<RideReview> submitReview({
     required String routeId,
     String? vehicleId,
@@ -73,6 +74,7 @@ class ProfileService {
     return RideReview.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// My reviews
   Future<List<RideReview>> myReviews() async {
     final response = await _dio.get('/reviews/mine', queryParameters: {'limit': 10});
     return [
@@ -80,6 +82,7 @@ class ProfileService {
     ];
   }
 
+  /// Record trip
   Future<void> recordTrip({
     required List<String> routeIds,
     required String originName,
@@ -96,45 +99,51 @@ class ProfileService {
     });
   }
 
+  /// Notification prefs
   Future<Map<NotificationPref, bool>> notificationPrefs() async {
     final response = await _dio.get('/users/me/settings');
     return NotificationPref.fromSettings(response.data as Map<String, dynamic>);
   }
 
+  /// Set notification pref
   Future<void> setNotificationPref(NotificationPref pref, bool enabled) =>
       _dio.patch('/users/me/settings', data: {pref.apiKey: enabled});
 
-  // ── Privacy & Security ──
 
+  /// Profile security
   Future<SecurityInfo> security() async {
     final response = await _dio.get('/users/me/security');
     return SecurityInfo.fromJson(response.data as Map<String, dynamic>);
   }
 
+  /// Change password
   Future<void> changePassword({required String current, required String next}) =>
       _dio.post('/users/me/password', data: {
         'current_password': current,
         'new_password': next,
       });
 
-  /// Emails a code; returns the masked address it went to.
+  /// Start two factor
   Future<String> startTwoFactor() async {
     final response = await _dio.post('/users/me/two-factor/start');
     return (response.data as Map<String, dynamic>)['email'] as String? ?? 'your email';
   }
 
+  /// Confirm two factor
   Future<void> confirmTwoFactor(String otp) =>
       _dio.post('/users/me/two-factor/confirm', data: {'otp': otp});
 
+  /// Turn off two factor
   Future<void> turnOffTwoFactor() =>
       _dio.patch('/users/me/settings', data: {'two_factor_enabled': false});
 
+  /// Accept terms
   Future<SecurityInfo> acceptTerms() async {
     final response = await _dio.post('/users/me/accept-terms');
     return SecurityInfo.fromJson(response.data as Map<String, dynamic>);
   }
 
-  // GeoJSON order is [lng, lat].
+  /// Profile point
   static Map<String, dynamic> _point(LatLng point) => {
         'type': 'Point',
         'coordinates': [point.longitude, point.latitude],

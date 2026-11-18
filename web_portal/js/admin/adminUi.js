@@ -1,11 +1,8 @@
-// js/admin/adminUi.js
-//
-// Param-only HTML builders + small DOM helpers shared by every admin view.
-// Nothing in here talks to the backend.
-
+// Admin UI
+// Admin UI
 const AdminUi = (() => {
-  // ---------- Formatting ----------
 
+  // Escape HTML
   function escapeHtml(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -15,10 +12,7 @@ const AdminUi = (() => {
       .replace(/'/g, '&#39;');
   }
 
-  /**
-   * Accepts a Date, or an API timestamp. The API sends naive UTC timestamps
-   * ("2026-01-15T08:00:00"), so a string without a zone is treated as UTC.
-   */
+  // Parse date
   function parseDate(value) {
     if (!value) return null;
     if (value instanceof Date) return value;
@@ -27,12 +21,13 @@ const AdminUi = (() => {
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  /** "Oct 6, 2026" */
+  // Format date
   function formatDate(value) {
     const date = parseDate(value);
     return date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
   }
 
+  // Format date time
   function formatDateTime(value) {
     const date = parseDate(value);
     return date
@@ -40,10 +35,12 @@ const AdminUi = (() => {
       : '—';
   }
 
+  // Format number
   function formatNumber(value) {
     return typeof value === 'number' ? value.toLocaleString('en-US') : '—';
   }
 
+  // Format duration
   function formatDuration(totalSeconds) {
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -53,8 +50,8 @@ const AdminUi = (() => {
     return `${minutes}m`;
   }
 
-  // ---------- Building blocks ----------
 
+  // Stat card
   function statCard(label, value) {
     return `
       <div class="stat-card">
@@ -63,11 +60,12 @@ const AdminUi = (() => {
       </div>`;
   }
 
-  /** @param {Array<[label, value]>} cards — value undefined renders a skeleton */
+  // Stat grid
   function statGrid(cards) {
     return `<section class="stat-grid">${cards.map(([label, value]) => statCard(label, value)).join('')}</section>`;
   }
 
+  // Admin UI panel
   function panel({ title, subtitle = '', bodyId, bodyClass = '', panelClass = '', between = '' }) {
     return `
       <section class="panel ${panelClass}">
@@ -80,14 +78,17 @@ const AdminUi = (() => {
       </section>`;
   }
 
+  // Role badge
   function roleBadge(role) {
     return `<span class="role-badge role-badge--${escapeHtml(role)}">${escapeHtml(role)}</span>`;
   }
 
+  // Status chip
   function statusChip(status) {
     return `<span class="status-chip status-chip--${escapeHtml(status)}">${escapeHtml(status)}</span>`;
   }
 
+  // Filter chips
   function filterChips(options, active, dataAttr = 'filter') {
     return options
       .map(({ value, label }) => `
@@ -97,6 +98,7 @@ const AdminUi = (() => {
       .join('');
   }
 
+  // State message
   function stateMessage(text, { error = false, retry = false } = {}) {
     return `
       <div class="state-msg${error ? ' state-msg--error' : ''}">
@@ -105,8 +107,8 @@ const AdminUi = (() => {
       </div>`;
   }
 
-  // ---------- Users table ----------
 
+  // User row
   function userRow(user, currentEmail) {
     const isSelf = user.email === currentEmail;
     return `
@@ -126,6 +128,7 @@ const AdminUi = (() => {
       </tr>`;
   }
 
+  // Users table
   function usersTable(users, { firstColumn = 'Name', currentEmail = '' } = {}) {
     const rows = users.length
       ? users.map((u) => userRow(u, currentEmail)).join('')
@@ -141,8 +144,8 @@ const AdminUi = (() => {
       </div>`;
   }
 
-  // ---------- Operators ----------
 
+  // Pending operator list
   function pendingOperatorList(profiles) {
     if (!profiles.length) return stateMessage('No operators waiting for verification.');
     return `
@@ -155,8 +158,8 @@ const AdminUi = (() => {
       </div>`;
   }
 
-  // ---------- System health ----------
 
+  // Health list
   function healthList(health) {
     return `
       <div class="health-list">
@@ -169,12 +172,8 @@ const AdminUi = (() => {
       </div>`;
   }
 
-  // ---------- Async section loader ----------
 
-  /**
-   * Shows a loading state in `el`, runs `load()`, then `render(data)`.
-   * On failure shows the error with a "Try again" button.
-   */
+  // Load into
   async function loadInto(el, load, render) {
     if (!el) return;
     el.innerHTML = stateMessage('Loading…');
@@ -188,13 +187,8 @@ const AdminUi = (() => {
     }
   }
 
-  // ---------- Toast ----------
 
-  /**
-   * `sticky` keeps it up until its × is clicked (for things that must not be
-   * missed); `onClick` makes the toast itself a button that also closes it.
-   * Returns the toast element, so the caller can take it down early.
-   */
+  // Admin UI toast
   function toast(message, { error = false, sticky = false, onClick = null } = {}) {
     let root = document.getElementById('toast-root');
     if (!root) {
@@ -213,6 +207,7 @@ const AdminUi = (() => {
     if (onClick) {
       el.tabIndex = 0;
       el.setAttribute('role', 'button');
+      // Activate admin UI
       const activate = () => { el.remove(); onClick(); };
       el.addEventListener('click', activate);
       el.addEventListener('keydown', (e) => {
@@ -254,22 +249,18 @@ const AdminUi = (() => {
   };
 })();
 
-// ---------- Modal ----------
 
+// Admin modal
 const AdminModal = (() => {
   let backdrop = null;
   let closeHook = null;
 
+  // On keydown
   function onKeydown(e) {
     if (e.key === 'Escape') close();
   }
 
-  /**
-   * Opens a modal. `actions` render in the footer; each gets
-   * { label, variant, onClick } where onClick may return a promise —
-   * buttons are disabled while it runs and errors show inside the modal.
-   * `onClose` runs once when the modal goes away (e.g. to remove a map).
-   */
+  // Open admin UI
   function open({ title, body, actions = [], size = '', onClose = null }) {
     close();
     closeHook = onClose;
@@ -316,6 +307,7 @@ const AdminModal = (() => {
     return backdrop;
   }
 
+  // Close admin UI
   function close() {
     if (!backdrop) return;
     backdrop.remove();
@@ -326,7 +318,7 @@ const AdminModal = (() => {
     if (hook) hook();
   }
 
-  /** Resolves true when confirmed (after `onConfirm` succeeds). */
+  // Confirm admin UI
   function confirm({ title, message, confirmLabel = 'Confirm', variant = 'decline', onConfirm }) {
     open({
       title,

@@ -1,21 +1,18 @@
-// js/operator/operatorUi.js
-//
-// Param-only HTML builders + formatting shared by the operator views.
-// Generic helpers (escapeHtml, loadInto, toast, modal) come from adminUi.js.
-
+// Operator UI
+// Operator UI
 const OperatorUi = (() => {
   const esc = AdminUi.escapeHtml;
 
-  /** API timestamps are naive UTC; a string without a zone is treated as UTC. */
+  // Parse date
   function parseDate(value) {
     if (!value) return null;
-    const iso = String(value).replace(' ', 'T');   // live GPS frames send "2026-10-23 04:46:21.17"
+    const iso = String(value).replace(' ', 'T');
     const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(iso);
     const date = new Date(hasZone ? iso : `${iso}Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   }
 
-  /** "Just now", "10 minutes ago", "3 hours ago", "Yesterday, 4:20 PM", "Oct 3, 4:20 PM" */
+  // Time ago
   function timeAgo(value, now = new Date()) {
     const date = parseDate(value);
     if (!date) return '';
@@ -23,6 +20,7 @@ const OperatorUi = (() => {
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
 
+    // Start of day
     const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     const days = Math.round((startOfDay(now) - startOfDay(date)) / 86400000);
     const clock = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -36,16 +34,18 @@ const OperatorUi = (() => {
     return `${day}, ${clock}`;
   }
 
-  /** "₱18", "₱12.50", "—" */
+  // Operator UI fare
   function fare(value) {
     if (typeof value !== 'number') return '—';
     return Number.isInteger(value) ? `₱${value}` : `₱${value.toFixed(2)}`;
   }
 
+  // Operator UI chip
   function chip(label, tone = '') {
     return `<span class="op-chip${tone ? ` op-chip--${tone}` : ''}">${esc(label)}</span>`;
   }
 
+  // Operator UI stat
   function stat(label, value, tone = '') {
     return `
       <div class="op-stat">
@@ -54,7 +54,7 @@ const OperatorUi = (() => {
       </div>`;
   }
 
-  /** @param {Array<[label, value, tone?]>} items — value undefined renders a skeleton */
+  // Operator UI stats
   function stats(items) {
     return `<section class="op-stats">${items.map(([l, v, t]) => stat(l, v, t)).join('')}</section>`;
   }
@@ -71,7 +71,6 @@ const OperatorUi = (() => {
     promotion: 'Promotion',
   };
 
-  // Same labels as the driver app's report sheet (lib/models/driver_report.dart).
   const REPORT_CATEGORY = {
     emergency: { label: 'Emergency', tone: 'red' },
     breakdown: { label: 'Breakdown', tone: 'amber' },
@@ -80,7 +79,7 @@ const OperatorUi = (() => {
     other: { label: 'Other', tone: '' },
   };
 
-  /** An id for client_request_id (8–64 of A-Z a-z 0-9 _ -), so a resend is never sent twice. */
+  // Request ID
   function requestId() {
     if (crypto.randomUUID) return crypto.randomUUID();
     return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
@@ -107,29 +106,26 @@ const OperatorUi = (() => {
     other: 'Other',
   };
 
+  // Vehicle status chip
   function vehicleStatusChip(vehicle) {
     if (vehicle.suspended) return chip('Suspended', 'red');
     const meta = VEHICLE_STATUS[vehicle.status] || { label: vehicle.status, tone: '' };
     return chip(meta.label, meta.tone);
   }
 
-  /** Map of route id -> "J01 – Carbon – Lahug" from GET /routes/mine. */
+  // Route labels
   function routeLabels(routes) {
     return Object.fromEntries(routes.map((r) => [r.id, `${r.code} – ${r.name}`]));
   }
 
-  /** Readable driver name from GET /drivers ("LAST, FIRST" on the license). */
+  // Driver name
   function driverName(driver) {
+    // Operator UI title
     const title = (s) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
     return [driver.first_name, driver.last_name].filter(Boolean).map(title).join(' ') || driver.driver_code;
   }
 
-  /**
-   * Runs `action` only for a verified operator; anyone else gets a notice.
-   * The backend rejects these changes from unverified accounts, so this stops
-   * them before they fill in a form. If the check itself fails, `action` runs
-   * and the backend still guards the save.
-   */
+  // When verified
   async function whenVerified(action) {
     const profile = await OperatorApi.profile().catch(() => null);
     if (profile && !profile.is_verified) {
@@ -144,8 +140,9 @@ const OperatorUi = (() => {
     action();
   }
 
-  /** Degrees from north going from a to b ([lat, lng] pairs). */
+  // Operator UI bearing
   function bearing(a, b) {
+    // To rad
     const toRad = (d) => (d * Math.PI) / 180;
     const [lat1, lng1] = a.map(toRad);
     const [lat2, lng2] = b.map(toRad);

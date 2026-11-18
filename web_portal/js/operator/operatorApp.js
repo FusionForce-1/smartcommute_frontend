@@ -1,8 +1,5 @@
-// js/operator/operatorApp.js
-//
-// Operator portal bootstrap: auth guard, sidebar, header, then the router.
-// Loaded last so every view has registered itself already.
-
+// Operator app
+// Operator app
 const OperatorApp = (() => {
   const LOGIN_URL = '../index.html#/login';
 
@@ -32,23 +29,24 @@ const OperatorApp = (() => {
     ['Profile & Settings', 'Update your company details, change your password, choose whether to get emails, and turn two-factor authentication on or off.'],
   ];
 
+  // Redirect to login
   function redirectToLogin() {
     window.location.replace(LOGIN_URL);
   }
 
-  // A tracker label's QR code opens operator.html?claim=CODE. The code is
-  // kept in this tab (sessionStorage) so it survives a trip to the login page.
   const PENDING_CLAIM_KEY = 'sc_pending_claim';
 
+  // Remember claim from URL
   function rememberClaimFromUrl() {
     const params = new URLSearchParams(location.search);
     if (!params.has('claim')) return;
-    try { sessionStorage.setItem(PENDING_CLAIM_KEY, params.get('claim')); } catch { /* private mode */ }
+    try { sessionStorage.setItem(PENDING_CLAIM_KEY, params.get('claim')); } catch {  }
     params.delete('claim');
     const query = params.toString();
     history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}#/vehicles`);
   }
 
+  // Take pending claim
   function takePendingClaim() {
     try {
       const code = sessionStorage.getItem(PENDING_CLAIM_KEY);
@@ -59,7 +57,7 @@ const OperatorApp = (() => {
     }
   }
 
-  // Same sidebar markup as the admin portal (see adminApp.js), styled by admin.css.
+  // Nav link
   function navLink({ route, label, icon, badgeId }) {
     return `
       <a href="#/${route}" class="admin-nav__link" data-route="${route}">
@@ -68,6 +66,7 @@ const OperatorApp = (() => {
       </a>`;
   }
 
+  // Nav button
   function navButton(id, label, icon) {
     return `
       <button type="button" class="admin-nav__link" id="${id}">
@@ -75,6 +74,7 @@ const OperatorApp = (() => {
       </button>`;
   }
 
+  // Render sidebar
   function renderSidebar() {
     document.getElementById('op-nav').innerHTML = NAV_ITEMS.map(navLink).join('');
     document.getElementById('op-nav-footer').innerHTML =
@@ -88,6 +88,7 @@ const OperatorApp = (() => {
     document.getElementById('op-help').addEventListener('click', openHelp);
   }
 
+  // Open help
   function openHelp() {
     AdminModal.open({
       title: 'Help',
@@ -98,6 +99,7 @@ const OperatorApp = (() => {
     });
   }
 
+  // On route change
   function onRouteChange(activeRoute, view) {
     document.getElementById('op-title').textContent = view.heading || view.title;
     document.querySelectorAll('#op-nav [data-route]').forEach((link) => {
@@ -108,12 +110,13 @@ const OperatorApp = (() => {
     });
   }
 
+  // Render company
   function renderCompany({ company_name }) {
     document.getElementById('op-company').textContent = company_name || '';
     document.getElementById('op-account').hidden = !company_name;
   }
 
-  /** Company name in the sidebar, plus a notice while the account awaits verification. */
+  // Load profile
   async function loadProfile() {
     window.addEventListener('profile:updated', (e) => renderCompany(e.detail));
     const notice = document.getElementById('op-notice');
@@ -134,6 +137,7 @@ const OperatorApp = (() => {
     }
   }
 
+  // Start operator app
   function start() {
     rememberClaimFromUrl();
     if (!Session.accessToken || Session.role !== 'operator') {
@@ -147,9 +151,7 @@ const OperatorApp = (() => {
     OperatorRouter.start(onRouteChange);
     DriverReportAlerts.start();
     document.getElementById('op-subscription').addEventListener('click', OperatorSubscription.open);
-    // Back from PayPal (?paypal=return|cancel): reopen the Subscription popup.
     if (new URLSearchParams(location.search).has('paypal')) OperatorSubscription.open();
-    // Scanned a tracker label: go straight to claiming it.
     const claim = takePendingClaim();
     if (claim) TrackerSetup.claimFromLabel(claim);
   }

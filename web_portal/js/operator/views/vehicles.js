@@ -1,12 +1,9 @@
-// js/operator/views/vehicles.js
-//
-// Vehicles: the operator's fleet with route, driver, status and GPS.
-// Add / edit / remove vehicles and issue GPS tracker device keys.
-
+// Operator vehicles view
 OperatorRouter.register('vehicles', {
   title: 'Vehicles',
   heading: 'Vehicle Management',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const STATUSES = [
@@ -15,7 +12,7 @@ OperatorRouter.register('vehicles', {
       ['maintenance', 'Maintenance'],
     ];
 
-    let fleet;           // undefined = loading
+    let fleet;
     let routes = [];
     let drivers = [];
     let subscription = null;
@@ -45,13 +42,16 @@ OperatorRouter.register('vehicles', {
     const planEl = el.querySelector('#veh-plan');
     const addBtn = el.querySelector('#veh-add');
 
+    // Route labels
     const routeLabels = () => OperatorUi.routeLabels(routes);
+    // Driver by ID
     const driverById = (id) => drivers.find((d) => d.id === id);
 
-    // ---------- Rendering ----------
 
+    // Render stats
     function renderStats() {
       const loaded = Array.isArray(fleet);
+      // Count vehicles
       const count = (fn) => (loaded ? fleet.filter(fn).length : undefined);
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Vehicles', loaded ? fleet.length : undefined],
@@ -61,6 +61,7 @@ OperatorRouter.register('vehicles', {
       ]);
     }
 
+    // Render plan
     function renderPlan() {
       if (!subscription) {
         planEl.textContent = '';
@@ -75,6 +76,7 @@ OperatorRouter.register('vehicles', {
       addBtn.title = canAdd ? '' : 'Vehicle limit reached for your plan';
     }
 
+    // Vehicles row
     function row(v) {
       const labels = routeLabels();
       const driver = v.driver_id ? driverById(v.driver_id) : null;
@@ -100,6 +102,7 @@ OperatorRouter.register('vehicles', {
         </tr>`;
     }
 
+    // Render table
     function renderTable() {
       const rows = fleet.length
         ? fleet.map(row).join('')
@@ -115,6 +118,7 @@ OperatorRouter.register('vehicles', {
         </div>`;
     }
 
+    // Load vehicles
     function load() {
       fleet = undefined;
       renderStats();
@@ -139,21 +143,24 @@ OperatorRouter.register('vehicles', {
       });
     }
 
-    // ---------- Forms ----------
 
+    // Vehicles options
     const options = (items, selected) => items
       .map(([value, label]) => `<option value="${esc(value)}"${value === selected ? ' selected' : ''}>${esc(label)}</option>`)
       .join('');
 
+    // Route options
     function routeOptions(selected) {
       return options(routes.map((r) => [r.id, `${r.code} – ${r.name}${r.is_active ? '' : ' (inactive)'}`]), selected);
     }
 
+    // Driver options
     function driverOptions(selected) {
       return `<option value="">Unassigned</option>${options(
         drivers.map((d) => [d.id, `${OperatorUi.driverName(d)} (${d.driver_code})`]), selected)}`;
     }
 
+    // Open add
     function openAdd() {
       if (!routes.length) {
         AdminModal.open({
@@ -205,6 +212,7 @@ OperatorRouter.register('vehicles', {
       modal.querySelector('#va-plate').focus();
     }
 
+    // Open edit
     function openEdit(v) {
       AdminModal.open({
         title: `Edit ${v.plate_number}`,
@@ -245,6 +253,7 @@ OperatorRouter.register('vehicles', {
       });
     }
 
+    // Open device key
     function openDeviceKey(v) {
       AdminModal.open({
         title: 'GPS Tracker Key',
@@ -283,6 +292,7 @@ OperatorRouter.register('vehicles', {
       });
     }
 
+    // Confirm remove
     function confirmRemove(v) {
       AdminModal.confirm({
         title: 'Remove vehicle?',
@@ -303,13 +313,14 @@ OperatorRouter.register('vehicles', {
       if (!vehicle) return;
       ({
         edit: openEdit,
+        // Setup vehicles
         setup: (v) => TrackerSetup.open(v, load),
+        // Vehicles WiFi
         wifi: (v) => TrackerSetup.openWifi(v),
         key: openDeviceKey,
         remove: confirmRemove,
       })[btn.dataset.action]?.(vehicle);
     });
-    // Verify first: GET /fleet refuses unverified operators, so `fleet` never loads for them.
     el.querySelector('#veh-firmware').addEventListener('click', () => TrackerSetup.openInstaller());
     addBtn.addEventListener('click', () => OperatorUi.whenVerified(() => {
       if (Array.isArray(fleet)) openAdd();
@@ -317,8 +328,6 @@ OperatorRouter.register('vehicles', {
 
     load();
 
-    // Status ("Signal lost") and "Last GPS" change while the page is open,
-    // so the fleet is re-fetched quietly — no spinner, table updated in place.
     const REFRESH_MS = 10000;
     let refreshing = false;
     const refresh = setInterval(async () => {
@@ -329,7 +338,6 @@ OperatorRouter.register('vehicles', {
         renderStats();
         renderTable();
       } catch {
-        // Keep showing the last good data; the next tick tries again.
       } finally {
         refreshing = false;
       }

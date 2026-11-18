@@ -1,16 +1,13 @@
-// lib/widgets/auth/consent_checkbox.dart
-//
-// "I confirm that I have read, consent and agree to SmartCommute's User
-// Agreement and Privacy Policy" — the register screen's consent box. Each
-// link opens its document in a popup.
-
+// Consent checkbox
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../constants/legal_text.dart';
 
+/// Consent checkbox widget
 class ConsentCheckbox extends StatefulWidget {
+  /// Create consent checkbox
   const ConsentCheckbox({
     super.key,
     required this.value,
@@ -20,16 +17,19 @@ class ConsentCheckbox extends StatefulWidget {
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// Create widget state
   @override
   State<ConsentCheckbox> createState() => _ConsentCheckboxState();
 }
 
+/// Consent checkbox state
 class _ConsentCheckboxState extends State<ConsentCheckbox> {
   late final _agreementTap = TapGestureRecognizer()
     ..onTap = () => showLegalDoc(context, userAgreement);
   late final _privacyTap = TapGestureRecognizer()
     ..onTap = () => showLegalDoc(context, privacyPolicy);
 
+  /// Clean up resources
   @override
   void dispose() {
     _agreementTap.dispose();
@@ -37,6 +37,7 @@ class _ConsentCheckboxState extends State<ConsentCheckbox> {
     super.dispose();
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     const style = TextStyle(color: AppColors.secondary, fontSize: 12, height: 1.4);
@@ -81,7 +82,7 @@ class _ConsentCheckboxState extends State<ConsentCheckbox> {
   }
 }
 
-/// Shows [doc] in a scrollable popup.
+/// Show legal doc
 Future<void> showLegalDoc(BuildContext context, LegalDoc doc) {
   return showDialog<void>(
     context: context,
@@ -150,7 +151,7 @@ Future<void> showLegalDoc(BuildContext context, LegalDoc doc) {
   );
 }
 
-/// "Terms & Privacy Policy" on a profile: pick which document to read.
+/// Show legal choices
 void showLegalChoices(BuildContext context) {
   showModalBottomSheet<void>(
     context: context,

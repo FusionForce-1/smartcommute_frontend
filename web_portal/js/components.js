@@ -1,8 +1,4 @@
-// js/components.js
-//
-// Reusable, param-only UI builders for Login / Operator Register /
-// Forgot Password / Verify OTP. Icons resolve through js/constants/icons.js.
-
+// Shared UI components
 const LucideSvg = {
   mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 6 10 7 10-7"/></svg>',
   'mail-check': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h8"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><path d="m16 19 2 2 4-4"/></svg>',
@@ -33,6 +29,7 @@ const LucideSvg = {
   'credit-card': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>',
 };
 
+// Icon markup
 function iconMarkup(iconKey, className = '') {
   const name = ICONS[iconKey] || iconKey;
   const svg = LucideSvg[name] || LucideSvg.mail;
@@ -42,6 +39,7 @@ function iconMarkup(iconKey, className = '') {
 const Components = {
   icon: iconMarkup,
 
+  // Components field
   field({ id, label, type = 'text', placeholder = '', withToggle = false, value = '' }) {
     return `
       <div class="field-group">
@@ -64,6 +62,7 @@ const Components = {
       </div>`;
   },
 
+  // Components button
   button({ id, label, variant = 'primary', type = 'button' }) {
     const classMap = { primary: 'btn-primary', outline: 'btn-outline', google: 'btn-google' };
     const icon = variant === 'google'
@@ -75,10 +74,12 @@ const Components = {
       </button>`;
   },
 
+  // Or divider
   orDivider(label = 'or') {
     return `<div class="or-divider">${label}</div>`;
   },
 
+  // Error banner
   errorBanner({ id, message }) {
     return `
       <div id="${id}" class="error-banner" hidden>
@@ -86,15 +87,18 @@ const Components = {
       </div>`;
   },
 
+  // Bottom link row
   bottomLinkRow({ prompt, linkText, href, id }) {
     const extra = id ? ` id="${id}"` : '';
     return `<p class="bottom-link-row">${prompt} <a href="${href}"${extra}>${linkText}</a></p>`;
   },
 
+  // Popup icon
   popupIcon(iconKey) {
     return `<div class="popup-icon">${iconMarkup(iconKey)}</div>`;
   },
 
+  // Brand header
   brandHeader({ tagline = 'Cebu City Transit Information' } = {}) {
     return `
       <header class="brand-header">

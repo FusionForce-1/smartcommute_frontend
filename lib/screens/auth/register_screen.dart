@@ -1,9 +1,4 @@
-// lib/screens/auth/register_screen.dart
-//
-// Emae D. Calonia — Flutter Register (Commuter only).
-// Fields: Full Name, Email, Password, Repeat Password, and the User
-// Agreement / Privacy Policy consent box. No role selector.
-
+// Register screen
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../widgets/auth/auth_header_banner.dart';
@@ -15,7 +10,9 @@ import '../../widgets/auth/google_signin_button.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
 
+/// Register screen
 class RegisterScreen extends StatefulWidget {
+  /// Create register
   const RegisterScreen({
     super.key,
     this.onRegister,
@@ -23,7 +20,6 @@ class RegisterScreen extends StatefulWidget {
     this.onConsentChanged,
   });
 
-  /// Creates a commuter account (POST /auth/register).
   final Future<void> Function(
     String fullName,
     String email,
@@ -32,14 +28,14 @@ class RegisterScreen extends StatefulWidget {
 
   final VoidCallback? onBack;
 
-  /// The User Agreement / Privacy Policy box changed (also false on leaving
-  /// the screen). Lets a Google sign-up started here carry the agreement.
   final ValueChanged<bool>? onConsentChanged;
 
+  /// Create widget state
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
+/// Register state
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _fullName = TextEditingController();
@@ -52,6 +48,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Clean up resources
   @override
   void dispose() {
     widget.onConsentChanged?.call(false);
@@ -62,6 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  /// Handle register
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
     if (_password.text != _repeatPassword.text) {
@@ -95,6 +93,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -190,8 +189,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       const SizedBox(height: AppSpacing.sm),
                       const OrDivider(),
                       const SizedBox(height: AppSpacing.sm),
-                      // Google signs up a new account too, so it waits for
-                      // the box. Until then a faded stand-in shows why.
                       if (_agreed)
                         const GoogleSignInButton()
                       else

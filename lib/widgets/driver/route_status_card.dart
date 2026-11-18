@@ -1,28 +1,27 @@
-// lib/widgets/driver/route_status_card.dart
-//
-// "Route Status": On-Route / Delayed / Unavailable. The chosen one is
-// filled; commuters see it on the live map. Only changeable during a shift.
-
+// Route status card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../models/driver_dashboard.dart';
 import 'driver_card.dart';
 
+/// Route status card
 class RouteStatusCard extends StatelessWidget {
+  /// Create route status card
   const RouteStatusCard({super.key, required this.status, required this.onChanged});
 
   final RouteStatus status;
 
-  /// Null while off shift: the buttons are shown but locked.
   final ValueChanged<RouteStatus>? onChanged;
 
+  /// Color of
   static Color colorOf(RouteStatus status) => switch (status) {
         RouteStatus.onRoute => AppColors.shiftGreen,
         RouteStatus.delayed => AppColors.accent,
         RouteStatus.unavailable => AppColors.navInactive,
       };
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final onChanged = this.onChanged;
@@ -60,13 +59,16 @@ class RouteStatusCard extends StatelessWidget {
   }
 }
 
+/// Status button
 class _StatusButton extends StatelessWidget {
+  /// Create status button
   const _StatusButton({required this.status, required this.selected, required this.onPressed});
 
   final RouteStatus status;
   final bool selected;
   final VoidCallback? onPressed;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final color = RouteStatusCard.colorOf(status);

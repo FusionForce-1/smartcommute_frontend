@@ -1,13 +1,11 @@
-// lib/widgets/commuter/commuter_action_tile.dart
-//
-// Full-width white card with a teal icon and a label, used for the
-// dashboard's quick actions ("Refresh vehicle markers", ...).
-
+// Commuter action tile
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Commuter action tile
 class CommuterActionTile extends StatelessWidget {
+  /// Create commuter action tile
   const CommuterActionTile({
     super.key,
     required this.icon,
@@ -21,6 +19,7 @@ class CommuterActionTile extends StatelessWidget {
   final VoidCallback onTap;
   final bool enabled;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final color = enabled ? AppColors.textPrimary : AppColors.navInactive;

@@ -1,16 +1,7 @@
-// lib/services/ride_matcher.dart
-//
-// Which jeep, if any, the commuter is riding — so the map can merge their
-// "you are here" dot into that jeep's icon.
-//
-// On board = one jeep stays within [boardM] of the commuter while they move
-// at jeep speed (>= [ridingKmh], walking is ~5 km/h) for [boardAfter]. A
-// jeep standing next to someone waiting at the stop isn't enough. Once on
-// board they stay merged through traffic stops; they're off once the jeep
-// is further than [leaveM] for [leaveAfter] (got off, or a different jeep).
-
+// Ride matcher
 import 'package:latlong2/latlong.dart';
 
+/// Ride matcher
 class RideMatcher {
   static const double boardM = 40;
   static const double ridingKmh = 12;
@@ -18,7 +9,6 @@ class RideMatcher {
   static const double leaveM = 80;
   static const Duration leaveAfter = Duration(seconds: 10);
 
-  /// Fixes over this window give the commuter's moving speed.
   static const Duration _speedWindow = Duration(seconds: 10);
   static const Distance _d = Distance(roundResult: false);
 
@@ -28,11 +18,9 @@ class RideMatcher {
   DateTime? _candidateSince;
   DateTime? _farSince;
 
-  /// The jeep being ridden, or null.
   String? get riding => _riding;
 
-  /// Feeds one commuter fix and where every live jeep is now; returns [riding].
-  /// [reportedSpeedMps] (the phone's own speed) is used until there's a window of fixes.
+  /// Update ride matcher
   String? update(LatLng here, DateTime at, Map<String, LatLng> jeeps, {double? reportedSpeedMps}) {
     _fixes.add((at: here, time: at));
     _fixes.removeWhere((f) => at.difference(f.time) > _speedWindow);
@@ -52,7 +40,6 @@ class RideMatcher {
       _candidate = null;
     }
 
-    // Nearest jeep close enough to be the one we're in.
     String? nearest;
     var best = double.infinity;
     jeeps.forEach((id, p) {
@@ -78,6 +65,7 @@ class RideMatcher {
     return _riding;
   }
 
+  /// Speed kmh
   double? _speedKmh(double? reportedMps) {
     if (_fixes.length >= 2) {
       final first = _fixes.first, last = _fixes.last;

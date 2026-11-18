@@ -1,14 +1,9 @@
-// js/operator/views/settings.js
-//
-// Settings: email notifications, password, two-factor authentication and
-// language (/users/me/settings, /users/me/security, /users/me/password).
-// Turning two-factor on emails a code that must be confirmed first, so a
-// broken mailbox can't lock anyone out.
-
+// Operator settings view
 OperatorRouter.register('settings', {
   title: 'Settings',
   heading: 'Settings',
 
+  // Mount the view
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const LANGUAGES = { 'en-PH': 'English (Philippines)' };
@@ -25,6 +20,7 @@ OperatorRouter.register('settings', {
 
     const cardEl = el.querySelector('#settings-card');
 
+    // Toggle settings
     function toggle(id, checked) {
       return `
         <label class="op-switch">
@@ -33,6 +29,7 @@ OperatorRouter.register('settings', {
         </label>`;
     }
 
+    // Password row
     function passwordRow() {
       if (!security.has_password) {
         return `
@@ -53,8 +50,8 @@ OperatorRouter.register('settings', {
         </div>`;
     }
 
+    // Two factor row
     function twoFactorRow(s) {
-      // An account that already has it on can always turn it off.
       if (security.two_factor_blocked && !s.two_factor_enabled) {
         return `
           <div class="op-setting">
@@ -74,6 +71,7 @@ OperatorRouter.register('settings', {
         </div>`;
     }
 
+    // Render the view
     function render() {
       const s = settings;
       cardEl.innerHTML = `
@@ -98,6 +96,7 @@ OperatorRouter.register('settings', {
         </div>`;
     }
 
+    // Save settings
     async function save(request, doneMessage) {
       saving = true;
       render();
@@ -112,9 +111,10 @@ OperatorRouter.register('settings', {
       }
     }
 
-    // ---------- Password ----------
 
+    // Open change password
     function openChangePassword() {
+      // Settings field
       const field = (id, label, autocomplete) => `
         <div class="form-field">
           <label for="${id}">${label}</label>
@@ -149,8 +149,8 @@ OperatorRouter.register('settings', {
       });
     }
 
-    // ---------- Two-factor ----------
 
+    // Open enable two factor
     function openEnableTwoFactor() {
       const modal = AdminModal.open({
         title: 'Turn on two-factor authentication',
@@ -188,6 +188,7 @@ OperatorRouter.register('settings', {
         codeEl.value = codeEl.value.replace(/\D/g, '').slice(0, 6);
       });
 
+      // Send code
       async function sendCode() {
         resendBtn.disabled = true;
         codeEl.disabled = true;
@@ -211,6 +212,7 @@ OperatorRouter.register('settings', {
       sendCode();
     }
 
+    // Confirm disable two factor
     function confirmDisableTwoFactor() {
       AdminModal.confirm({
         title: 'Turn off two-factor authentication?',
@@ -224,7 +226,6 @@ OperatorRouter.register('settings', {
       });
     }
 
-    // ---------- Events ----------
 
     cardEl.addEventListener('change', (e) => {
       if (!settings || saving) return;
@@ -234,7 +235,6 @@ OperatorRouter.register('settings', {
         save(() => OperatorApi.updateSettings({ email_notifications: on }),
           on ? 'Email notifications turned on.' : 'Email notifications turned off.');
       } else if (id === 'set-2fa') {
-        // The switch only flips once the change is confirmed.
         e.target.checked = settings.two_factor_enabled;
         if (settings.two_factor_enabled) confirmDisableTwoFactor();
         else openEnableTwoFactor();
@@ -248,6 +248,7 @@ OperatorRouter.register('settings', {
       if (e.target.id === 'set-password') openChangePassword();
     });
 
+    // Load settings
     const load = () => Promise.all([OperatorApi.settings(), OperatorApi.security()]);
     AdminUi.loadInto(cardEl, load, ([s, info]) => {
       settings = s;

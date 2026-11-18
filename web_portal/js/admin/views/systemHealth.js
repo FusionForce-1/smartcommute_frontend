@@ -1,10 +1,8 @@
-// js/admin/views/systemHealth.js
-//
-// System Health: live status of each backend service, refreshed on a timer.
-
+// Admin system health view
 AdminRouter.register('system-health', {
   title: 'System Health',
 
+  // Mount the view
   mount(el) {
     const POLL_MS = 30000;
 
@@ -15,6 +13,7 @@ AdminRouter.register('system-health', {
     const statsEl = el.querySelector('#health-stats');
     const bodyEl = el.querySelector('#health-body');
 
+    // Render the view
     function render(health) {
       const online = health.services.filter((s) => s.status !== 'down').length;
       statsEl.innerHTML = AdminUi.statGrid([

@@ -1,8 +1,4 @@
-// lib/widgets/commuter/notice_card.dart
-//
-// One notice on the Notifications screen. Unread notices are tinted in
-// their colour with a dot before the title; read ones turn white.
-
+// Notice card
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -11,12 +7,15 @@ import '../../utils/time_ago.dart';
 import 'notice_style.dart';
 import 'route_code_chip.dart';
 
+/// Notice card
 class NoticeCard extends StatelessWidget {
+  /// Create notice card
   const NoticeCard({super.key, required this.notice, required this.onTap});
 
   final CommuterNotice notice;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final style = NoticeStyle.of(notice);
@@ -50,11 +49,14 @@ class NoticeCard extends StatelessWidget {
   }
 }
 
+/// Notice icon
 class _NoticeIcon extends StatelessWidget {
+  /// Create notice icon
   const _NoticeIcon({required this.style});
 
   final NoticeStyle style;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -70,13 +72,16 @@ class _NoticeIcon extends StatelessWidget {
   }
 }
 
+/// Notice body widget
 class _NoticeBody extends StatelessWidget {
+  /// Create notice body
   const _NoticeBody({required this.notice, required this.style, required this.unread});
 
   final CommuterNotice notice;
   final NoticeStyle style;
   final bool unread;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final company = notice.companyName;

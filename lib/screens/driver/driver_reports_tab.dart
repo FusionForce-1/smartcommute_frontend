@@ -1,11 +1,4 @@
-// lib/screens/driver/driver_reports_tab.dart
-//
-// The driver's Reports tab: "Report to operator" (a breakdown, a delay, an
-// emergency, ...) and the reports they've sent, filtered with the chips
-// (Recent, Today, Yesterday, Last Month, Last Year) or a calendar day.
-// Reports only go to the driver's own operator, and operators can't reply
-// here, so there is no read state to show.
-
+// Driver reports tab
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
@@ -15,7 +8,9 @@ import '../../utils/shift_time.dart';
 import '../../utils/time_ago.dart';
 import '../../widgets/driver/report_sheet.dart';
 
+/// Driver reports tab
 class DriverReportsTab extends StatelessWidget {
+  /// Create driver reports tab
   const DriverReportsTab({super.key, required this.driver});
 
   final DriverProvider driver;
@@ -28,6 +23,7 @@ class DriverReportsTab extends StatelessWidget {
     ReportsPeriod.lastYear,
   ];
 
+  /// Pick day
   Future<void> _pickDay(BuildContext context) async {
     final today = DateTime.now();
     final picked = await showDatePicker(
@@ -46,6 +42,7 @@ class DriverReportsTab extends StatelessWidget {
     if (picked != null) driver.showReports(ReportsPeriod.day, day: picked);
   }
 
+  /// Report driver reports
   Future<void> _report(BuildContext context) async {
     final confirmation = await showReportSheet(context, driver);
     if (confirmation != null && context.mounted) {
@@ -62,6 +59,7 @@ class DriverReportsTab extends StatelessWidget {
         ReportsPeriod.day => 'No reports sent on ${formatLongDate(driver.reportsDay ?? DateTime.now())}.',
       };
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final reports = driver.reports;
@@ -173,13 +171,15 @@ class DriverReportsTab extends StatelessWidget {
   }
 }
 
-/// "Calendar" with a "Select Date" box (the picked day once chosen).
+/// Calendar field
 class _CalendarField extends StatelessWidget {
+  /// Create calendar field
   const _CalendarField({required this.day, required this.onTap});
 
   final DateTime? day;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final day = this.day;
@@ -219,13 +219,16 @@ class _CalendarField extends StatelessWidget {
   }
 }
 
+/// Period chip
 class _PeriodChip extends StatelessWidget {
+  /// Create period chip
   const _PeriodChip({required this.label, required this.selected, required this.onTap});
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
@@ -253,13 +256,14 @@ class _PeriodChip extends StatelessWidget {
   }
 }
 
-/// One sent report: category, note, the vehicle it was sent from, and when
-/// ("5 hrs ago (October 29, 2026) 10:32 AM").
+/// Report card
 class ReportCard extends StatelessWidget {
+  /// Create report card
   const ReportCard({super.key, required this.report});
 
   final DriverReport report;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final r = report;

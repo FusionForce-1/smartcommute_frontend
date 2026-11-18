@@ -1,12 +1,10 @@
-// Web: asks web/index.html to fade out its HTML loading screen.
-
+// Web splash web
 import 'dart:js_interop';
 
 @JS('smartCommuteRemoveSplash')
 external JSFunction? get _removeSplash;
 
+/// Remove web splash
 void removeWebSplash() {
-  // Missing when the page is an older index.html — then there is nothing
-  // to remove.
   _removeSplash?.callAsFunction();
 }

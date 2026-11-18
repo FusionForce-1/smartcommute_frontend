@@ -1,15 +1,14 @@
-// lib/widgets/commuter/commuter_header.dart
-//
-// Sky-blue banner with the landscape logo across the top of the commuter
-// dashboard. Extends under the status bar.
-
+// Commuter header
 import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 
+/// Commuter header
 class CommuterHeader extends StatelessWidget {
+  /// Create commuter header
   const CommuterHeader({super.key});
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
@@ -25,8 +24,6 @@ class CommuterHeader extends StatelessWidget {
           ),
           child: Align(
             alignment: Alignment.centerLeft,
-            // The PNG has wide blank margins above and below the artwork;
-            // clip to the middle band so the banner stays slim.
             child: ClipRect(
               child: Align(
                 widthFactor: 1,

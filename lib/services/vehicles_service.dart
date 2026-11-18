@@ -1,11 +1,15 @@
+// Vehicles service
 import 'package:dio/dio.dart';
 import '../models/vehicles.dart';
 
+/// Vehicles service
 class VehiclesService {
+  /// Create vehicles
   VehiclesService(this._dio);
 
   final Dio _dio;
 
+  /// Get vehicles
   Future<List<Vehicle>> getVehicles() async {
     final response = await _dio.get('/vehicles');
 

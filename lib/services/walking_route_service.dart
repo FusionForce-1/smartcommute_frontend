@@ -1,38 +1,33 @@
-// lib/services/walking_route_service.dart
-//
-// Walking path between two points along footpaths and streets, from the
-// free OpenStreetMap routing service (FOSSGIS, OSRM "foot" profile). If it
-// can't be reached, a straight line with a walking-pace estimate is used,
-// so the commuter always gets an answer.
-
+// Walking route service
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:latlong2/latlong.dart';
 
 import 'boarding_planner.dart';
 
+/// Walking route
 class WalkingRoute {
+  /// Create walking route
   const WalkingRoute({required this.points, required this.metres, required this.seconds, required this.byRoad});
 
   final List<LatLng> points;
   final double metres;
   final double seconds;
 
-  /// False when this is the straight-line fallback.
   final bool byRoad;
 
   int get steps => stepsFor(metres);
   int get minutes => (seconds / 60).ceil().clamp(1, 1 << 20);
 }
 
+/// Walking route service
 class WalkingRouteService {
+  /// Create walking route
   WalkingRouteService({Dio? http})
       : _http = http ??
             Dio(BaseOptions(
               connectTimeout: const Duration(seconds: 8),
               receiveTimeout: const Duration(seconds: 8),
-              // Not on web: browsers that honour it send a CORS preflight the
-              // service refuses, and every walk falls back to a straight line.
               headers: kIsWeb ? null : {'User-Agent': 'SmartCommute/1.0 (commuter app)'},
             ));
 
@@ -40,17 +35,20 @@ class WalkingRouteService {
   final Dio _http;
   final Map<String, WalkingRoute> _cache = {};
 
+  /// Walking route key
   static String _key(LatLng a, LatLng b) =>
       '${a.latitude.toStringAsFixed(4)},${a.longitude.toStringAsFixed(4)};'
       '${b.latitude.toStringAsFixed(4)},${b.longitude.toStringAsFixed(4)}';
 
+  /// Walking route straight
   static WalkingRoute straight(LatLng from, LatLng to) {
     final m = const Distance().as(LengthUnit.Meter, from, to);
     return WalkingRoute(points: [from, to], metres: m, seconds: m / walkMetresPerSecond, byRoad: false);
   }
 
+  /// Walking route route
   Future<WalkingRoute> route(LatLng from, LatLng to) async {
-    final key = _key(from, to);   // ~10 m grid: GPS jitter reuses the answer
+    final key = _key(from, to);
     final cached = _cache[key];
     if (cached != null) return cached;
     try {
@@ -65,7 +63,6 @@ class WalkingRouteService {
           .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
           .toList();
       final walk = WalkingRoute(
-        // Start and end exactly at the commuter and the boarding spot.
         points: [from, ...coords, to],
         metres: (r['distance'] as num).toDouble(),
         seconds: (r['duration'] as num).toDouble(),

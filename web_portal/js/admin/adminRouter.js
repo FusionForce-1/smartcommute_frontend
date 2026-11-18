@@ -1,24 +1,24 @@
-// js/admin/adminRouter.js
-//
-// Hash router for the admin portal (#/dashboard, #/users, ...).
-// Each view registers { title, mount(el) }. mount() may return a cleanup
-// function (e.g. to stop a polling timer) that runs before the next view.
-
+// Admin router
+// Admin router
 const AdminRouter = (() => {
   const views = {};
   const DEFAULT_VIEW = 'dashboard';
   let cleanup = null;
+  // On change
   let onChange = () => {};
 
+  // Register admin
   function register(name, view) {
     views[name] = view;
   }
 
+  // Current name
   function currentName() {
     const name = location.hash.replace(/^#\/?/, '');
     return views[name] ? name : DEFAULT_VIEW;
   }
 
+  // Render the view
   function render() {
     if (typeof cleanup === 'function') cleanup();
     const name = currentName();
@@ -32,7 +32,7 @@ const AdminRouter = (() => {
     window.scrollTo(0, 0);
   }
 
-  /** @param {(name: string) => void} onRouteChange — e.g. highlight the nav */
+  // Start admin
   function start(onRouteChange) {
     onChange = onRouteChange || onChange;
     window.addEventListener('hashchange', render);

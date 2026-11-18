@@ -1,8 +1,4 @@
-// lib/screens/auth/set_new_password_screen.dart
-//
-// Forgot Password, last step: lock icon, New Password, Repeat Password,
-// Reset Password. Follows VerifyOtpScreen, which only collects the code.
-
+// Set new password screen
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
@@ -11,23 +7,24 @@ import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
 
+/// Set new password screen
 class SetNewPasswordScreen extends StatefulWidget {
+  /// Create set new password
   const SetNewPasswordScreen({
     super.key,
     this.onResetPassword,
     this.onBack,
   });
 
-  /// AuthProvider.verifyOtpAndResetPassword(email, otp, newPassword)
-  /// → POST /auth/reset-password. The code is only checked here, so a
-  /// wrong or expired code fails on this screen.
   final Future<void> Function(String newPassword)? onResetPassword;
   final VoidCallback? onBack;
 
+  /// Create widget state
   @override
   State<SetNewPasswordScreen> createState() => _SetNewPasswordScreenState();
 }
 
+/// Set new password state
 class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _password = TextEditingController();
@@ -35,6 +32,7 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  /// Clean up resources
   @override
   void dispose() {
     _password.dispose();
@@ -42,6 +40,7 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
     super.dispose();
   }
 
+  /// Handle reset
   Future<void> _handleReset() async {
     if (!_formKey.currentState!.validate()) return;
     if (_password.text != _repeatPassword.text) {
@@ -67,6 +66,7 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
     }
   }
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return Scaffold(

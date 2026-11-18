@@ -1,14 +1,11 @@
-// lib/widgets/fare_breakdown_sheet.dart
-//
-// Fare breakdown sa gipili nga route option — total, ETA, transfers,
-// ug fare kada leg. Numbers gikan tanan sa backend /trip-plan.
-
+// fare breakdown sheet
 import 'package:flutter/material.dart';
 
 import '../config/theme_config.dart';
 import '../constants/app_icons.dart';
 import '../models/trip_plan.dart';
 
+/// Show fare breakdown sheet
 Future<void> showFareBreakdownSheet(BuildContext context, RouteOption option) {
   return showModalBottomSheet<void>(
     context: context,
@@ -22,11 +19,14 @@ Future<void> showFareBreakdownSheet(BuildContext context, RouteOption option) {
   );
 }
 
+/// fare breakdown sheet
 class FareBreakdownSheet extends StatelessWidget {
+  /// Create fare breakdown sheet
   const FareBreakdownSheet({super.key, required this.option});
 
   final RouteOption option;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -73,11 +73,14 @@ class FareBreakdownSheet extends StatelessWidget {
   }
 }
 
+/// Leg row
 class _LegRow extends StatelessWidget {
+  /// Create leg row
   const _LegRow({required this.leg});
 
   final RouteLeg leg;
 
+  /// Build the widget
   @override
   Widget build(BuildContext context) {
     return ListTile(

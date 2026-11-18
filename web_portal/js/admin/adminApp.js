@@ -1,8 +1,5 @@
-// js/admin/adminApp.js
-//
-// Admin portal bootstrap: auth guard, sidebar, header, then the router.
-// Loaded last so every view has registered itself already.
-
+// Admin app
+// Admin app
 const AdminApp = (() => {
   const LOGIN_URL = '../index.html#/login';
 
@@ -23,10 +20,12 @@ const AdminApp = (() => {
     ['Config', 'Change sign-in, GPS, plan, message and trip planner limits; saved changes apply right away. Server Setup shows what is set on the server, and Send test email checks that it can deliver mail.'],
   ];
 
+  // Redirect to login
   function redirectToLogin() {
     window.location.replace(LOGIN_URL);
   }
 
+  // Nav link
   function navLink({ route, label, icon }) {
     return `
       <a href="#/${route}" class="admin-nav__link" data-route="${route}">
@@ -34,6 +33,7 @@ const AdminApp = (() => {
       </a>`;
   }
 
+  // Nav button
   function navButton(id, label, icon) {
     return `
       <button type="button" class="admin-nav__link" id="${id}">
@@ -41,6 +41,7 @@ const AdminApp = (() => {
       </button>`;
   }
 
+  // Render sidebar
   function renderSidebar() {
     document.getElementById('admin-nav').innerHTML = NAV_ITEMS.map(navLink).join('');
     document.getElementById('admin-nav-footer').innerHTML =
@@ -53,6 +54,7 @@ const AdminApp = (() => {
     document.getElementById('admin-help').addEventListener('click', openHelp);
   }
 
+  // Highlight nav
   function highlightNav(activeRoute) {
     document.querySelectorAll('#admin-nav [data-route]').forEach((link) => {
       const isActive = link.dataset.route === activeRoute;
@@ -62,7 +64,7 @@ const AdminApp = (() => {
     });
   }
 
-  /** Admin's name under the logo. There is no /users/me, so find this account in the admin list. */
+  // Load account
   async function loadAccount() {
     try {
       const admins = await AdminApi.listUsers({ role: 'admin', limit: 200 });
@@ -71,10 +73,10 @@ const AdminApp = (() => {
       document.getElementById('admin-name').textContent = me.name;
       document.getElementById('admin-account').hidden = false;
     } catch {
-      // The sidebar works without the name; the header still shows the email.
     }
   }
 
+  // Open help
   function openHelp() {
     AdminModal.open({
       title: 'Help',
@@ -85,6 +87,7 @@ const AdminApp = (() => {
     });
   }
 
+  // Start admin app
   function start() {
     if (!Session.accessToken || Session.role !== 'admin') {
       redirectToLogin();
