@@ -1,3 +1,5 @@
+// Commuter location source
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -6,7 +8,9 @@ import 'package:latlong2/latlong.dart';
 
 enum LocationFailure { servicesOff, denied, unavailable, timeout }
 
+/// Location lookup failure
 class LocationException implements Exception {
+  /// Create location failure
   const LocationException(this.reason);
 
   final LocationFailure reason;
@@ -14,8 +18,6 @@ class LocationException implements Exception {
   String get message => switch (reason) {
         LocationFailure.servicesOff => 'Turn on location services to plan a trip.',
         LocationFailure.denied => 'Location permission is needed to plan a trip.',
-        // Browsers (Brave especially) rely on the computer's own location
-        // setting; with it off they report "position unavailable".
         LocationFailure.unavailable => kIsWeb
             ? "Your browser couldn't find where you are. Turn on location for this "
                 'device (Windows: Settings › Privacy & security › Location), or tap '
@@ -27,30 +29,30 @@ class LocationException implements Exception {
       };
 }
 
-/// Gi-abstract ang GPS para ma-test ang TripPlanProvider nga walay Geolocator.
+/// Location source interface
 abstract class LocationSource {
+  /// Get current location
   Future<LatLng> currentLocation();
 
-  /// Position updates while the commuter moves at least [distanceFilterM].
-  /// Permission is checked by [currentLocation] first, so this assumes it.
+  /// Stream position updates
   Stream<LatLng> positionStream({int distanceFilterM = 25});
 
+  /// Open app settings
   Future<void> openSettings();
 
-  /// False kung dili ma-abli ang settings (e.g. web — mo-throw ang geolocator).
   bool get canOpenSettings;
 }
 
+/// Geolocator location source
 class GeolocatorLocationSource implements LocationSource {
-  /// How long the precise (GPS) attempt gets before falling back.
   static const Duration _preciseLimit = Duration(seconds: 8);
 
-  /// How long the quick (Wi-Fi / network) fallback gets.
   static const Duration _quickLimit = Duration(seconds: 10);
 
   @override
   bool get canOpenSettings => !kIsWeb;
 
+  /// Get current location
   @override
   Future<LatLng> currentLocation() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
@@ -66,8 +68,6 @@ class GeolocatorLocationSource implements LocationSource {
       throw const LocationException(LocationFailure.denied);
     }
 
-    // Precise first; indoors or on a laptop without GPS that can fail or
-    // never come, so fall back to a quicker, approximate fix.
     try {
       return await _position(LocationAccuracy.high, _preciseLimit);
     } on LocationException catch (e) {
@@ -76,8 +76,7 @@ class GeolocatorLocationSource implements LocationSource {
     return _position(LocationAccuracy.low, _quickLimit);
   }
 
-  /// One position lookup, with the platform's errors turned into
-  /// [LocationException]s the planner can explain.
+  /// One position lookup
   Future<LatLng> _position(LocationAccuracy accuracy, Duration limit) async {
     try {
       final p = await Geolocator.getCurrentPosition(
@@ -95,6 +94,7 @@ class GeolocatorLocationSource implements LocationSource {
     }
   }
 
+  /// Stream position updates
   @override
   Stream<LatLng> positionStream({int distanceFilterM = 25}) {
     return Geolocator.getPositionStream(
@@ -105,6 +105,7 @@ class GeolocatorLocationSource implements LocationSource {
     ).map((p) => LatLng(p.latitude, p.longitude));
   }
 
+  /// Open app settings
   @override
   Future<void> openSettings() async {
     await Geolocator.openAppSettings();

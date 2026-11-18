@@ -1,31 +1,18 @@
-// js/operator/trackerSetup.js
-//
-// "Set up GPS tracker" for one vehicle, two ways:
-//
-//  * USB — the tracker is plugged into this computer. The browser talks to
-//    it over the cable (Web Serial: Chrome/Edge on a computer), the portal
-//    issues the vehicle's device key and writes WiFi + vehicle + key into
-//    the tracker. The operator never sees or types the key.
-//
-//  * Claim code — the tracker joins the shared setup hotspot and waits; the
-//    operator types the code from its sticker, and the server hands the
-//    tracker its settings on its next check-in (POST /devices/claim).
-//
-// Serial protocol (firmware smart_commute_tracker.ino): one JSON object per
-// line prefixed "@@"; the tracker answers "@@{...}" amid its normal logs.
+// GPS tracker setup (portal)
 
 const TrackerSetup = (() => {
+  // Escape HTML text
   const esc = (s) => AdminUi.escapeHtml(String(s ?? ''));
   const SETUP_SSID = 'SmartCommute-Setup';
   const SETUP_PASS = 'smartcommute';
   const MAX_NETWORKS = 3;
 
-  // ---------- WiFi list (shared by both ways) ----------
-
+  // WiFi rows HTML
   function wifiRows(count = 1) {
     return Array.from({ length: count }, (_, i) => wifiRow(i)).join('');
   }
 
+  // One WiFi row HTML
   function wifiRow(i) {
     return `
       <div class="ts-wifi" data-row="${i}" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
@@ -34,6 +21,7 @@ const TrackerSetup = (() => {
       </div>`;
   }
 
+  // WiFi form section
   function wifiSection() {
     return `
       <div class="form-field">
@@ -45,6 +33,7 @@ const TrackerSetup = (() => {
       </div>`;
   }
 
+  // Add-network button handler
   function bindWifi(m) {
     m.querySelector('#ts-add-wifi').addEventListener('click', () => {
       const list = m.querySelector('#ts-wifi-list');
@@ -54,11 +43,7 @@ const TrackerSetup = (() => {
     });
   }
 
-  /**
-   * The WiFi rows as [{ssid, password}], or throws a readable error. Names
-   * are trimmed, except one that exactly matches a scanned network: WiFi
-   * names may really start or end with a space.
-   */
+  // Read and check WiFi
   function readWifi(m, nearby = []) {
     const nets = [...m.querySelectorAll('.ts-wifi')]
       .map((row) => {
@@ -79,12 +64,10 @@ const TrackerSetup = (() => {
     return nets;
   }
 
-  // ---------- Serial link to the tracker (USB) ----------
-
-  // One port per page: reopening a port that is already open throws.
   const link = { port: null, reader: null, writer: null, pipe: null, buffer: '', waiters: [], log: [] };
   let watchingUnplug = false;
 
+  // Handle serial line
   function onLine(line) {
     if (!line.startsWith('@@')) {
       link.log.push(line);
@@ -94,8 +77,6 @@ const TrackerSetup = (() => {
     let msg;
     try { msg = JSON.parse(line.slice(2)); } catch { return; }
     link.waiters = link.waiters.filter((w) => {
-      // "?" = a line the tracker couldn't read. A command that is being
-      // re-sent waits for a clean copy instead of failing on a garbled one.
       if (msg.cmd === '?' && w.retrying) return true;
       if (w.cmd !== msg.cmd && msg.cmd !== '?') return true;
       w.resolve(msg);
@@ -103,6 +84,7 @@ const TrackerSetup = (() => {
     });
   }
 
+  // Read serial port lines
   async function readLoop() {
     const decoder = new TextDecoderStream();
     link.pipe = link.port.readable.pipeTo(decoder.writable).catch(() => {});
@@ -120,19 +102,15 @@ const TrackerSetup = (() => {
         }
       }
     } catch {
-      // Unplugged or closed: callers time out with a clear message.
     }
   }
 
+  // Open tracker serial port
   async function connect() {
     if (link.port) return;
-    // Must run straight from the click: the browser only shows its device
-    // picker in response to a user gesture.
     const port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
-    // Release the auto-reset lines so the ESP32 runs instead of sitting in
-    // reset / the bootloader (the board ties them to EN and GPIO0).
-    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch { /* not all adapters */ }
+    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch { }
     link.port = port;
     link.writer = port.writable.getWriter();
     readLoop();
@@ -144,22 +122,17 @@ const TrackerSetup = (() => {
     }
   }
 
+  // Close serial port
   async function disconnect() {
     const { port, reader, writer, pipe } = link;
     Object.assign(link, { port: null, reader: null, writer: null, pipe: null, buffer: '' });
-    // The port only closes once its streams are unlocked: stop reading, let
-    // the pipe finish, release the writer.
-    try { await reader?.cancel(); } catch { /* already closed */ }
+    try { await reader?.cancel(); } catch { }
     await pipe;
-    try { writer?.releaseLock(); } catch { /* already released */ }
-    try { await port?.close(); } catch { /* already closed */ }
+    try { writer?.releaseLock(); } catch { }
+    try { await port?.close(); } catch { }
   }
 
-  /**
-   * Sends a command and waits for its "@@" reply. It's re-sent every
-   * `retryMs`, because the tracker may be rebooting (opening the port can
-   * reset it) or busy with a scan.
-   */
+  // Send USB command
   async function command(cmd, payload = {}, { timeoutMs = 20000, retryMs = 0 } = {}) {
     if (!link.writer) throw new Error('The tracker is not connected.');
     const line = `@@${JSON.stringify({ cmd, ...payload })}\n`;
@@ -191,15 +164,14 @@ const TrackerSetup = (() => {
     });
   }
 
-  /** Where the tracker should report: the server this portal uses, when it's a public (https) one. */
+  // Server for the tracker
   function serverForTracker() {
     const url = new URL(API_BASE_URL);
-    if (url.protocol !== 'https:') return null;   // local dev backend: the tracker keeps its default
+    if (url.protocol !== 'https:') return null;
     return { host: url.hostname, port: Number(url.port) || 443, tls: true };
   }
 
-  // ---------- Screens ----------
-
+  // Choose USB or code
   function openChooser(vehicle, onDone) {
     const usbOk = 'serial' in navigator;
     AdminModal.open({
@@ -225,10 +197,10 @@ const TrackerSetup = (() => {
     }));
   }
 
-  // Lowercase, letters/digits only: "Connect Ka?" and "connect ka" look alike.
+  // Loose WiFi name compare
   const looseName = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-  /** Stops a near-miss typo (e.g. "connect ka" for "connect ka?") before it strands the tracker. */
+  // Catch WiFi name typos
   function checkAgainstNearby(networks, nearby) {
     for (const n of networks) {
       if (nearby.includes(n.ssid)) continue;
@@ -237,14 +209,15 @@ const TrackerSetup = (() => {
         throw new Error(`There's no WiFi named "${n.ssid}" nearby. Did you mean "${near}"? `
           + 'The name must match exactly, including capitals and symbols.');
       }
-      // Not nearby at all: fine (e.g. the jeep's hotspot is off right now).
     }
   }
 
+  // USB setup screen
   function openUsb(vehicle, onDone) {
     let info = null;
-    let nearby = [];   // WiFi names the tracker can see, from its last scan
+    let nearby = [];
 
+    // Scan nearby WiFi
     async function scan(modal) {
       const btn = modal.querySelector('#ts-scan');
       btn.disabled = true;
@@ -287,18 +260,13 @@ const TrackerSetup = (() => {
               modal.querySelector('#ts-form').hidden = false;
               modal.querySelector('.admin-modal__foot [data-index="1"]').textContent = 'Save to tracker';
               modal.querySelector('.ts-ssid').focus();
-              await scan(modal);   // fills the name suggestions
+              await scan(modal);
               return;
             }
             const networks = readWifi(modal, nearby);
             checkAgainstNearby(networks, nearby);
             const { device_key: key } = await OperatorApi.issueDeviceKey(vehicle.vehicle_id);
             const server = serverForTracker();
-            // The settings line is longer than the tracker's USB input buffer
-            // (256 bytes on firmware 2.1.0 and older). While it's busy
-            // reconnecting it can't drain it and the line is cut off, so it's
-            // re-sent until the tracker confirms. A new key was just issued,
-            // so the old one no longer works: say so if this still fails.
             try {
               await command('configure', {
                 networks, vehicle_id: vehicle.vehicle_id, device_key: key, ...(server ? { server } : {}),
@@ -307,7 +275,7 @@ const TrackerSetup = (() => {
               throw new Error(`${err.message} Until a save goes through, this tracker can't send GPS `
                 + '(its old key was replaced) — keep it plugged in and click Save to tracker again.');
             }
-            await disconnect();   // it restarts with the new settings
+            await disconnect();
             done(vehicle, networks, onDone, 'saved over USB');
           },
         },
@@ -317,6 +285,7 @@ const TrackerSetup = (() => {
     m.querySelector('#ts-scan').addEventListener('click', () => scan(m));
   }
 
+  // Show connected tracker
   function showDevice(m, info, vehicle) {
     const current = info.configured
       ? (info.vehicle_id === vehicle.vehicle_id ? 'already set up for this vehicle' : 'currently set up for another vehicle')
@@ -334,7 +303,7 @@ const TrackerSetup = (() => {
     offerFirmwareUpdate(m, info);
   }
 
-  /** On the USB card: point out a newer published firmware and offer to install it. */
+  // Offer newer firmware
   async function offerFirmwareUpdate(m, info) {
     const release = await fetch(firmwareUrl('latest.json'), { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -352,18 +321,12 @@ const TrackerSetup = (() => {
     m.querySelector('#ts-install-update')?.addEventListener('click', () => openInstaller());
   }
 
-  // ---------- Label (sticker on the tracker) ----------
-
-  /** Address a phone opens when it scans the label: the portal, with the code filled in. */
+  // Label QR link
   function claimLink(code) {
     return `${location.origin}${location.pathname}?claim=${encodeURIComponent(code.replace(/-/g, ''))}`;
   }
 
-  /**
-   * Opens a printable sticker: big claim code, a QR code that opens the
-   * portal with the code filled in, and the three steps an operator follows.
-   * The QR is drawn in the print window by qrcodejs (no data leaves the browser).
-   */
+  // Print tracker label
   function printLabel(info) {
     const win = window.open('', '_blank', 'width=480,height=640');
     if (!win) throw new Error('Allow pop-ups for this site to print the label.');
@@ -410,6 +373,7 @@ const TrackerSetup = (() => {
     win.document.close();
   }
 
+  // Claim-code setup screen
   function openClaim(vehicle, onDone, code = '') {
     const m = AdminModal.open({
       title: `Claim code setup — ${vehicle.plate_number}`,
@@ -451,11 +415,12 @@ const TrackerSetup = (() => {
     (code ? m.querySelector('.ts-ssid') : m.querySelector('#ts-code')).focus();
   }
 
+  // Wait for tracker pickup
   async function waitForDelivery(deviceId, progressEl) {
     const started = Date.now();
     while (Date.now() - started < 3 * 60 * 1000) {
       await new Promise((r) => setTimeout(r, 3000));
-      if (!progressEl.isConnected) return new Promise(() => {});   // dialog closed: stop quietly
+      if (!progressEl.isConnected) return new Promise(() => {});
       const s = await OperatorApi.trackerSetupStatus(deviceId).catch(() => null);
       if (s?.state === 'delivered') return;
       const secs = Math.round((Date.now() - started) / 1000);
@@ -465,6 +430,7 @@ const TrackerSetup = (() => {
       + `${SETUP_SSID} hotspot; it will still pick them up within the next hour.`);
   }
 
+  // Setup done screen
   function done(vehicle, networks, onDone, how) {
     AdminModal.open({
       title: 'Tracker set up',
@@ -480,10 +446,7 @@ const TrackerSetup = (() => {
 
   window.addEventListener('beforeunload', () => { disconnect(); });
 
-  /**
-   * Opened from a scanned label (operator.html?claim=CODE): the code is
-   * already known, so the operator only picks the jeep and the WiFi.
-   */
+  // Claim from scanned label
   async function claimFromLabel(rawCode) {
     const code = String(rawCode).toUpperCase().replace(/[^0-9A-Z]/g, '');
     const shown = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
@@ -526,13 +489,7 @@ const TrackerSetup = (() => {
     m.querySelector('#ts-vehicle').focus();
   }
 
-  // ---------- WiFi of a tracker that's already set up (remote) ----------
-  //
-  // Lists what the tracker reported, lets the operator keep, re-password,
-  // remove or add networks (max 3, min 1) and sends the new list over the
-  // tracker's GPS connection. Saved passwords are never shown or needed:
-  // an unchanged network goes as {ssid, keep: true}.
-
+  // WiFi dialog banner
   function wifiStatusLine(s) {
     if (s.last_error) return `<div class="op-card" style="border-left:4px solid var(--op-red);margin-bottom:12px;"><p class="modal-text" style="margin:0;">${esc(s.last_error)}</p></div>`;
     if (s.pending) {
@@ -543,6 +500,7 @@ const TrackerSetup = (() => {
     return '';
   }
 
+  // Remote WiFi dialog
   async function openWifi(vehicle) {
     const s = await OperatorApi.trackerWifi(vehicle.vehicle_id);
     if (!s.supports_remote) {
@@ -560,7 +518,6 @@ const TrackerSetup = (() => {
       return;
     }
 
-    // One row per network: saved ones start as "keep".
     const rows = s.saved.map((ssid) => ({ ssid, saved: true, removed: false, changePw: false }));
 
     const m = AdminModal.open({
@@ -588,6 +545,7 @@ const TrackerSetup = (() => {
       ],
     });
 
+    // Network row HTML
     function rowHtml(r, i) {
       if (r.removed) {
         return `<div class="op-card" style="margin-bottom:8px;opacity:.6;display:flex;justify-content:space-between;align-items:center;">
@@ -616,13 +574,13 @@ const TrackerSetup = (() => {
       </div>`;
     }
 
-    // Typed values live in `rows`: read them before changing the list,
-    // since redrawing renumbers the inputs.
+    // Save typed values
     function captureRows(modal) {
       modal.querySelectorAll('[data-ssid]').forEach((el) => { rows[el.dataset.ssid].ssid = el.value; });
       modal.querySelectorAll('[data-pass]').forEach((el) => { rows[el.dataset.pass].password = el.value; });
     }
 
+    // Redraw network rows
     function drawRows(modal) {
       modal.querySelector('#tw-rows').innerHTML = rows.map(rowHtml).join('');
       modal.querySelectorAll('[data-pass]').forEach((el) => { el.value = rows[el.dataset.pass].password || ''; });
@@ -630,6 +588,7 @@ const TrackerSetup = (() => {
       modal.querySelector('#tw-add').hidden = live >= MAX_NETWORKS;
     }
 
+    // Update online status
     function render(modal, status) {
       Object.assign(s, status);
       modal.querySelector('#tw-online').innerHTML = s.online
@@ -638,6 +597,7 @@ const TrackerSetup = (() => {
       modal.querySelector('#tw-status').innerHTML = wifiStatusLine(s);
     }
 
+    // Build list to send
     function collect(modal) {
       captureRows(modal);
       const live = rows.filter((r) => !r.removed && (r.saved || r.ssid.trim()));
@@ -656,6 +616,7 @@ const TrackerSetup = (() => {
       return networks;
     }
 
+    // Wait for tracker confirmation
     async function waitForTracker(modal) {
       const started = Date.now();
       while (Date.now() - started < 60000) {
@@ -673,7 +634,7 @@ const TrackerSetup = (() => {
           }
           return;
         }
-        if (!status.online) return;   // offline: the banner says it'll get it on reconnect
+        if (!status.online) return;
       }
     }
 
@@ -700,8 +661,6 @@ const TrackerSetup = (() => {
     showFirmware(m, vehicle);
   }
 
-  // ---------- Firmware updates over the air ----------
-
   const FW_STATE = {
     pending: 'Waiting for the tracker to come online…',
     sent: 'Sent to the tracker…',
@@ -709,6 +668,7 @@ const TrackerSetup = (() => {
     done: '✓ Updated.',
   };
 
+  // Firmware status line
   async function showFirmware(m, vehicle) {
     const box = m.querySelector('#tw-fw');
     let fw;
@@ -748,16 +708,11 @@ const TrackerSetup = (() => {
     if (busy) setTimeout(() => { if (m.isConnected) showFirmware(m, vehicle); }, 5000);
   }
 
-  // ---------- Firmware installer (new / blank trackers) ----------
-  //
-  // ESP Web Tools writes the firmware published in /firmware (see
-  // Smart-Commute-Backend/tools/release_firmware.py) straight from the
-  // browser over USB. It writes only the program, never the settings area,
-  // so reinstalling keeps a tracker's WiFi, vehicle and claim code.
-
   const ESP_WEB_TOOLS = 'https://unpkg.com/esp-web-tools@10.2.1/dist/web/install-button.js?module';
+  // Firmware file URL
   const firmwareUrl = (file) => new URL(`../firmware/${file}`, location.href).href;
 
+  // Load firmware installer
   function loadEspWebTools() {
     if (document.querySelector(`script[src="${ESP_WEB_TOOLS}"]`)) return;
     const script = document.createElement('script');
@@ -766,8 +721,9 @@ const TrackerSetup = (() => {
     document.head.appendChild(script);
   }
 
+  // Install firmware screen
   async function openInstaller() {
-    await disconnect();   // the installer needs the USB port to itself
+    await disconnect();
     loadEspWebTools();
     const release = await fetch(firmwareUrl('latest.json'), { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -790,7 +746,6 @@ const TrackerSetup = (() => {
         </esp-web-install-button>`,
       actions: [{ label: 'Close', variant: 'ghost', onClick: AdminModal.close }],
     });
-    // The installer opens its own dialog; don't leave ours on top of it.
     m.querySelector('#fw-install')?.addEventListener('click', () => {
       m.style.visibility = 'hidden';
       const reveal = () => { m.style.visibility = ''; };

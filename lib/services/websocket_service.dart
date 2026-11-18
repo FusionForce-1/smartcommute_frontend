@@ -1,26 +1,4 @@
-// lib/services/websocket_service.dart
-//
-// Two WebSocket clients, matching the backend's two GPS sockets:
-//
-//   WebSocketService     — commuter side, WSS /ws/live
-//     Receives vehicle broadcasts. Reconnects automatically when the
-//     connection drops, so the map doesn't silently stop updating.
-//
-//   GpsIngestionSession  — driver side, WSS /ws/gps/{vehicle_id}
-//     The driver's phone as a backup for the jeep's tracker: it streams
-//     during a shift, and the backend uses its fixes only while the tracker
-//     is offline. Frames are JSON {"lat","lng","spd","hdg","ts"}: spd in
-//     km/h, hdg in degrees from north, ts the device fix time (ISO 8601 UTC).
-//
-// The driver's access token goes in the subprotocols ("bearer", <token>):
-// browsers can't set headers on a WebSocket. Tokens last 15 minutes, so
-// when the backend ends the session for an expired token the driver
-// session reconnects with a fresh one.
-//
-// The backend watchdog marks a vehicle "signal_lost" after 30 s without a
-// frame and re-arms once frames resume. A parked vehicle's GPS stream goes
-// quiet (distance filter), so the driver session re-sends the last fix on
-// a keepalive timer to avoid false signal-lost alerts.
+// App WebSocket clients
 
 import 'dart:async';
 import 'dart:convert';
@@ -31,23 +9,22 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../config/env_config.dart';
 
+/// Build WebSocket address
 Uri _wsUri(String path) {
   final base = EnvConfig.wsBaseUrl.replaceAll(RegExp(r'/+$'), '');
   return Uri.parse('$base$path');
 }
 
-/// Exponential backoff: 1, 2, 4, 8, 16, then 30 s max.
+/// Reconnect wait time
 Duration _backoff(int attempt) =>
     Duration(seconds: attempt >= 5 ? 30 : 1 << attempt);
 
-// =================================================================
-// COMMUTER — live vehicle broadcast
-// =================================================================
-
+/// Live vehicle updates client
 class WebSocketService {
+  /// Create live client
   WebSocketService({String? url}) : _url = url;
 
-  final String? _url; // defaults to WS_BASE_URL + /ws/live
+  final String? _url;
 
   WebSocketChannel? _channel;
   StreamSubscription? _subscription;
@@ -58,6 +35,7 @@ class WebSocketService {
 
   Stream<dynamic>? get messages => _channel?.stream;
 
+  /// Open live connection
   void connect() {
     _active = true;
     _reconnectTimer?.cancel();
@@ -72,14 +50,12 @@ class WebSocketService {
     channel.ready.then((_) {
       _reconnectAttempt = 0;
     }).catchError((Object error) {
-      // Failure is also delivered through the stream's onError/onDone,
-      // which schedules the reconnect.
     });
 
-    // Re-attach the listener after a reconnect.
     if (_onMessage != null) _listen(channel);
   }
 
+  /// Set message handler
   void listenForMessages(
     void Function(dynamic message) onMessage,
   ) {
@@ -88,6 +64,7 @@ class WebSocketService {
     if (channel != null) _listen(channel);
   }
 
+  /// Listen to connection
   void _listen(WebSocketChannel channel) {
     _subscription?.cancel();
     _subscription = channel.stream.listen(
@@ -109,6 +86,7 @@ class WebSocketService {
     );
   }
 
+  /// Plan next reconnect
   void _scheduleReconnect() {
     if (!_active) return;
     _channel = null;
@@ -118,6 +96,7 @@ class WebSocketService {
     _reconnectTimer = Timer(delay, connect);
   }
 
+  /// Close live connection
   void disconnect() {
     _active = false;
     _reconnectTimer?.cancel();
@@ -128,16 +107,13 @@ class WebSocketService {
   }
 }
 
-// =================================================================
-// DRIVER — GPS ingestion
-// =================================================================
-
 enum GpsSessionState { idle, connecting, live, reconnecting, error }
 
-/// Returns a current (refreshed if needed) access token, or null.
 typedef AccessTokenProvider = Future<String?> Function();
 
+/// Phone GPS sharing session
 class GpsIngestionSession extends ChangeNotifier {
+  /// Create GPS session
   GpsIngestionSession({
     required this.accessToken,
     this.keepaliveInterval = const Duration(seconds: 10),
@@ -145,10 +121,8 @@ class GpsIngestionSession extends ChangeNotifier {
 
   final AccessTokenProvider accessToken;
 
-  /// Must stay well under the backend's 30 s watchdog.
   final Duration keepaliveInterval;
 
-  /// Close reason the backend sends when the access token runs out.
   static const _sessionExpired = 'Session expired';
 
   GpsSessionState _state = GpsSessionState.idle;
@@ -171,8 +145,7 @@ class GpsIngestionSession extends ChangeNotifier {
   Position? get lastFix => _lastFix;
   bool get isActive => _active;
 
-  /// Starts streaming this device's location for [vehicleId].
-  /// Throws if location permission is denied or services are off.
+  /// Start sharing location
   Future<void> start(String vehicleId) async {
     if (_active) await stop();
     await _ensureLocationPermission();
@@ -185,7 +158,7 @@ class GpsIngestionSession extends ChangeNotifier {
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // metres
+        distanceFilter: 5,
       ),
     ).listen(
       _onFix,
@@ -196,6 +169,7 @@ class GpsIngestionSession extends ChangeNotifier {
     await _connect();
   }
 
+  /// Stop sharing location
   Future<void> stop() async {
     _active = false;
     _keepaliveTimer?.cancel();
@@ -209,6 +183,7 @@ class GpsIngestionSession extends ChangeNotifier {
     _setState(GpsSessionState.idle);
   }
 
+  /// Check location permission
   Future<void> _ensureLocationPermission() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw Exception('Location services are turned off.');
@@ -223,6 +198,7 @@ class GpsIngestionSession extends ChangeNotifier {
     }
   }
 
+  /// Open GPS socket
   Future<void> _connect() async {
     if (!_active || _vehicleId == null) return;
     _setState(_reconnectAttempt == 0
@@ -253,22 +229,20 @@ class GpsIngestionSession extends ChangeNotifier {
     _setState(GpsSessionState.live);
 
     _socketSub = channel.stream.listen(
-      (_) {}, // server doesn't send anything on this socket
+      (_) {},
       onDone: () => _onSocketClosed(channel.closeCode, channel.closeReason),
       onError: (_) => _onSocketClosed(channel.closeCode, channel.closeReason),
       cancelOnError: true,
     );
 
-    // Push the latest fix right away so the map updates on (re)connect.
     _sendLastFix();
   }
 
+  /// Handle socket close
   void _onSocketClosed(int? code, String? reason) {
     _channel = null;
     _socketSub = null;
     if (!_active) return;
-    // 1008 = the backend refused this session. An expired token is fixed by
-    // reconnecting (with a fresh one); any other refusal won't change.
     if (code == 1008 && !(reason ?? '').startsWith(_sessionExpired)) {
       _active = false;
       _keepaliveTimer?.cancel();
@@ -279,6 +253,7 @@ class GpsIngestionSession extends ChangeNotifier {
     _scheduleReconnect('Connection lost');
   }
 
+  /// Plan next reconnect
   void _scheduleReconnect(String reason) {
     if (!_active) return;
     _error = reason;
@@ -288,11 +263,13 @@ class GpsIngestionSession extends ChangeNotifier {
     _reconnectTimer = Timer(delay, _connect);
   }
 
+  /// Handle new fix
   void _onFix(Position fix) {
     _lastFix = fix;
     _sendLastFix();
   }
 
+  /// Resend if quiet
   void _keepalive() {
     final last = _lastSentAt;
     if (last == null || DateTime.now().difference(last) >= keepaliveInterval) {
@@ -300,6 +277,7 @@ class GpsIngestionSession extends ChangeNotifier {
     }
   }
 
+  /// Send latest fix
   void _sendLastFix() {
     final fix = _lastFix;
     final channel = _channel;
@@ -309,27 +287,29 @@ class GpsIngestionSession extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// JSON frame accepted by the backend's gps_ingestion handler.
+  /// Fix to JSON frame
   @visibleForTesting
   static Map<String, dynamic> encodeFix(Position fix) => {
         'lat': fix.latitude,
         'lng': fix.longitude,
-        // Geolocator reports m/s and uses negative values for "unknown".
         'spd': fix.speed >= 0 ? double.parse((fix.speed * 3.6).toStringAsFixed(2)) : null,
         'hdg': fix.heading >= 0 ? double.parse(fix.heading.toStringAsFixed(2)) : null,
         'ts': fix.timestamp.toUtc().toIso8601String(),
       };
 
+  /// Change session state
   void _setState(GpsSessionState s) {
     _state = s;
     notifyListeners();
   }
 
+  /// Set error state
   void _setError(String message) {
     _error = message;
     _setState(GpsSessionState.error);
   }
 
+  /// Stop on dispose
   @override
   void dispose() {
     stop();
