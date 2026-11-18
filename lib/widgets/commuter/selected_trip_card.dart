@@ -19,10 +19,20 @@ class SelectedTripCard extends StatelessWidget {
     required this.onCancel,
     required this.onOpen,
     this.progress,
+    this.crowd,
+    this.crowdOnBoard = false,
   });
 
   /// Where the commuter is in the trip; null before their first GPS fix.
   final TripProgressState? progress;
+
+  /// Live crowd level ("low" | "medium" | "high") of the jeep that matters
+  /// now: the one being ridden, or the next one coming to the boarding stop.
+  /// Null when that jeep has no live data: the line is hidden.
+  final String? crowd;
+
+  /// [crowd] is the jeep the commuter is on, not the next one to board.
+  final bool crowdOnBoard;
 
   final SelectedTrip trip;
   final VoidCallback onCancel;
@@ -98,6 +108,29 @@ class SelectedTripCard extends StatelessWidget {
                       '${formatTransfers(option.transfers)}',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                     ),
+                    if (_crowd() case (final label, final level, final hint, final color)) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        key: const Key('tripCrowdLevel'),
+                        children: [
+                          Icon(Icons.groups, size: 18, color: color),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text.rich(
+                              TextSpan(children: [
+                                TextSpan(text: '$label: '),
+                                TextSpan(
+                                  text: level,
+                                  style: TextStyle(fontWeight: FontWeight.w600, color: color),
+                                ),
+                                TextSpan(text: ' · $hint'),
+                              ]),
+                              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -111,6 +144,24 @@ class SelectedTripCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Amber text is hard to read on white; this darker shade keeps the hue.
+  static const Color _mediumCrowd = Color(0xFFB26A00);
+
+  /// ("Next 07B", "Low", "seats available", green) / ("Your jeep", …), or null.
+  (String, String, String, Color)? _crowd() {
+    final (String, String, Color)? look = switch (crowd) {
+      'low' => ('Low', 'seats available', AppColors.success),
+      'medium' => ('Medium', 'filling up', _mediumCrowd),
+      'high' => ('High', 'nearly full', AppColors.error),
+      _ => null,
+    };
+    if (look == null) return null;
+    final (level, hint, color) = look;
+    final leg = trip.option.legs[progress?.legIndex ?? 0];
+    final label = crowdOnBoard ? 'Your jeep' : 'Next ${leg.routeCode ?? 'jeep'}';
+    return (label, level, hint, color);
   }
 
   static String _metres(double m) => m < 1000 ? '${m.round()} m' : '${(m / 1000).toStringAsFixed(1)} km';

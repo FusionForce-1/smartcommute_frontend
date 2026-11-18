@@ -418,14 +418,45 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           ? const SizedBox(width: double.infinity)
           : Padding(
               padding: padding,
-              child: SelectedTripCard(
-                trip: trip,
-                progress: _progress?.state,
-                onOpen: _openSelectedTrip,
-                onCancel: widget.onCancelTrip ?? () {},
+              // Rebuilt on every vehicle update, so the crowd level stays live.
+              child: ValueListenableBuilder<int>(
+                valueListenable: _fleetVersion,
+                builder: (context, _, __) {
+                  final crowd = _tripCrowd(trip);
+                  return SelectedTripCard(
+                    trip: trip,
+                    progress: _progress?.state,
+                    crowd: crowd?.level,
+                    crowdOnBoard: crowd?.onBoard ?? false,
+                    onOpen: _openSelectedTrip,
+                    onCancel: widget.onCancelTrip ?? () {},
+                  );
+                },
               ),
             ),
     );
+  }
+
+  /// Crowd level for the Selected Route card: the jeep being ridden, else the
+  /// next jeep the plan found for the current leg. Null with no live data.
+  ({String level, bool onBoard})? _tripCrowd(SelectedTrip trip) {
+    if (_ridingVehicleId case final id?) {
+      if (_liveCrowd(id) case final level?) return (level: level, onBoard: true);
+    }
+    final legs = trip.option.legs;
+    final legIndex = (_progress?.state?.legIndex ?? 0).clamp(0, legs.length - 1);
+    final next = legs[legIndex].nextVehicleId;
+    if (next == null) return null;
+    final level = _liveCrowd(next);
+    return level == null ? null : (level: level, onBoard: false);
+  }
+
+  /// A jeep's crowd level from its live GPS, unless its signal is lost or the
+  /// driver marked it unavailable (an old reading would mislead).
+  String? _liveCrowd(String vehicleId) {
+    final latest = _tracks[vehicleId]?.latest;
+    if (latest == null || latest.isSignalLost || latest.isUnavailable) return null;
+    return latest.crowd;
   }
 
   void _fitToStops() {

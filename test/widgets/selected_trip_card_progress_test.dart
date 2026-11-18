@@ -40,4 +40,39 @@ void main() {
     await show(tester, at(TripPhase.arrived, remaining: 0));
     expect(find.text("You've arrived"), findsOneWidget);
   });
+
+  Future<void> showCrowd(WidgetTester tester, String? crowd, {bool onBoard = false}) =>
+      tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SelectedTripCard(
+            trip: trip,
+            crowd: crowd,
+            crowdOnBoard: onBoard,
+            onCancel: () {},
+            onOpen: () {},
+          ),
+        ),
+      ));
+
+  String crowdText(WidgetTester tester) =>
+      tester.widget<Text>(find.descendant(of: find.byKey(const Key('tripCrowdLevel')), matching: find.byType(Text)))
+          .textSpan!
+          .toPlainText();
+
+  testWidgets('no crowd line without a live jeep', (tester) async {
+    await showCrowd(tester, null);
+    expect(find.byKey(const Key('tripCrowdLevel')), findsNothing);
+    await showCrowd(tester, 'unknown');
+    expect(find.byKey(const Key('tripCrowdLevel')), findsNothing);
+  });
+
+  testWidgets('crowd level of the next jeep and of the jeep ridden', (tester) async {
+    final next = 'Next ${leg.routeCode ?? 'jeep'}';
+    await showCrowd(tester, 'low');
+    expect(crowdText(tester), '$next: Low · seats available');
+    await showCrowd(tester, 'medium');
+    expect(crowdText(tester), '$next: Medium · filling up');
+    await showCrowd(tester, 'high', onBoard: true);
+    expect(crowdText(tester), 'Your jeep: High · nearly full');
+  });
 }
