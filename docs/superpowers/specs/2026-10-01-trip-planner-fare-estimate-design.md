@@ -1,7 +1,6 @@
 # Trip Planner & Fare Estimate — Design
 
 **Date:** 2026-10-01
-**Branch:** Velez
 **Status:** Draft, pending review
 
 ## Goal

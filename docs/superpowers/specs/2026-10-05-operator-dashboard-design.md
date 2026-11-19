@@ -1,7 +1,6 @@
 # Operator Dashboard Redesign — Design
 
 **Date:** 2026-10-05
-**Branch:** Velez
 **Status:** Draft, pending review
 
 ## Goal
