@@ -35,13 +35,18 @@ const OperatorApp = (() => {
   }
 
   const PENDING_CLAIM_KEY = 'sc_pending_claim';
+  const PENDING_DEVICE_KEY = 'sc_pending_claim_device';
 
   // Remember claim from URL
   function rememberClaimFromUrl() {
     const params = new URLSearchParams(location.search);
     if (!params.has('claim')) return;
-    try { sessionStorage.setItem(PENDING_CLAIM_KEY, params.get('claim')); } catch {  }
+    try {
+      sessionStorage.setItem(PENDING_CLAIM_KEY, params.get('claim'));
+      sessionStorage.setItem(PENDING_DEVICE_KEY, params.get('device') || '');
+    } catch {  }
     params.delete('claim');
+    params.delete('device');
     const query = params.toString();
     history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}#/vehicles`);
   }
@@ -50,8 +55,10 @@ const OperatorApp = (() => {
   function takePendingClaim() {
     try {
       const code = sessionStorage.getItem(PENDING_CLAIM_KEY);
+      const device = sessionStorage.getItem(PENDING_DEVICE_KEY);
       sessionStorage.removeItem(PENDING_CLAIM_KEY);
-      return code;
+      sessionStorage.removeItem(PENDING_DEVICE_KEY);
+      return code ? { code, device } : null;
     } catch {
       return null;
     }
@@ -146,6 +153,10 @@ const OperatorApp = (() => {
     }
 
     window.addEventListener('session:expired', redirectToLogin);
+    IdleTimeout.start(async () => {
+      await AuthModule.logout();
+      redirectToLogin();
+    });
     renderSidebar();
     loadProfile();
     OperatorRouter.start(onRouteChange);
@@ -153,7 +164,7 @@ const OperatorApp = (() => {
     document.getElementById('op-subscription').addEventListener('click', OperatorSubscription.open);
     if (new URLSearchParams(location.search).has('paypal')) OperatorSubscription.open();
     const claim = takePendingClaim();
-    if (claim) TrackerSetup.claimFromLabel(claim);
+    if (claim) TrackerSetup.claimFromLabel(claim.code, claim.device);
   }
 
   return { start };

@@ -7,8 +7,14 @@ OperatorRouter.register('routes', {
   mount(el) {
     const esc = AdminUi.escapeHtml;
     let routes;
+    let statuses = {};
     let showForm = false;
     const busy = new Set();
+    const STATUS_LABELS = { active: 'Normal', congested: 'Congested', suspended: 'Suspended' };
+
+    // Fare rule text
+    const fareRuleText = (r) => `₱${r.base} for the first ${r.base_km} km, then ₱${Number(r.per_km).toFixed(2)} per km. `
+      + `Students, seniors and PWD get ${r.discount_pct}% off. Fares are fixed for every route.`;
 
     el.innerHTML = `
       <div class="op-page-head">
@@ -66,8 +72,8 @@ OperatorRouter.register('routes', {
               <input id="rf-name" maxlength="80" placeholder="e.g. Talamban – Pier 1" />
             </div>
             <div class="op-field">
-              <label for="rf-fare">Base Fare (₱)</label>
-              <input id="rf-fare" type="number" min="0.01" max="9999" step="0.01" placeholder="13" />
+              <label>Fare</label>
+              <p class="op-muted-note" id="rf-fare-rule">${esc(fareRuleText({ base: 17, base_km: 4, per_km: 2.4, discount_pct: 20 }))}</p>
             </div>
             <div class="op-field op-field--full">
               <label>Origin &amp; Destination</label>
@@ -101,11 +107,10 @@ OperatorRouter.register('routes', {
           originAt: where.origin?.lng != null ? [where.origin.lng, where.origin.lat] : null,
           destinationAt: where.destination?.lng != null ? [where.destination.lng, where.destination.lat] : null,
           path: where.path,
-          baseFare: Number(field('rf-fare').value),
         };
       };
       // Routes complete
-      const complete = (v) => v.code && v.name && v.origin && v.destination && v.baseFare > 0;
+      const complete = (v) => v.code && v.name && v.origin && v.destination;
       // Refresh routes
       const refresh = () => {
         errorEl.hidden = true;
@@ -154,6 +159,10 @@ OperatorRouter.register('routes', {
         }
       });
 
+      OperatorApi.fareRule().then((rule) => {
+        const line = form.querySelector('#rf-fare-rule');
+        if (line && rule) line.textContent = fareRuleText(rule);
+      }).catch(() => {});
       field('rf-code').focus();
     }
 
@@ -194,9 +203,41 @@ OperatorRouter.register('routes', {
               <div><span>Fare</span><strong>${OperatorUi.fare(r.base_fare)}</strong></div>
               <div><span>Vehicles</span><strong>${r.vehicle_count}</strong></div>
             </div>
+            ${r.owned ? statusControl(r) : ''}
+            ${r.owned && !r.has_return_line ? `<div class="op-muted-note" data-hint="no-return-line">Return trip uses the outbound line reversed; draw a return line if the jeep takes other streets.</div>` : ''}
             ${action}
           </div>
         </article>`;
+    }
+
+    // Route status control
+    function statusControl(r) {
+      const current = statuses[r.id] || 'active';
+      return `
+        <label class="op-field" style="margin:var(--space-xs) 0;">
+          <span>Route status</span>
+          <select data-action="status" data-id="${r.id}" ${busy.has(r.id) ? 'disabled' : ''}>
+            ${Object.entries(STATUS_LABELS).map(([value, label]) =>
+              `<option value="${value}" ${value === current ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+        </label>`;
+    }
+
+    // Change route status
+    async function changeStatus(route, status) {
+      busy.add(route.id);
+      try {
+        await OperatorApi.setRouteStatus(route.id, status);
+        statuses[route.id] = status;
+        AdminUi.toast(status === 'congested'
+          ? `${route.code} marked congested. It returns to normal by itself after an hour.`
+          : `${route.code} is now ${STATUS_LABELS[status].toLowerCase()}.`);
+      } catch (err) {
+        AdminUi.toast(err.message || 'Unable to update route status.', { error: true });
+      } finally {
+        busy.delete(route.id);
+        renderList();
+      }
     }
 
     // Render list
@@ -210,6 +251,10 @@ OperatorRouter.register('routes', {
     function load() {
       routes = undefined;
       renderStats();
+      OperatorApi.routeStatuses().then((s) => {
+        statuses = s || {};
+        if (Array.isArray(routes)) renderList();
+      }).catch(() => {});
       AdminUi.loadInto(listEl, OperatorApi.myRoutes, (list) => {
         routes = list;
         renderStats();
@@ -267,6 +312,13 @@ OperatorRouter.register('routes', {
         },
       });
     }
+
+    listEl.addEventListener('change', (e) => {
+      const select = e.target.closest('select[data-action="status"]');
+      if (!select || !Array.isArray(routes)) return;
+      const route = routes.find((r) => r.id === select.dataset.id);
+      if (route) changeStatus(route, select.value);
+    });
 
     listEl.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-action]');

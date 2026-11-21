@@ -6,7 +6,9 @@ import '../../constants/app_icons.dart';
 import '../../widgets/auth/auth_header_banner.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
+import 'package:dio/dio.dart';
 import '../../widgets/error_banner.dart';
+import '../../services/api_error.dart';
 
 /// Verify OTP screen
 class VerifyOtpScreen extends StatefulWidget {
@@ -58,7 +60,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _errorMessage = 'Incorrect or expired code. Try again.',
+          () => _errorMessage = e is DioException && e.response?.statusCode == 429
+              ? apiErrorMessage(e)
+              : 'Incorrect or expired code. Try again.',
         );
       }
     } finally {

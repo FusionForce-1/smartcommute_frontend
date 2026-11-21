@@ -95,6 +95,10 @@ const AdminApp = (() => {
     }
 
     window.addEventListener('session:expired', redirectToLogin);
+    IdleTimeout.start(async () => {
+      await AuthModule.logout();
+      redirectToLogin();
+    });
     document.getElementById('admin-email').textContent = Session.email;
     renderSidebar();
     loadAccount();

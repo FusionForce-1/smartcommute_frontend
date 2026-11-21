@@ -24,6 +24,7 @@ import '../../services/trip_eta.dart';
 import '../../services/trip_progress.dart';
 import '../../services/walking_route_service.dart';
 import '../../services/websocket_service.dart';
+import '../../widgets/commuter/crowd_chip.dart';
 import '../../widgets/commuter/commuter_action_tile.dart';
 import '../../widgets/commuter/live_map.dart';
 import '../../widgets/commuter/nearby_vehicle_card.dart';
@@ -209,6 +210,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     } else {
       track.push(update, now);
     }
+    if (update.isOffRoute && update.vehicleId == _selectedVehicleId) _clearSelectedVehicle();
 
     _frame.value++;
     _fleetVersion.value++;
@@ -247,7 +249,8 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     const distance = Distance(roundResult: false);
     final live = [
       for (final track in _tracks.values)
-        if (!track.latest.isSignalLost && !track.latest.isUnavailable && track.latest.location != null)
+        if (!track.latest.isSignalLost && !track.latest.isUnavailable && !track.latest.isOffRoute &&
+            track.latest.location != null)
           if (routeByVehicle[track.latest.vehicleId] case final route?)
             (
               route: route,
@@ -508,7 +511,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     final routeOf = {for (final v in widget.vehicles) v.id: v.routeId};
     return [
       for (final MapEntry(key: id, value: track) in _tracks.entries)
-        if (!track.latest.isSignalLost && !track.latest.isUnavailable)
+        if (!track.latest.isSignalLost && !track.latest.isUnavailable && !track.latest.isOffRoute)
           if (routeOf[id] case final routeId?)
             if (track.positionAt(now) ?? track.latest.location case final at?)
               (id: id, routeId: routeId, at: at, heading: track.headingAt(now) ?? track.latest.heading),
@@ -825,6 +828,7 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       onWalkTo: (toJeep) => setState(() => _walkingToJeep = toJeep),
       boardName: _boardName,
       jeepSpeedKmh: _tracks[_selectedVehicleId!]?.latest.speed,
+      crowd: _tracks[_selectedVehicleId!]?.latest.crowd,
       onHide: _clearSelectedVehicle,
     );
   }
@@ -1031,9 +1035,11 @@ class _BoardingCard extends StatelessWidget {
     required this.boardName,
     required this.jeepSpeedKmh,
     required this.onHide,
+    this.crowd,
   });
 
   final String routeCode;
+  final String? crowd;
   final BoardingPlan plan;
   final WalkingRoute walk;
   final WalkingRoute? jeepWalk;
@@ -1094,6 +1100,8 @@ class _BoardingCard extends StatelessWidget {
                         key: const Key('jeepDistance'),
                         style: const TextStyle(fontSize: 14, color: AppColors.brandTeal, fontWeight: FontWeight.w500),
                       ),
+                      if (CrowdChip.labelFor(crowd) != null)
+                        Padding(padding: const EdgeInsets.only(top: 4), child: CrowdChip(level: crowd)),
                     ],
                   ),
                 ),
@@ -1253,6 +1261,7 @@ class _NearbyList extends StatelessWidget {
             distanceM: v.metres,
             delayed: v.update.dutyStatus == 'delayed',
             selected: v.update.vehicleId == selectedId,
+            crowd: v.update.crowd,
             onTap: () => onSelected(v.update.vehicleId),
           ),
       ],

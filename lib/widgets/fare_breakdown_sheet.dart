@@ -48,6 +48,11 @@ class FareBreakdownSheet extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
+          if (option.totalFareDiscounted case final discounted?)
+            Text(
+              'Student, senior or PWD: ${formatFare(discounted)}',
+              style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+            ),
           Text(
             '${option.totalEtaMin} min · ${formatTransfers(option.transfers)}',
             style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
@@ -97,9 +102,15 @@ class _LegRow extends StatelessWidget {
           Text('${leg.etaMin} min'),
         ],
       ),
-      trailing: Text(
-        formatFare(leg.fare),
-        style: const TextStyle(fontWeight: FontWeight.w600),
+      trailing: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(formatFare(leg.fare), style: const TextStyle(fontWeight: FontWeight.w600)),
+          if (leg.fareDiscounted case final discounted?)
+            Text('${formatFare(discounted)} discounted',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        ],
       ),
     );
   }

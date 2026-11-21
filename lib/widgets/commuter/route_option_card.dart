@@ -61,6 +61,15 @@ class RouteOptionCard extends StatelessWidget {
                     _FareBadge(fare: option.totalFare),
                   ],
                 ),
+                if (option.totalFareDiscounted case final discounted?)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      'Student/Senior/PWD ${formatFareCompact(discounted)}',
+                      key: const Key('discountedFare'),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                  ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [

@@ -1,0 +1,21 @@
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' https://unpkg.com/leaflet@1.9.4/ https://unpkg.com/esp-web-tools@10.2.1/ https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/ https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/ https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/ https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://smart-commute-backend.onrender.com wss://smart-commute-backend.onrender.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://accounts.google.com/gsi/ https://unpkg.com; frame-src https://accounts.google.com/gsi/; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}

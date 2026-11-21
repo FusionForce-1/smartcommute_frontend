@@ -67,15 +67,12 @@ class RideMatcher {
 
   /// Speed kmh
   double? _speedKmh(double? reportedMps) {
+    if (reportedMps != null && reportedMps.isFinite && reportedMps > 0) return reportedMps * 3.6;
     if (_fixes.length >= 2) {
       final first = _fixes.first, last = _fixes.last;
       final seconds = last.time.difference(first.time).inMilliseconds / 1000;
       if (seconds >= 3) {
-        var metres = 0.0;
-        for (var i = 1; i < _fixes.length; i++) {
-          metres += _d.as(LengthUnit.Meter, _fixes[i - 1].at, _fixes[i].at);
-        }
-        return metres / seconds * 3.6;
+        return _d.as(LengthUnit.Meter, first.at, last.at) / seconds * 3.6;
       }
     }
     if (reportedMps != null && reportedMps >= 0) return reportedMps * 3.6;

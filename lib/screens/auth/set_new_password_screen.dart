@@ -5,7 +5,10 @@ import '../../constants/app_icons.dart';
 import '../../widgets/auth/auth_header_banner.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
+import 'package:dio/dio.dart';
 import '../../widgets/error_banner.dart';
+import '../../services/api_error.dart';
+import '../../utils/password_rule.dart';
 
 /// Set new password screen
 class SetNewPasswordScreen extends StatefulWidget {
@@ -57,8 +60,9 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _errorMessage =
-              'Incorrect or expired code. Go back and request a new one.',
+          () => _errorMessage = e is DioException && e.response?.statusCode == 422
+              ? apiErrorMessage(e)
+              : 'Incorrect or expired code. Go back and request a new one.',
         );
       }
     } finally {
@@ -124,9 +128,7 @@ class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
                         controller: _password,
                         pill: true,
                         obscureText: true,
-                        validator: (v) => (v == null || v.length < 8)
-                            ? 'Minimum 8 characters'
-                            : null,
+                        validator: passwordProblem,
                       ),
                       AuthTextField(
                         label: 'Repeat Password',

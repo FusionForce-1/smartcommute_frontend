@@ -299,7 +299,9 @@ const TrackerSetup = (() => {
           <button type="button" class="btn-sm btn-sm--teal" id="ts-print">Print label for this tracker</button>
         </div>
       </div>`;
-    m.querySelector('#ts-print').addEventListener('click', () => printLabel(info));
+    m.querySelector('#ts-print').addEventListener('click', () => {
+      printLabel(info).catch((err) => AdminUi.toast(err.message || 'Unable to print the label.', { error: true }));
+    });
     offerFirmwareUpdate(m, info);
   }
 
@@ -322,15 +324,43 @@ const TrackerSetup = (() => {
   }
 
   // Label QR link
-  function claimLink(code) {
-    return `${location.origin}${location.pathname}?claim=${encodeURIComponent(code.replace(/-/g, ''))}`;
+  function claimLink(code, deviceId) {
+    const device = deviceId ? `&device=${encodeURIComponent(deviceId)}` : '';
+    return `${location.origin}${location.pathname}?claim=${encodeURIComponent(code.replace(/-/g, ''))}${device}`;
+  }
+
+  const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+  const QR_LIB_SRI = 'sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU';
+
+  // Load QR library
+  function loadQrLib() {
+    if (window.QRCode) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = QR_LIB;
+      script.integrity = QR_LIB_SRI;
+      script.crossOrigin = 'anonymous';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('Could not load the QR code maker.'));
+      document.head.appendChild(script);
+    });
+  }
+
+  // QR image data
+  async function qrDataUrl(text) {
+    await loadQrLib();
+    const box = document.createElement('div');
+    new window.QRCode(box, { text, width: 220, height: 220, correctLevel: window.QRCode.CorrectLevel.M });
+    const canvas = box.querySelector('canvas');
+    return canvas ? canvas.toDataURL('image/png') : box.querySelector('img')?.src || '';
   }
 
   // Print tracker label
-  function printLabel(info) {
+  async function printLabel(info) {
     const win = window.open('', '_blank', 'width=480,height=640');
     if (!win) throw new Error('Allow pop-ups for this site to print the label.');
-    const link = claimLink(info.claim_code);
+    const link = claimLink(info.claim_code, info.device_id);
+    const qr = await qrDataUrl(link).catch(() => '');
     win.document.write(`<!doctype html>
 <html><head><meta charset="utf-8"><title>Tracker label ${esc(info.device_id)}</title>
 <style>
@@ -351,7 +381,7 @@ const TrackerSetup = (() => {
 <body>
   <div class="label">
     <div class="brand">SMART COMMUTE · GPS TRACKER</div>
-    <div id="qr"></div>
+    <div id="qr">${qr ? `<img src="${qr}" alt="QR code" />` : ''}</div>
     <div>
       <div class="small">Set-up code</div>
       <div class="code">${esc(info.claim_code)}</div>
@@ -364,17 +394,13 @@ const TrackerSetup = (() => {
     </ol>
   </div>
   <p class="tip">Printing on a label printer: choose 70 × 50 mm paper. On normal paper, cut along the border and tape it to the tracker.</p>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  <script>
-    new QRCode(document.getElementById('qr'), { text: ${JSON.stringify(link)}, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
-    setTimeout(() => window.print(), 400);
-  <\/script>
 </body></html>`);
     win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
   }
 
   // Claim-code setup screen
-  function openClaim(vehicle, onDone, code = '') {
+  function openClaim(vehicle, onDone, code = '', deviceId = '') {
     const m = AdminModal.open({
       title: `Claim code setup — ${vehicle.plate_number}`,
       body: `
@@ -402,7 +428,9 @@ const TrackerSetup = (() => {
             const code = modal.querySelector('#ts-code').value.trim();
             if (!code) throw new Error('Enter the claim code from the tracker.');
             const networks = readWifi(modal);
-            const claim = await OperatorApi.claimTracker({ claim_code: code, vehicle_id: vehicle.vehicle_id, networks });
+            const claim = await OperatorApi.claimTracker({
+              claim_code: code, vehicle_id: vehicle.vehicle_id, networks, device_id: deviceId,
+            });
             const progress = modal.querySelector('#ts-progress');
             progress.textContent = `Claimed tracker ${claim.device_id}. Waiting for it to pick up its settings…`;
             await waitForDelivery(claim.device_id, progress);
@@ -447,8 +475,9 @@ const TrackerSetup = (() => {
   window.addEventListener('beforeunload', () => { disconnect(); });
 
   // Claim from scanned label
-  async function claimFromLabel(rawCode) {
+  async function claimFromLabel(rawCode, rawDevice = '') {
     const code = String(rawCode).toUpperCase().replace(/[^0-9A-Z]/g, '');
+    const device = /^SC-[0-9A-F]{6,12}$/.test(String(rawDevice || '').toUpperCase()) ? String(rawDevice).toUpperCase() : '';
     const shown = code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
     const fleet = await OperatorApi.fleet().catch(() => []);
     if (!fleet.length) {
@@ -462,7 +491,7 @@ const TrackerSetup = (() => {
       return;
     }
     if (fleet.length === 1) {
-      openClaim(fleet[0], null, shown);
+      openClaim(fleet[0], null, shown, device);
       return;
     }
     const m = AdminModal.open({
@@ -481,7 +510,7 @@ const TrackerSetup = (() => {
           variant: 'primary',
           onClick: (modal) => {
             const id = modal.querySelector('#ts-vehicle').value;
-            openClaim(fleet.find((v) => v.vehicle_id === id), null, shown);
+            openClaim(fleet.find((v) => v.vehicle_id === id), null, shown, device);
           },
         },
       ],

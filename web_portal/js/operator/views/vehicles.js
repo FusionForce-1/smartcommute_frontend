@@ -87,7 +87,7 @@ OperatorRouter.register('vehicles', {
           <td class="data-table__name">${esc(v.plate_number)}</td>
           <td>${esc(labels[v.route_id] || 'Unknown route')}</td>
           <td>${driver ? esc(OperatorUi.driverName(driver)) : v.driver_id ? 'Assigned' : '<span style="color:var(--op-muted)">Unassigned</span>'}</td>
-          <td>${OperatorUi.vehicleStatusChip(v)}</td>
+          <td>${OperatorUi.vehicleStatusChip(v)} ${OperatorUi.flagChips(v)}</td>
           <td>${crowd}</td>
           <td>${esc(ping)}</td>
           <td>
@@ -260,9 +260,20 @@ OperatorRouter.register('vehicles', {
         size: 'sm',
         body: `
           <p class="modal-text">Issue a new device key for <strong>${esc(v.plate_number)}</strong>'s GPS tracker.</p>
-          <p class="modal-text">Any previous key stops working immediately and its tracker is disconnected.</p>`,
+          <p class="modal-text">Any previous key stops working immediately and its tracker is disconnected.</p>
+          <p class="modal-text">Replacing or reflashing the tracker? <strong>Remove tracker</strong> lets the new one set up by claim code.</p>`,
         actions: [
           { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+          {
+            label: 'Remove tracker',
+            variant: 'ghost',
+            onClick: async () => {
+              await OperatorApi.removeTracker(v.vehicle_id);
+              AdminModal.close();
+              AdminUi.toast(`${v.plate_number}'s tracker was removed. Set up GPS again to add one.`);
+              load();
+            },
+          },
           {
             label: 'Issue New Key',
             variant: 'primary',

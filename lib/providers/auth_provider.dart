@@ -37,7 +37,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tokens = await _apiService.login(email, password);
+      final tokens = await _apiService.login(email, password, rememberMe: rememberMe);
       _role = tokens.role;
       _isGuest = false;
       _status = AuthStatus.authenticated;
@@ -168,7 +168,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final tokens = await _apiService.refreshToken();
+      final tokens = await _apiService.restoreSession();
       _role = tokens.role;
       _isGuest = false;
       _status = AuthStatus.authenticated;

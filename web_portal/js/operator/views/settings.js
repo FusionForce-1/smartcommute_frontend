@@ -7,7 +7,6 @@ OperatorRouter.register('settings', {
   mount(el) {
     const esc = AdminUi.escapeHtml;
     const LANGUAGES = { 'en-PH': 'English (Philippines)' };
-    const MIN_PASSWORD_LENGTH = 6;
     let settings = null;
     let security = null;
     let saving = false;
@@ -136,9 +135,8 @@ OperatorRouter.register('settings', {
               const current = m.querySelector('#pw-current').value;
               const next = m.querySelector('#pw-new').value;
               if (!current || !next) throw new Error('Fill in your current and new password.');
-              if (next.length < MIN_PASSWORD_LENGTH) {
-                throw new Error(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-              }
+              const problem = PasswordRule.problem(next);
+              if (problem) throw new Error(`New password: ${problem}`);
               if (next !== m.querySelector('#pw-repeat').value) throw new Error('New passwords do not match.');
               await OperatorApi.changePassword(current, next);
               AdminModal.close();
@@ -214,16 +212,55 @@ OperatorRouter.register('settings', {
 
     // Confirm disable two factor
     function confirmDisableTwoFactor() {
-      AdminModal.confirm({
+      const withPassword = security.has_password;
+      AdminModal.open({
         title: 'Turn off two-factor authentication?',
-        message: 'You will sign in with just your password. Your account will be less protected if your password is ever leaked.',
-        confirmLabel: 'Turn Off',
-        onConfirm: async () => {
-          settings = await OperatorApi.updateSettings({ two_factor_enabled: false });
-          render();
-          AdminUi.toast('Two-factor authentication is off.');
-        },
+        size: 'sm',
+        body: `
+          <p class="modal-text">You will sign in with just your password. Your account will be less protected if your password is ever leaked.</p>
+          <p id="tf-off-help">${withPassword ? 'Enter your current password to confirm.'
+            : 'You sign in with Google, so we will email you a code to confirm.'}</p>
+          <div class="form-field">
+            <label for="tf-off-secret">${withPassword ? 'Current password' : '6-digit code'}</label>
+            <input id="tf-off-secret" type="${withPassword ? 'password' : 'text'}"
+              autocomplete="${withPassword ? 'current-password' : 'one-time-code'}" ${withPassword ? '' : 'inputmode="numeric" maxlength="6" disabled'} />
+          </div>
+          ${withPassword ? '' : '<button type="button" class="op-btn op-btn--outline" id="tf-off-send">Email me a code</button>'}`,
+        actions: [
+          { label: 'Cancel', variant: 'ghost', onClick: AdminModal.close },
+          {
+            label: 'Turn Off',
+            variant: 'decline',
+            onClick: async (m) => {
+              const value = m.querySelector('#tf-off-secret').value.trim();
+              if (!value) throw new Error(withPassword ? 'Enter your current password.' : 'Enter the code we emailed you.');
+              settings = await OperatorApi.updateSettings(withPassword
+                ? { two_factor_enabled: false, current_password: m.querySelector('#tf-off-secret').value }
+                : { two_factor_enabled: false, otp: value });
+              AdminModal.close();
+              render();
+              AdminUi.toast('Two-factor authentication is off.');
+            },
+          },
+        ],
       });
+      const sendBtn = document.getElementById('tf-off-send');
+      if (sendBtn) {
+        sendBtn.addEventListener('click', async () => {
+          sendBtn.disabled = true;
+          try {
+            const { email } = await OperatorApi.sendTwoFactorOffCode();
+            document.getElementById('tf-off-help').textContent = `Enter the code we sent to ${email}.`;
+            const input = document.getElementById('tf-off-secret');
+            input.disabled = false;
+            input.focus();
+          } catch (err) {
+            AdminUi.toast(err.message || 'Unable to send the code.', { error: true });
+          } finally {
+            sendBtn.disabled = false;
+          }
+        });
+      }
     }
 
 

@@ -40,6 +40,28 @@ class Sim {
 }
 
 void main() {
+  test('standing still with 4 m GPS noise on the line is not riding', () {
+    final progress = TripProgress(option(), const {});
+    var t = DateTime.utc(2026, 10, 21, 8);
+    TripProgressState? last;
+    for (var i = 0; i < 60; i++) {
+      t = t.add(const Duration(seconds: 1));
+      final north = (i.isEven ? 4 : -4) / 111320;
+      final east = (i % 3 - 1) * 4 / mPerDegLng;
+      last = progress.update(LatLng(lat + north, startLng + 0.002 + east), at: t);
+    }
+    expect(last!.phase, TripPhase.toBoard);
+    expect(last.speedKmh, lessThan(3));
+  });
+
+  test("the phone's own speed is preferred when it reports one", () {
+    final progress = TripProgress(option(), const {});
+    final t = DateTime.utc(2026, 10, 21, 8);
+    progress.update(const LatLng(lat, startLng), at: t);
+    final s = progress.update(const LatLng(lat, startLng), at: t.add(const Duration(seconds: 5)), reportedSpeedMps: 5);
+    expect(s.speedKmh, closeTo(18, 0.01));
+  });
+
   test('walking along the street is not riding', () {
     final sim = Sim(TripProgress(option(), const {}))..go(5, 60);
     expect(sim.last!.phase, TripPhase.toBoard);

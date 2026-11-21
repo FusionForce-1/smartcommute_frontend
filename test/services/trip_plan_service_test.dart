@@ -30,7 +30,7 @@ void main() {
       'coordinates': [123.89, 10.31],
     });
     expect((body['destination'] as Map)['coordinates'], [123.905, 10.33]);
-    expect(body['preferences'], {'minimize': 'transfers', 'max_transfers': 2});
+    expect(body['preferences'], {'minimize': 'transfers', 'max_transfers': 1});
     expect(result.options.single.totalFare, 28.0);
   });
 

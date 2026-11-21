@@ -33,7 +33,7 @@ const AuthPopup = (() => {
         AuthPopup.openVerifyOtp(email);
       } catch (err) {
         const banner = document.querySelector('#forgot-error .error-banner__text');
-        if (banner) banner.textContent = err.message || 'This email is not registered';
+        if (banner) banner.textContent = err.message || 'Unable to send a code right now. Try again later.';
         showError('forgot-error');
       }
     });
@@ -128,8 +128,9 @@ const AuthPopup = (() => {
       const password = document.getElementById('new-password').value;
       const repeatPassword = document.getElementById('new-password-repeat').value;
 
-      if (password.length < 6) {
-        showPasswordError('Password must be at least 6 characters.');
+      const problem = PasswordRule.problem(password);
+      if (problem) {
+        showPasswordError(problem);
         return;
       }
       if (password !== repeatPassword) {

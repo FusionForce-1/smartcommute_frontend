@@ -82,14 +82,19 @@ class FakeGpsSession extends GpsIngestionSession {
   final List<String> started = [];
   int stops = 0;
   bool _on = false;
+  String? _vid;
 
   @override
   bool get isActive => _on;
 
   @override
+  String? get vehicleId => _vid;
+
+  @override
   Future<void> start(String vehicleId) async {
     if (startError != null) throw startError!;
     started.add(vehicleId);
+    _vid = vehicleId;
     _on = true;
     notifyListeners();
   }

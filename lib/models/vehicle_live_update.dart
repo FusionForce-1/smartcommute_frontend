@@ -12,12 +12,15 @@ class VehicleLiveUpdate {
     this.heading,
     this.timestamp,
     this.crowd,
+    this.crowdPercent,
+    this.onShift,
     this.etaNextStop,
     this.nextStop,
     this.traffic,
     this.dutyStatus,
     this.source,
     this.shiftEnded = false,
+    this.offRoute,
   });
 
   final String vehicleId;
@@ -27,6 +30,9 @@ class VehicleLiveUpdate {
   final double? heading;
   final DateTime? timestamp;
   final String? crowd;
+  final int? crowdPercent;
+
+  final bool? onShift;
   final int? etaNextStop;
   final String? nextStop;
   final String? traffic;
@@ -36,7 +42,12 @@ class VehicleLiveUpdate {
 
   final bool shiftEnded;
 
+  /// Off route flag
+  final bool? offRoute;
+
   bool get isSignalLost => status == 'signal_lost';
+
+  bool get isOffRoute => offRoute == true;
 
   bool get isUnavailable => dutyStatus == 'unavailable';
 
@@ -55,12 +66,15 @@ class VehicleLiveUpdate {
       heading: (json['heading'] as num?)?.toDouble(),
       timestamp: parseServerTime(json['ts']),
       crowd: json['crowd'] as String?,
+      crowdPercent: (json['crowd_percent'] as num?)?.toInt(),
+      onShift: json['on_shift'] as bool?,
       etaNextStop: (json['eta_next_stop'] as num?)?.toInt(),
       nextStop: json['next_stop'] as String?,
       traffic: json['traffic'] as String?,
       dutyStatus: json['duty_status'] as String?,
       source: json['source'] as String?,
       shiftEnded: json['shift_ended'] == true,
+      offRoute: json['off_route'] as bool?,
     );
   }
 
@@ -75,9 +89,12 @@ class VehicleLiveUpdate {
         heading: heading,
         timestamp: timestamp,
         crowd: update.crowd ?? crowd,
-        etaNextStop: update.etaNextStop,
+        crowdPercent: update.crowdPercent ?? crowdPercent,
+        onShift: update.onShift ?? onShift,
+        etaNextStop: update.etaNextStop ?? etaNextStop,
         dutyStatus: update.dutyStatus ?? dutyStatus,
         source: source,
+        offRoute: update.offRoute ?? offRoute,
       );
     }
 

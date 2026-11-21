@@ -16,6 +16,8 @@ const OperatorApi = {
     ApiClient.post('/users/me/password', { current_password: currentPassword, new_password: newPassword }),
   // Start two factor request
   startTwoFactor: () => ApiClient.post('/users/me/two-factor/start'),
+  // Email turn-off code
+  sendTwoFactorOffCode: () => ApiClient.post('/users/me/two-factor/disable-code'),
   // Confirm two factor request
   confirmTwoFactor: (otp) => ApiClient.post('/users/me/two-factor/confirm', { otp }),
 
@@ -71,9 +73,11 @@ const OperatorApi = {
   deleteVehicle: (id) => ApiClient.delete(`/vehicles/${id}`),
   // Issue device key request
   issueDeviceKey: (id) => ApiClient.post(`/vehicles/${id}/device-key`),
+  // Remove tracker request
+  removeTracker: (id) => ApiClient.delete(`/vehicles/${id}/device-key`),
   // Claim tracker request
-  claimTracker: ({ claim_code, vehicle_id, networks }) =>
-    ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks }),
+  claimTracker: ({ claim_code, vehicle_id, networks, device_id }) =>
+    ApiClient.post('/devices/claim', { claim_code, vehicle_id, networks, ...(device_id ? { device_id } : {}) }),
   // Tracker setup status request
   trackerSetupStatus: (deviceId) => ApiClient.get(`/devices/${encodeURIComponent(deviceId)}`),
   // Tracker WiFi request
@@ -92,17 +96,22 @@ const OperatorApi = {
   // Route request
   route: (id) => ApiClient.get(`/routes/${id}`),
   // Create route request
-  createRoute: ({ code, name, origin, destination, baseFare, originAt, destinationAt, path }) =>
+  createRoute: ({ code, name, origin, destination, originAt, destinationAt, path }) =>
     ApiClient.post('/routes', {
       code,
       name,
       terminal_a: origin,
       terminal_b: destination,
-      fare_matrix: { base: baseFare },
       ...(originAt ? { terminal_a_location: { type: 'Point', coordinates: originAt } } : {}),
       ...(destinationAt ? { terminal_b_location: { type: 'Point', coordinates: destinationAt } } : {}),
       ...(path ? { geometry: { type: 'LineString', coordinates: path } } : {}),
     }),
+  // Fare rule request
+  fareRule: () => ApiClient.get('/routes/fare-rule'),
+  // Route statuses request
+  routeStatuses: () => ApiClient.get('/route-status'),
+  // Set route status request
+  setRouteStatus: (routeId, status) => ApiClient.patch('/route-status', { route_id: routeId, status }),
   // Set route active request
   setRouteActive: (id, isActive) => ApiClient.patch(`/routes/${id}/active`, { is_active: isActive }),
   // Route stops request

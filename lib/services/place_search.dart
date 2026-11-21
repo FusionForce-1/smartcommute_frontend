@@ -1,6 +1,7 @@
 // Place search
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:latlong2/latlong.dart';
 
@@ -135,3 +136,47 @@ class PlaceIndex {
 /// Format place distance
 String formatPlaceDistance(double metres) =>
     metres < 1000 ? '${metres.round()} m away' : '${(metres / 1000).toStringAsFixed(1)} km away';
+
+/// Server place search
+class ServerPlaceSearch {
+  /// Create server place search
+  ServerPlaceSearch(this._dio);
+
+  final Dio _dio;
+
+  /// Search Photon via server
+  Future<List<Place>> search(String query, {LatLng? near}) async {
+    final response = await _dio.get<List<dynamic>>('/places/search', queryParameters: {
+      'q': query,
+      if (near != null) 'near': '${near.latitude},${near.longitude}',
+    });
+    return [
+      for (final r in response.data ?? const [])
+        if (r is Map && r['location'] is Map && (r['location']['coordinates'] as List?)?.length == 2)
+          Place(
+            name: [r['name'], if ((r['area'] as String?)?.isNotEmpty == true) r['area']].join(', '),
+            location: LatLng(
+              ((r['location']['coordinates'] as List)[1] as num).toDouble(),
+              ((r['location']['coordinates'] as List)[0] as num).toDouble(),
+            ),
+            kind: (r['kind'] as String?)?.isNotEmpty == true ? r['kind'] as String : 'Place',
+          ),
+    ];
+  }
+}
+
+/// Drop online duplicates
+List<PlaceMatch> newOnlineMatches(List<PlaceMatch> local, List<PlaceMatch> online, {double closeM = 40}) {
+  const distance = Distance();
+  final names = {for (final l in local) foldPlaceText(l.place.name)};
+  final kept = <PlaceMatch>[];
+  for (final o in online) {
+    final folded = foldPlaceText(o.place.name);
+    final near = [...local, ...kept].any(
+        (l) => distance.as(LengthUnit.Meter, l.place.location, o.place.location) < closeM);
+    if (names.contains(folded) || near) continue;
+    names.add(folded);
+    kept.add(o);
+  }
+  return kept;
+}

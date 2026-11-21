@@ -35,6 +35,10 @@ class DriverService {
   Future<void> setRouteStatus(RouteStatus status) =>
       _dio.put('/drivers/me/shift/status', data: {'status': status.apiValue});
 
+  /// Report route traffic
+  Future<void> reportTraffic(String routeId, {required bool congested}) =>
+      _dio.patch('/route-status', data: {'route_id': routeId, 'status': congested ? 'congested' : 'active'});
+
   /// Send report
   Future<DriverReport> sendReport({
     required DriverReportCategory category,

@@ -82,6 +82,14 @@ class ProfileService {
     ];
   }
 
+  /// Send feedback
+  Future<void> sendFeedback({required String category, required String message, String? routeId}) =>
+      _dio.post('/feedback', data: {
+        'category': category,
+        'message': message,
+        if (routeId != null) 'route_id': routeId,
+      });
+
   /// Record trip
   Future<void> recordTrip({
     required List<String> routeIds,
@@ -134,8 +142,18 @@ class ProfileService {
       _dio.post('/users/me/two-factor/confirm', data: {'otp': otp});
 
   /// Turn off two factor
-  Future<void> turnOffTwoFactor() =>
-      _dio.patch('/users/me/settings', data: {'two_factor_enabled': false});
+  Future<void> turnOffTwoFactor({String? password, String? otp}) =>
+      _dio.patch('/users/me/settings', data: {
+        'two_factor_enabled': false,
+        if (password != null) 'current_password': password,
+        if (otp != null) 'otp': otp,
+      });
+
+  /// Email turn-off code
+  Future<String> sendTwoFactorOffCode() async {
+    final response = await _dio.post('/users/me/two-factor/disable-code');
+    return (response.data as Map<String, dynamic>)['email'] as String? ?? 'your email';
+  }
 
   /// Accept terms
   Future<SecurityInfo> acceptTerms() async {

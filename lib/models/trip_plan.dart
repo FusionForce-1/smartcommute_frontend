@@ -45,6 +45,7 @@ class RouteOption {
     required this.totalEtaMin,
     required this.totalFare,
     required this.transfers,
+    this.totalFareDiscounted,
     this.totalWalkM,
     this.walkFromAlightM,
     this.walkFromAlightMin,
@@ -56,6 +57,8 @@ class RouteOption {
   final int totalEtaMin;
   final double totalFare;
   final int transfers;
+
+  final double? totalFareDiscounted;
 
   final int? totalWalkM;
   final int? walkFromAlightM;
@@ -76,6 +79,7 @@ class RouteOption {
           .toList(),
       totalEtaMin: json['total_eta_min'] as int,
       totalFare: (json['total_fare'] as num).toDouble(),
+      totalFareDiscounted: (json['total_fare_discounted'] as num?)?.toDouble(),
       transfers: json['transfers'] as int,
       totalWalkM: json['total_walk_m'] as int?,
       walkFromAlightM: json['walk_from_alight_m'] as int?,
@@ -95,6 +99,7 @@ class RouteLeg {
     required this.alightStop,
     required this.etaMin,
     required this.fare,
+    this.fareDiscounted,
     this.routeCode,
     this.walkToBoardM,
     this.walkToBoardMin,
@@ -118,6 +123,8 @@ class RouteLeg {
   final StopModel alightStop;
   final int etaMin;
   final double fare;
+
+  final double? fareDiscounted;
 
   final String? routeCode;
   final int? walkToBoardM;
@@ -158,6 +165,7 @@ class RouteLeg {
       alightStop: StopModel.fromJson(json['alight_stop'] as Map<String, dynamic>),
       etaMin: json['eta_min'] as int,
       fare: (json['fare'] as num).toDouble(),
+      fareDiscounted: (json['fare_discounted'] as num?)?.toDouble(),
       routeCode: json['route_code'] as String?,
       walkToBoardM: json['walk_to_board_m'] as int?,
       walkToBoardMin: json['walk_to_board_min'] as int?,

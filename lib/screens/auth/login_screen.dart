@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../config/theme_config.dart';
 import '../../constants/app_icons.dart';
+import '../../services/api_error.dart';
 import '../../widgets/auth/smart_commute_logo.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/auth/google_signin_button.dart';
@@ -68,7 +69,11 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = 'Invalid email or password.');
+        // Show server message
+        final message = apiErrorMessage(e);
+        setState(() => _errorMessage = message == genericErrorMessage
+            ? 'Invalid email or password.'
+            : message);
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

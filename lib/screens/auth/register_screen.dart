@@ -9,6 +9,8 @@ import '../../widgets/auth/google_button_face.dart';
 import '../../widgets/auth/google_signin_button.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
+import '../../services/api_error.dart';
+import '../../utils/password_rule.dart';
 
 /// Register screen
 class RegisterScreen extends StatefulWidget {
@@ -85,7 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } catch (e) {
       if (mounted) {
         setState(
-          () => _errorMessage = 'Registration failed. Please try again.',
+          () => _errorMessage = apiErrorMessage(e) == genericErrorMessage
+              ? 'Registration failed. Please try again.'
+              : apiErrorMessage(e),
         );
       }
     } finally {
@@ -149,9 +153,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         hint: 'Password',
                         controller: _password,
                         obscureText: true,
-                        validator: (v) => (v == null || v.length < 8)
-                            ? 'Minimum 8 characters'
-                            : null,
+                        validator: passwordProblem,
                       ),
                       AuthTextField(
                         label: 'Repeat Password',

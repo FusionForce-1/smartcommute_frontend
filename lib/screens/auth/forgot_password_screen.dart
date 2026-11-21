@@ -6,6 +6,7 @@ import '../../widgets/auth/auth_header_banner.dart';
 import '../../widgets/auth/auth_text_field.dart';
 import '../../widgets/loading_overlay.dart';
 import '../../widgets/error_banner.dart';
+import '../../services/api_error.dart';
 
 /// Forgot password screen
 class ForgotPasswordScreen extends StatefulWidget {
@@ -50,7 +51,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       await widget.onSendOtp?.call(_email.text.trim());
     } catch (e) {
       if (mounted) {
-        setState(() => _errorMessage = 'This email is not registered.');
+        setState(() => _errorMessage = apiErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);

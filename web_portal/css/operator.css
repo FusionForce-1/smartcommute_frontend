@@ -233,6 +233,10 @@
   opacity: 0.6;
 }
 
+.op-puv--off-route .op-puv__img {
+  filter: drop-shadow(0 0 3px #F5A623) drop-shadow(0 0 2px #F5A623);
+}
+
 .op-big-number {
   font-size: 32px;
   font-weight: 700;

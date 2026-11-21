@@ -20,6 +20,7 @@ import '../../widgets/commuter/saved_route_tile.dart';
 import '../../widgets/commuter/settings_group.dart';
 import 'help_support_screen.dart';
 import 'privacy_security_screen.dart';
+import 'send_feedback_screen.dart';
 
 /// Profile tab
 class ProfileTab extends StatelessWidget {
@@ -125,6 +126,13 @@ class ProfileTab extends StatelessWidget {
                       label: 'Privacy & Security',
                       onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => PrivacySecurityScreen(service: profile.service),
+                      )),
+                    ),
+                    SettingsLinkRow(
+                      icon: Icons.feedback_outlined,
+                      label: 'Send feedback',
+                      onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => SendFeedbackScreen(service: profile.service, routes: routes),
                       )),
                     ),
                     ..._infoLinks(context),

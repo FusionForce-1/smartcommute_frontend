@@ -26,7 +26,7 @@ class TripPlanService {
         'destination': _point(destination),
         'preferences': {
           'minimize': preference.apiValue,
-          'max_transfers': 2,
+          'max_transfers': 1,
         },
       },
       options: Options(receiveTimeout: planTimeout),

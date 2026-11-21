@@ -13,6 +13,7 @@ import '../../widgets/driver/crowd_estimate_card.dart';
 import '../../widgets/driver/driver_map.dart';
 import '../../widgets/driver/my_route_info.dart';
 import '../../widgets/driver/route_status_card.dart';
+import '../../widgets/driver/traffic_report_card.dart';
 import '../../widgets/driver/shift_card.dart';
 import '../../widgets/map_follower.dart';
 
@@ -226,6 +227,11 @@ class _DriverMapTabState extends State<DriverMapTab> with TickerProviderStateMix
           RouteStatusCard(
             status: driver.routeStatus,
             onChanged: shift == null ? null : (status) => _report(() => driver.setRouteStatus(status)),
+          ),
+          gap,
+          TrafficReportCard(
+            reported: driver.trafficReported,
+            onReport: shift == null ? null : (congested) => _report(() => driver.reportTraffic(congested)),
           ),
           gap,
           CrowdEstimateCard(

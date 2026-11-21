@@ -1,93 +1,9 @@
 // Services auth module
 // Auth module
 const AuthModule = (() => {
-  const USE_MOCKS = false;
-  // Auth module delay
-  const delay = (ms = 450) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  const users = {
-    'operator@gmail.com': { password: 'password123', role: 'operator' },
-    'admin@gmail.com': { password: 'password123', role: 'admin' },
-    'testing@account.com': { password: 'password123', role: 'operator' },
-  };
-  const otps = {};
-
   // Auth module request
-  async function request(method, path, body) {
-    if (!USE_MOCKS) return ApiClient.request(method, path, body, { auth: false });
-    await delay();
-    return mockDispatch(method, path, body);
-  }
-
-  // Mock dispatch
-  function mockDispatch(method, path, body = {}) {
-    if (method === 'POST' && path === '/auth/login') {
-      const id = String(body.email || '').trim().toLowerCase();
-      const user = users[id];
-      if (!user || user.password !== body.password) {
-        const err = new Error('Invalid email or password.');
-        err.statusCode = 401;
-        throw err;
-      }
-      return { access_token: 'mock-access', role: user.role };
-    }
-
-    if (method === 'POST' && path === '/auth/register') {
-      const email = String(body.email || '').trim().toLowerCase();
-      if (!email) {
-        const err = new Error('Email is required.');
-        err.statusCode = 400;
-        throw err;
-      }
-      if (users[email] && body.auth_provider !== 'google') {
-        const err = new Error('Email is already registered.');
-        err.statusCode = 409;
-        throw err;
-      }
-      users[email] = { password: body.password || 'google-oauth', role: 'operator' };
-      return { id: `mock-${Object.keys(users).length}`, email, role: 'operator' };
-    }
-
-    if (method === 'POST' && path === '/auth/google') {
-      if (!body.id_token) {
-        const err = new Error('Google sign-in cancelled.');
-        err.statusCode = 401;
-        throw err;
-      }
-      return {
-        access_token: 'mock-google',
-        role: 'operator',
-        email: body.email || 'operator@gmail.com',
-        needs_profile: true,
-      };
-    }
-
-    if (method === 'POST' && path === '/auth/forgot-password') {
-      const email = String(body.email || '').trim().toLowerCase();
-      if (email === 'test@account.com' || !users[email]) {
-        const err = new Error('This email is not registered');
-        err.statusCode = 404;
-        throw err;
-      }
-      otps[email] = '123456';
-      return { status: 'accepted' };
-    }
-
-    if (method === 'POST' && path === '/auth/reset-password') {
-      const email = String(body.email || '').trim().toLowerCase();
-      const expected = otps[email] || '123456';
-      if (String(body.otp || '').trim() !== expected) {
-        const err = new Error('Incorrect or expired code. Try again.');
-        err.statusCode = 400;
-        throw err;
-      }
-      delete otps[email];
-      return { status: 'ok' };
-    }
-
-    const err = new Error(`No mock for ${method} ${path}`);
-    err.statusCode = 404;
-    throw err;
+  function request(method, path, body) {
+    return ApiClient.request(method, path, body, { auth: false });
   }
 
   // Create operator profile
@@ -113,8 +29,9 @@ const AuthModule = (() => {
 
     // Logout auth module
     logout: async () => {
+      const refreshToken = Session.refreshToken;
       try {
-        await ApiClient.post('/auth/logout');
+        await ApiClient.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : undefined);
       } catch {
       }
       Session.clear();
@@ -137,6 +54,7 @@ const AuthModule = (() => {
     // Login with Google
     loginWithGoogle: async (idToken, { role, email, rememberMe = false } = {}) => {
       const result = await request('POST', '/auth/google', { id_token: idToken, role });
+      if (result?.two_factor_required) return result;
       Session.save({ ...result, email }, rememberMe);
       return result;
     },

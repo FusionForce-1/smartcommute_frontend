@@ -125,6 +125,8 @@ class GpsIngestionSession extends ChangeNotifier {
 
   static const _sessionExpired = 'Session expired';
 
+  static const maxResendAge = Duration(seconds: 30);
+
   GpsSessionState _state = GpsSessionState.idle;
   String? _vehicleId;
   String? _error;
@@ -162,7 +164,10 @@ class GpsIngestionSession extends ChangeNotifier {
       ),
     ).listen(
       _onFix,
-      onError: (Object e) => _setError('Location stream error: $e'),
+      onError: (Object e) {
+        _keepaliveTimer?.cancel();
+        _setError('Location stream error: $e');
+      },
     );
 
     _keepaliveTimer = Timer.periodic(keepaliveInterval, (_) => _keepalive());
@@ -272,10 +277,17 @@ class GpsIngestionSession extends ChangeNotifier {
   /// Resend if quiet
   void _keepalive() {
     final last = _lastSentAt;
+    final fix = _lastFix;
+    if (fix == null || !isFresh(fix, DateTime.now())) return;
     if (last == null || DateTime.now().difference(last) >= keepaliveInterval) {
       _sendLastFix();
     }
   }
+
+  /// Fresh enough to resend
+  @visibleForTesting
+  static bool isFresh(Position fix, DateTime now) =>
+      now.toUtc().difference(fix.timestamp.toUtc()) <= maxResendAge;
 
   /// Send latest fix
   void _sendLastFix() {

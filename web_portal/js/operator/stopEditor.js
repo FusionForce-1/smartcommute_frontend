@@ -5,6 +5,7 @@ const StopEditor = (() => {
   const esc = (s) => AdminUi.escapeHtml(String(s ?? ''));
   const OFF_ROUTE_WARN_M = 100;
   const LANDMARK_NAME_M = 120;
+  const MIN_STOP_GAP_M = 15;
   const OSRM = 'https://router.project-osrm.org/route/v1/driving';
   const MAX_LINE_POINTS = 5000;
   const END_KEEP_M = 50;
@@ -233,6 +234,11 @@ const StopEditor = (() => {
 
     // Add stop
     function addStop(lat, lng, { id, name, landmark, shared = false } = {}) {
+      // Refuse near duplicate
+      if (!id && stops.some((s) => metresBetween(s, { lat, lng }) < MIN_STOP_GAP_M)) {
+        AdminUi.toast('A stop is already there.');
+        return null;
+      }
       const near = name ? null : nearestLandmark(lat, lng);
       const stop = {
         key: nextKey++, id, lat, lng,

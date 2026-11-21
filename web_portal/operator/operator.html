@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com/leaflet@1.9.4/ https://unpkg.com/esp-web-tools@10.2.1/ https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/ https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@1.9.4/ https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://unpkg.com/leaflet@1.9.4/ https://*.googleusercontent.com; font-src 'self'; connect-src 'self' https://smart-commute-backend.onrender.com wss://smart-commute-backend.onrender.com http://localhost:8000 ws://localhost:8000 https://nominatim.openstreetmap.org https://router.project-osrm.org https://accounts.google.com/gsi/ https://unpkg.com; frame-src https://accounts.google.com/gsi/; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <title>Smart Commute — Operator Portal</title>
   <link rel="icon" type="image/png" href="../assets/icons/smartcommute-favicon.png" />
   <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H" crossorigin="anonymous" />
   <link rel="stylesheet" href="../css/theme.css" />
   <link rel="stylesheet" href="../css/admin.css" />
   <link rel="stylesheet" href="../css/operator.css" />
@@ -38,7 +40,8 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>
 
   <!-- Config + shared services -->
   <script src="../js/config.js"></script>
@@ -47,7 +50,9 @@
   <script src="../js/services/session.js"></script>
   <script src="../js/services/apiClient.js"></script>
   <script src="../js/services/authModule.js"></script>
+  <script src="../js/services/idleTimeout.js"></script>
   <script src="../js/operatorProfileRules.js"></script>
+  <script src="../js/passwordRule.js"></script>
 
   <!-- Shared UI helpers (escapeHtml, loadInto, toast, modal) -->
   <script src="../js/admin/adminUi.js"></script>

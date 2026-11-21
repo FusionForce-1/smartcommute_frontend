@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:smartcommute_app/models/models.dart';
 import 'package:smartcommute_app/models/vehicle_live_update.dart';
 import 'package:smartcommute_app/services/websocket_service.dart';
 
@@ -76,20 +75,6 @@ void main() {
       final older = VehicleLiveUpdate.fromJson(frame('2026-09-30 04:00:05'));
       expect(newer.merge(older), isNull);
     });
-  });
-
-  test('GPSPositionModel parses GET /vehicles/{id}/position (GeoJSON)', () {
-    final p = GPSPositionModel.fromJson({
-      'vehicle_id': 'v1',
-      'location': {'type': 'Point', 'coordinates': [123.9, 10.3]},
-      'speed': 20,
-      'heading': null,
-      'timestamp': '2026-09-30T04:00:00',
-    });
-    expect(p.lat, 10.3);
-    expect(p.lng, 123.9);
-    expect(p.speed, 20.0);
-    expect(p.timestamp, DateTime.utc(2026, 9, 30, 4));
   });
 
   test('driver frame matches backend JSON contract', () {

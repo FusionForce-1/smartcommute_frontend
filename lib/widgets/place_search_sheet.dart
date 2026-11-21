@@ -1,11 +1,13 @@
 // Place search sheet
-import 'package:dio/dio.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../config/theme_config.dart';
 import '../constants/app_icons.dart';
 import '../models/transport_stop.dart';
+import '../services/dio_interceptor.dart';
 import '../services/place_search.dart';
 import 'stop_image.dart';
 
@@ -15,13 +17,14 @@ Future<Place?> showPlaceSearchSheet(
   required List<TransportStop> stops,
   required String title,
   LatLng? near,
+  ServerPlaceSearch? online,
 }) {
   return showModalBottomSheet<Place>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: Colors.white,
-    builder: (context) => _PlaceSearchSheet(stops: stops, title: title, near: near),
+    builder: (context) => PlaceSearchSheet(stops: stops, title: title, near: near, online: online),
   );
 }
 
@@ -41,26 +44,28 @@ IconData _kindIcon(String kind) {
 }
 
 /// Place search sheet
-class _PlaceSearchSheet extends StatefulWidget {
+class PlaceSearchSheet extends StatefulWidget {
   /// Create place search sheet
-  const _PlaceSearchSheet({required this.stops, required this.title, this.near});
+  const PlaceSearchSheet({super.key, required this.stops, required this.title, this.near, this.online});
 
   final List<TransportStop> stops;
   final String title;
   final LatLng? near;
 
+  final ServerPlaceSearch? online;
+
   /// Create widget state
   @override
-  State<_PlaceSearchSheet> createState() => _PlaceSearchSheetState();
+  State<PlaceSearchSheet> createState() => _PlaceSearchSheetState();
 }
 
 /// Place search sheet state
-class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
-  static final Dio _http = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 10),
-    headers: {'User-Agent': 'SmartCommute/1.0 (commuter app)', 'Accept-Language': 'en'},
-  ));
+class _PlaceSearchSheetState extends State<PlaceSearchSheet> {
+  static const debounce = Duration(milliseconds: 300);
+
+  late final ServerPlaceSearch _server = widget.online ?? ServerPlaceSearch(buildDioClient());
+  Timer? _debounce;
+  int _searchId = 0;
 
   late final PlaceIndex _stops = PlaceIndex([
     for (final s in widget.stops) Place(name: s.name, location: s.location, kind: 'Your stop'),
@@ -70,8 +75,24 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
 
   String _query = '';
   List<PlaceMatch> _online = const [];
-  String? _onlineNote;
   bool _searchingOnline = false;
+
+  /// Clean up resources
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  /// Query changed
+  void _onQuery(String value) {
+    setState(() {
+      _query = value;
+      _online = const [];
+    });
+    _debounce?.cancel();
+    if (value.trim().length >= 3) _debounce = Timer(debounce, _searchOnline);
+  }
 
   /// Initialize widget state
   @override
@@ -109,43 +130,22 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
   /// Search online
   Future<void> _searchOnline() async {
     final q = _query.trim();
-    if (q.length < 3 || _searchingOnline) return;
-    setState(() { _searchingOnline = true; _onlineNote = null; });
+    if (q.length < 3) return;
+    final id = ++_searchId;
+    setState(() => _searchingOnline = true);
     try {
       final center = widget.near;
-      final res = await _http.get<List<dynamic>>(
-        'https://nominatim.openstreetmap.org/search',
-        queryParameters: {
-          'q': q, 'format': 'jsonv2', 'countrycodes': 'ph', 'limit': 6,
-          if (center != null) 'viewbox': '${center.longitude - 0.3},${center.latitude + 0.3},'
-              '${center.longitude + 0.3},${center.latitude - 0.3}',
-          'bounded': 0,
-        },
-      );
       const distance = Distance();
-      final results = [
-        for (final r in res.data ?? const [])
-          if (r is Map && r['lat'] != null && r['lon'] != null)
-            () {
-              final at = LatLng(double.parse('${r['lat']}'), double.parse('${r['lon']}'));
-              final name = (r['name'] as String?)?.trim().isNotEmpty == true
-                  ? r['name'] as String
-                  : '${r['display_name']}'.split(',').take(2).join(',').trim();
-              return (
-                place: Place(name: name, location: at, kind: 'Online result'),
-                metres: center == null ? 0.0 : distance.as(LengthUnit.Meter, center, at),
-              );
-            }(),
-      ];
-      if (!mounted) return;
-      setState(() {
-        _online = results;
-        _onlineNote = results.isEmpty ? 'Nothing found online for "$q". Try a nearby landmark.' : null;
-      });
+      final places = await _server.search(q, near: center);
+      if (!mounted || id != _searchId) return;
+      setState(() => _online = [
+            for (final p in places)
+              (place: p, metres: center == null ? 0.0 : distance.as(LengthUnit.Meter, center, p.location)),
+          ]);
     } catch (_) {
-      if (mounted) setState(() => _onlineNote = 'Online search is unavailable right now. Check your connection.');
+      if (mounted && id == _searchId) setState(() => _online = const []);
     } finally {
-      if (mounted) setState(() => _searchingOnline = false);
+      if (mounted && id == _searchId) setState(() => _searchingOnline = false);
     }
   }
 
@@ -175,7 +175,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
   Widget build(BuildContext context) {
     final typed = _query.trim();
     final local = _localMatches();
-    final online = _online.where((o) => !local.any((l) => foldPlaceText(l.place.name) == foldPlaceText(o.place.name)));
+    final online = newOnlineMatches(local, _online);
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -197,7 +197,7 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
                   hintText: 'Stop, mall, school, church, barangay…',
                   prefixIcon: Icon(AppIcons.search),
                 ),
-                onChanged: (value) => setState(() { _query = value; _online = const []; _onlineNote = null; }),
+                onChanged: _onQuery,
                 onSubmitted: (_) => _searchOnline(),
               ),
             ),
@@ -216,24 +216,15 @@ class _PlaceSearchSheetState extends State<_PlaceSearchSheet> {
                       children: [
                         for (final m in local) _tile(m),
                         for (final m in online) _tile(m),
-                        if (local.isEmpty && online.isEmpty && _onlineNote == null && !_searchingOnline)
+                        if (_searchingOnline)
+                          const ListTile(
+                            leading: SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2)),
+                            title: Text('Searching more places…'),
+                          ),
+                        if (local.isEmpty && online.isEmpty && !_searchingOnline)
                           Padding(
                             padding: const EdgeInsets.all(AppSpacing.md),
                             child: Text('No place named "$typed" nearby.', style: const TextStyle(color: AppColors.textSecondary)),
-                          ),
-                        if (_onlineNote != null)
-                          Padding(
-                            padding: const EdgeInsets.all(AppSpacing.md),
-                            child: Text(_onlineNote!, style: const TextStyle(color: AppColors.textSecondary)),
-                          ),
-                        if (typed.length >= 3)
-                          ListTile(
-                            leading: _searchingOnline
-                                ? const SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.travel_explore),
-                            title: Text(_searchingOnline ? 'Searching online…' : 'Search online for "$typed"'),
-                            subtitle: const Text('If the place isn\'t listed above'),
-                            onTap: _searchingOnline ? null : _searchOnline,
                           ),
                       ],
                     ),

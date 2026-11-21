@@ -106,6 +106,19 @@ const OperatorUi = (() => {
     other: 'Other',
   };
 
+  const FLAG_TEXT = {
+    driver_away: 'Driver away from PUV',
+    off_route: 'Off route (more than 150 m from its route)',
+  };
+
+  // Away and off-route chips
+  function flagChips(vehicle) {
+    return [
+      vehicle.driver_away ? chip(FLAG_TEXT.driver_away, 'amber') : '',
+      vehicle.off_route ? chip('Off route', 'amber') : '',
+    ].join('');
+  }
+
   // Vehicle status chip
   function vehicleStatusChip(vehicle) {
     if (vehicle.suspended) return chip('Suspended', 'red');
@@ -168,6 +181,8 @@ const OperatorUi = (() => {
     ROUTE_STATUS,
     FEEDBACK_CATEGORY,
     vehicleStatusChip,
+    FLAG_TEXT,
+    flagChips,
     routeLabels,
     driverName,
     whenVerified,

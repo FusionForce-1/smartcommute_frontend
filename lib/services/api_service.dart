@@ -18,6 +18,8 @@ class TwoFactorRequired implements Exception {
   String toString() => 'Two-factor code required for $maskedEmail';
 }
 
+const String rememberMeKey = 'remember_me';
+
 /// API service
 class ApiService {
   final Dio _dio;
@@ -29,17 +31,25 @@ class ApiService {
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
 
+  bool _rememberMe = false;
+
   /// Login data
-  Future<TokenResponse> login(String email, String password) async {
+  Future<TokenResponse> login(String email, String password, {bool rememberMe = false}) async {
+    _rememberMe = rememberMe;
     final response = await _dio.post('/auth/login', data: {
       'email': email.trim(),
       'password': password,
     });
+    return _tokensOrChallenge(response, email.trim());
+  }
+
+  /// Tokens or 2FA challenge
+  Future<TokenResponse> _tokensOrChallenge(Response response, String email) async {
     final data = response.data as Map<String, dynamic>;
     if (response.statusCode == 202 && data['two_factor_required'] == true) {
       throw TwoFactorRequired(
-        email: email.trim(),
-        maskedEmail: data['email'] as String? ?? email.trim(),
+        email: data['login_email'] as String? ?? email,
+        maskedEmail: data['email'] as String? ?? email,
       );
     }
     final tokens = TokenResponse.fromJson(data);
@@ -60,13 +70,12 @@ class ApiService {
 
   /// Login with Google
   Future<TokenResponse> loginWithGoogle(String idToken, {bool acceptedTerms = false}) async {
+    _rememberMe = true;
     final response = await _dio.post('/auth/google', data: {
       'id_token': idToken,
       if (acceptedTerms) 'accepted_terms': true,
     });
-    final tokens = TokenResponse.fromJson(response.data);
-    await _storeTokens(tokens);
-    return tokens;
+    return _tokensOrChallenge(response, '');
   }
 
   /// Register data
@@ -78,6 +87,16 @@ class ApiService {
   /// Continue as guest
   Future<void> continueAsGuest() async {
     await _secureStorage.deleteAll();
+  }
+
+  /// Restore saved session
+  Future<TokenResponse> restoreSession() async {
+    if (await _secureStorage.read(key: rememberMeKey) != '1') {
+      await _secureStorage.deleteAll();
+      throw Exception('Not remembered: sign in again');
+    }
+    _rememberMe = true;
+    return refreshToken();
   }
 
   /// Refresh token
@@ -97,7 +116,8 @@ class ApiService {
   /// Logout data
   Future<void> logout() async {
     try {
-      await _dio.post('/auth/logout');
+      final refresh = await _secureStorage.read(key: 'refresh_token');
+      await _dio.post('/auth/logout', data: {if (refresh != null) 'refresh_token': refresh});
     } finally {
       await _secureStorage.deleteAll();
     }
@@ -107,6 +127,7 @@ class ApiService {
   Future<void> _storeTokens(TokenResponse tokens) async {
     await _secureStorage.write(key: 'access_token', value: tokens.accessToken);
     await _secureStorage.write(key: 'refresh_token', value: tokens.refreshToken);
+    await _secureStorage.write(key: rememberMeKey, value: _rememberMe ? '1' : '0');
   }
 
   /// Send password reset OTP
@@ -125,114 +146,5 @@ class ApiService {
       'otp': otp,
       'new_password': newPassword,
     });
-  }
-
-
-  /// Get routes
-  Future<List<RouteModel>> getRoutes() async {
-    final response = await _dio.get('/routes');
-    return (response.data as List)
-        .map((json) => RouteModel.fromJson(json))
-        .toList();
-  }
-
-  /// Get route by ID
-  Future<RouteModel> getRouteById(String id) async {
-    final response = await _dio.get('/routes/$id');
-    return RouteModel.fromJson(response.data);
-  }
-
-  /// Get stops
-  Future<List<StopModel>> getStops({double? lat, double? lng, double? radiusMeters}) async {
-    final response = await _dio.get('/stops', queryParameters: {
-      if (lat != null && lng != null) 'near': '$lat,$lng',
-      if (radiusMeters != null) 'radius': radiusMeters,
-    });
-    return (response.data as List)
-        .map((json) => StopModel.fromJson(json))
-        .toList();
-  }
-
-  /// Get vehicles
-  Future<List<VehicleModel>> getVehicles({String? routeId}) async {
-    final response = await _dio.get('/vehicles', queryParameters: {
-      if (routeId != null) 'route_id': routeId,
-    });
-    return (response.data as List)
-        .map((json) => VehicleModel.fromJson(json))
-        .toList();
-  }
-
-  /// Get vehicle position
-  Future<GPSPositionModel> getVehiclePosition(String id) async {
-    final response = await _dio.get('/vehicles/$id/position');
-    return GPSPositionModel.fromJson(response.data);
-  }
-
-
-  /// Plan trip
-  Future<TripPlanResponse> planTrip(TripPlanRequest request) async {
-    final response = await _dio.post('/trip-plan', data: request.toJson());
-    return TripPlanResponse.fromJson(response.data);
-  }
-
-  /// Submit feedback
-  Future<FeedbackResponse> submitFeedback(FeedbackCreate feedback) async {
-    final response = await _dio.post('/feedback', data: feedback.toJson());
-    return FeedbackResponse.fromJson(response.data);
-  }
-
-
-  /// Get announcements
-  Future<List<Announcement>> getAnnouncements() async {
-    final response = await _dio.get('/announcements');
-    return (response.data as List)
-        .map((json) => Announcement.fromJson(json))
-        .toList();
-  }
-
-
-  /// Update route status
-  Future<void> updateRouteStatus(RouteStatusUpdate update) async {
-    await _dio.patch('/route-status', data: update.toJson());
-  }
-
-  /// Get fleet
-  Future<List<VehicleModel>> getFleet({String? operatorId}) async {
-    final response = await _dio.get('/fleet', queryParameters: {
-      if (operatorId != null) 'operator_id': operatorId,
-    });
-    return (response.data as List)
-        .map((json) => VehicleModel.fromJson(json))
-        .toList();
-  }
-
-
-  /// Get users
-  Future<List<UserModel>> getUsers({String? role}) async {
-    final response = await _dio.get('/users', queryParameters: {
-      if (role != null) 'role': role,
-    });
-    return (response.data as List)
-        .map((json) => UserModel.fromJson(json))
-        .toList();
-  }
-
-  /// Update user
-  Future<UserModel> updateUser(String id, UserUpdate update) async {
-    final response = await _dio.patch('/users/$id', data: update.toJson());
-    return UserModel.fromJson(response.data);
-  }
-
-  /// Verify operator
-  Future<void> verifyOperator(String id) async {
-    await _dio.post('/users/$id/verify');
-  }
-
-  /// Get reports
-  Future<Map<String, dynamic>> getReports(String type) async {
-    final endpoint = type == 'fleet' ? '/reports/fleet' : '/reports/system';
-    final response = await _dio.get(endpoint);
-    return response.data as Map<String, dynamic>;
   }
 }

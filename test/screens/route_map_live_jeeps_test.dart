@@ -137,4 +137,19 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('0000'), findsNothing);
   });
+
+  testWidgets('an off-route jeep hides and comes back when it is on route again', (tester) async {
+    final socket = await open(tester);
+    socket.send({...fix('jeep1', 123.8850), 'off_route': false});
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0000'), findsOneWidget);
+
+    socket.send({...fix('jeep1', 123.8852), 'ts': '2026-10-20 10:31:31.304234', 'off_route': true});
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0000'), findsNothing);
+
+    socket.send({...fix('jeep1', 123.8854), 'ts': '2026-10-20 10:31:32.304234', 'off_route': false});
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('0000'), findsOneWidget);
+  });
 }

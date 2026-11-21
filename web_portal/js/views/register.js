@@ -98,6 +98,12 @@ Router.register('register', {
             role: 'operator',
             email: GoogleAuth.emailFrom(idToken),
           });
+          if (result.two_factor_required) {
+            AuthPopup.openSignInCode({
+              email: result.login_email || GoogleAuth.emailFrom(idToken), sentTo: result.email, rememberMe: false,
+            });
+            return;
+          }
           if (result.role !== 'operator') {
             Session.clear();
             throw new Error(`This Google account is already registered as ${result.role}. Use a different account.`);
@@ -124,7 +130,8 @@ function validateRegistration({ name, email, password, repeatPassword, profile }
   if (profile.company_name.length < 2) return 'Company name must be at least 2 characters.';
   const franchiseProblem = OperatorProfileRules.franchiseProblem(profile.franchise_number);
   if (franchiseProblem) return franchiseProblem;
-  if (password.length < 6) return 'Password must be at least 6 characters.';
+  const passwordProblem = PasswordRule.problem(password);
+  if (passwordProblem) return passwordProblem;
   if (password !== repeatPassword) return 'Passwords do not match.';
   return '';
 }

@@ -25,6 +25,18 @@ class Sim {
 }
 
 void main() {
+  test('standing next to a jeep with 4 m GPS noise is not riding it', () {
+    final m = RideMatcher();
+    var t = DateTime.utc(2026, 10, 23, 8);
+    String? last;
+    for (var i = 0; i < 40; i++) {
+      t = t.add(const Duration(seconds: 1));
+      final wobble = (i.isEven ? 4 : -4) / mPerDegLng;
+      last = m.update(LatLng(lat, 123.880 + wobble), t, {'jeep1': LatLng(lat, 123.880 + 5 / mPerDegLng - wobble)});
+    }
+    expect(last, isNull);
+  });
+
   test('waiting next to a parked jeep is not riding it', () {
     final sim = Sim()..go(30, meKmh: 0);
     expect(sim.last, isNull);

@@ -10,8 +10,25 @@ const DriverActivity = (() => {
     delayed: { label: 'Delayed', tone: 'amber' },
     unavailable: { label: 'Unavailable', tone: '' },
   };
-  const EVENT_TONE = { shift_started: 'green', status_changed: 'amber', crowd_reported: 'blue', shift_ended: '' };
-  const EVENT_LABEL = { shift_started: 'Shift', status_changed: 'Status', crowd_reported: 'Crowd', shift_ended: 'Shift end' };
+  const EVENT_TONE = {
+    shift_started: 'green', status_changed: 'amber', crowd_reported: 'blue', shift_ended: '', driver_away: 'amber', off_route: 'amber',
+  };
+  const EVENT_LABEL = {
+    shift_started: 'Shift', status_changed: 'Status', crowd_reported: 'Crowd', shift_ended: 'Shift end',
+    driver_away: 'Away', off_route: 'Off route',
+  };
+  const SPAN_KINDS = new Set(['driver_away', 'off_route']);
+
+  // Clock time
+  function clock(value) {
+    const t = OperatorUi.parseDate(value);
+    return t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  }
+
+  // Event text
+  function eventText(e) {
+    return SPAN_KINDS.has(e.kind) ? `${e.text} ${clock(e.at)}–${e.until ? clock(e.until) : 'now'}` : e.text;
+  }
 
   let session = 0;
 
@@ -47,7 +64,7 @@ const DriverActivity = (() => {
               ${OperatorUi.chip(EVENT_LABEL[e.kind] || e.kind, EVENT_TONE[e.kind] || '')}
               <span>${esc(OperatorUi.timeAgo(e.at))}</span>
             </div>
-            ${esc(e.text)}
+            ${esc(eventText(e))}
           </div>`).join('')}
       </div>`;
   }
@@ -112,7 +129,7 @@ const DriverActivity = (() => {
       } else {
         marker.setLatLng(latLng);
       }
-      marker.bindTooltip(loc.plate_number, { permanent: true, direction: 'top', offset: [0, -10] });
+      marker.bindTooltip(esc(loc.plate_number), { permanent: true, direction: 'top', offset: [0, -10] });
       if (focus) map.setView(latLng, FOCUS_ZOOM);
       else if (!map.getBounds().contains(latLng)) map.panTo(latLng);
     }

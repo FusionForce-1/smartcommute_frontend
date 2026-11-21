@@ -65,7 +65,8 @@ OperatorRouter.register('reports', {
       statsEl.innerHTML = OperatorUi.stats([
         ['Total Vehicles', report?.total_vehicles],
         ['Active Vehicles', report?.active_vehicles, 'green'],
-        ['Fleet Uptime', pct(report?.uptime_percent), 'blue'],
+        // Active share of fleet
+        ['Active now %', pct(report?.uptime_percent), 'blue'],
         ['GPS Coverage (1 hr)', pct(report?.gps_coverage_percent), 'amber'],
       ]);
     }
@@ -75,7 +76,7 @@ OperatorRouter.register('reports', {
       renderStats(null);
       OperatorApi.fleetReport().then(renderStats).catch(() => {
         statsEl.innerHTML = OperatorUi.stats([
-          ['Total Vehicles', '—'], ['Active Vehicles', '—'], ['Fleet Uptime', '—'], ['GPS Coverage (1 hr)', '—'],
+          ['Total Vehicles', '—'], ['Active Vehicles', '—'], ['Active now %', '—'], ['GPS Coverage (1 hr)', '—'],
         ]);
       });
     }

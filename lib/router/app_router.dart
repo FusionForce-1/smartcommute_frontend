@@ -38,11 +38,24 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
+  bool _restoring = true;
+
   /// Initialize widget state
   @override
   void initState() {
     super.initState();
     _setUpGoogleSignIn();
+    _restoreSession();
+  }
+
+  /// Restore remembered session
+  Future<void> _restoreSession() async {
+    await _authProvider.checkSession();
+    if (!mounted) return;
+    setState(() => _restoring = false);
+    if (_authProvider.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToDashboard(_authProvider.role));
+    }
   }
 
   /// Set up Google sign in
@@ -61,7 +74,14 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
   void _listenForNextGoogleSignIn() {
     GoogleAuthService.instance.signInAndGetIdToken().then((idToken) async {
       if (idToken == null) return;
-      await _authProvider.loginWithGoogle(idToken);
+      try {
+        await _authProvider.loginWithGoogle(idToken);
+      } on TwoFactorRequired catch (challenge) {
+        await _navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => TwoFactorLoginHost(challenge: challenge)),
+        );
+        return;
+      }
       _navigateToDashboard(_authProvider.role);
     }).catchError((Object e) {
       debugPrint('Google sign-in failed: $e');
@@ -86,6 +106,7 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
             '${detail != null ? ': $detail' : '.'}';
       }
       if (status == 403) return detail?.toString() ?? 'Account is not allowed.';
+      if ((status == 409 || status == 429) && detail != null) return detail.toString();
       return 'Google sign-in failed (HTTP $status).';
     }
     if (e is GoogleSignInException) {
@@ -136,7 +157,9 @@ class _SmartCommuteAuthAppState extends State<SmartCommuteAuthApp> {
         title: 'Smart Commute',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        home: const LoginScreenHost(),
+        home: _restoring
+            ? const Scaffold(body: Center(child: CircularProgressIndicator()))
+            : const LoginScreenHost(),
       ),
     );
   }

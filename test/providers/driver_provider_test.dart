@@ -97,6 +97,33 @@ void main() {
     expect(driver.gpsError, DriverProvider.noTrackerMessage);
   });
 
+  test('a shift moved to another jeep restarts the phone GPS for that jeep', () async {
+    final gps = FakeGpsSession();
+    final backend = backendWith(shift: shiftJson(), vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'XYZ 9')]);
+    final driver = buildProvider(backend, gps: gps);
+    await driver.load();
+    expect(gps.started, ['v1']);
+
+    backend.routes['GET /drivers/me'] = dashboardJson(
+        shift: shiftJson(vehicleId: 'v2'), vehicles: [vehicleJson(), vehicleJson(id: 'v2', plate: 'XYZ 9')]);
+    await driver.refresh();
+    expect(gps.stops, 1);
+    expect(gps.started, ['v1', 'v2']);
+  });
+
+  test('a tracker added later clears the no-tracker message and starts the backup', () async {
+    final gps = FakeGpsSession();
+    final backend = backendWith(shift: shiftJson(), vehicles: [vehicleJson(hasTracker: false)]);
+    final driver = buildProvider(backend, gps: gps);
+    await driver.load();
+    expect(driver.gpsError, DriverProvider.noTrackerMessage);
+
+    backend.routes['GET /drivers/me'] = dashboardJson(shift: shiftJson(), vehicles: [vehicleJson()]);
+    await driver.refresh();
+    expect(driver.gpsError, isNull);
+    expect(gps.started, ['v1']);
+  });
+
   test('the distance driven comes from the server, refreshed with the dashboard', () async {
     final backend = backendWith(shift: shiftJson(distanceKm: 4.2));
     final driver = buildProvider(backend);

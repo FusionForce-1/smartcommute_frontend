@@ -94,10 +94,17 @@ Router.register('login', {
       onCredential: async (idToken) => {
         hideError('login-error');
         try {
+          const rememberMe = document.getElementById('login-remember').checked;
           const result = await AuthModule.loginWithGoogle(idToken, {
             email: GoogleAuth.emailFrom(idToken),
-            rememberMe: document.getElementById('login-remember').checked,
+            rememberMe,
           });
+          if (result.two_factor_required) {
+            AuthPopup.openSignInCode({
+              email: result.login_email || GoogleAuth.emailFrom(idToken), sentTo: result.email, rememberMe,
+            });
+            return;
+          }
           await PortalRedirect.afterLogin(result.role);
         } catch (err) {
           GoogleAuth.forgetAccount();

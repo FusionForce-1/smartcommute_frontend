@@ -267,7 +267,7 @@ void main() {
     await tester.enterText(find.byType(TextField), 'sm city cebu');
     await tester.pumpAndSettle();
     expect(find.text('SM City Cebu'), findsOneWidget);
-    expect(find.textContaining('Search online for'), findsOneWidget);
+    expect(find.textContaining('Search online for'), findsNothing, reason: 'server search runs by itself and fails quietly');
   });
 
   testWidgets('offers Fastest and Few Transfers, with no Cheapest or departure time', (tester) async {

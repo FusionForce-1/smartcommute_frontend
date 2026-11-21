@@ -18,6 +18,7 @@ import '../../models/vehicles.dart';
 import '../../services/boarding_planner.dart';
 import '../../services/websocket_service.dart';
 import '../../widgets/commuter/commuter_page_header.dart';
+import '../../widgets/commuter/crowd_chip.dart';
 import '../../widgets/commuter/trip_route_layers.dart';
 import '../../widgets/commuter/vehicle_marker.dart';
 import '../../widgets/map_follower.dart';
@@ -160,6 +161,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     } else {
       track.push(update, now);
     }
+    if (update.isOffRoute && update.vehicleId == _selectedId) _selectedId = null;
     _frame.value++;
     if (!_ticker.isActive) _ticker.start();
     setState(() {});
@@ -171,7 +173,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> with TickerProviderStat
     final list = <RouteJeep>[];
     for (final entry in _tracks.entries) {
       final vehicle = _fleet[entry.key];
-      if (vehicle == null) continue;
+      if (vehicle == null || entry.value.latest.isOffRoute) continue;
       final legIndex = _option.legs.indexWhere((l) => l.routeId == vehicle.routeId);
       if (legIndex < 0) continue;
       final leg = _option.legs[legIndex];
@@ -386,7 +388,7 @@ class _LiveJeepsPanel extends StatelessWidget {
       );
     } else {
       body = SizedBox(
-        height: 74,
+        height: jeeps.any((j) => CrowdChip.labelFor(j.track.latest.crowd) != null) ? 106 : 74,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           itemCount: jeeps.length,
@@ -433,6 +435,10 @@ class _LiveJeepsPanel extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      if (CrowdChip.labelFor(j.track.latest.crowd) != null) ...[
+                        const SizedBox(height: 4),
+                        CrowdChip(level: j.track.latest.crowd),
+                      ],
                     ],
                   ),
                 ),

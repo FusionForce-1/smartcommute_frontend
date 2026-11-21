@@ -243,6 +243,8 @@ class DriverProvider extends ChangeNotifier {
       _gpsError = noTrackerMessage;
       return;
     }
+    if (_gpsError == noTrackerMessage) _gpsError = null;
+    if (gps.isActive && gps.vehicleId != shift.vehicleId) await gps.stop();
     if (gps.isActive || _gpsError != null) return;
     try {
       await gps.start(shift.vehicleId);
@@ -297,6 +299,24 @@ class DriverProvider extends ChangeNotifier {
     } catch (e) {
       _routeStatus = before;
       notifyListeners();
+      return apiErrorMessage(e);
+    }
+  }
+
+  bool? _trafficReported;
+
+  bool? get trafficReported => onShift ? _trafficReported : null;
+
+  /// Report route traffic
+  Future<String?> reportTraffic(bool congested) async {
+    final routeId = vehicle?.routeId;
+    if (!onShift || routeId == null || routeId.isEmpty) return noShiftMessage;
+    try {
+      await _service.reportTraffic(routeId, congested: congested);
+      _trafficReported = congested;
+      notifyListeners();
+      return null;
+    } catch (e) {
       return apiErrorMessage(e);
     }
   }

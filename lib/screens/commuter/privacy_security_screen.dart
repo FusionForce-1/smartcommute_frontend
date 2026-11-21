@@ -7,6 +7,7 @@ import '../../constants/support.dart';
 import '../../models/security_info.dart';
 import '../../services/api_error.dart';
 import '../../services/profile_service.dart';
+import '../../utils/password_rule.dart';
 import '../../widgets/auth/consent_checkbox.dart';
 import '../../widgets/commuter/settings_group.dart';
 
@@ -90,24 +91,13 @@ class _PrivacySecurityScreenState extends State<PrivacySecurityScreen> {
       }
       return;
     }
-    final sure = await showDialog<bool>(
+    final off = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Turn off two-factor sign-in?'),
-        content: const Text('Signing in will only need your password.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Turn off'),
-          ),
-        ],
-      ),
+      builder: (_) => TwoFactorOffDialog(service: widget.service, hasPassword: info.hasPassword),
     );
-    if (sure != true) return;
-    if (await _run(widget.service.turnOffTwoFactor) && mounted) {
+    if (off == true && mounted) {
       setState(() => _info = info.copyWith(twoFactorEnabled: false));
+      _toast('Two-factor sign-in is off.');
     }
   }
 
@@ -324,8 +314,8 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     String? problem;
     if (_current.text.isEmpty || _next.text.isEmpty) {
       problem = 'Fill in your current and new password.';
-    } else if (_next.text.length < 6) {
-      problem = 'New password must be at least 6 characters.';
+    } else if (passwordProblem(_next.text) != null) {
+      problem = 'New password: ${passwordProblem(_next.text)}.';
     } else if (_next.text != _repeat.text) {
       problem = 'New passwords do not match.';
     }
@@ -467,6 +457,121 @@ class _TwoFactorCodeDialogState extends State<_TwoFactorCodeDialog> {
           child: const Text('Cancel'),
         ),
         TextButton(onPressed: _saving ? null : _confirm, child: const Text('Turn on')),
+      ],
+    );
+  }
+}
+
+/// Two factor off dialog
+class TwoFactorOffDialog extends StatefulWidget {
+  /// Two-factor off dialog
+  const TwoFactorOffDialog({super.key, required this.service, required this.hasPassword});
+
+  final ProfileService service;
+  final bool hasPassword;
+
+  /// Create widget state
+  @override
+  State<TwoFactorOffDialog> createState() => _TwoFactorOffDialogState();
+}
+
+/// Two factor off state
+class _TwoFactorOffDialogState extends State<TwoFactorOffDialog> {
+  final _secret = TextEditingController();
+  String? _sentTo;
+  String? _error;
+  bool _saving = false;
+
+  /// Clean up resources
+  @override
+  void dispose() {
+    _secret.dispose();
+    super.dispose();
+  }
+
+  /// Email the code
+  Future<void> _sendCode() async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final to = await widget.service.sendTwoFactorOffCode();
+      if (mounted) setState(() => _sentTo = to);
+    } catch (e) {
+      if (mounted) setState(() => _error = apiErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Turn it off
+  Future<void> _turnOff() async {
+    final value = _secret.text.trim();
+    if (value.isEmpty) {
+      setState(() => _error = widget.hasPassword ? 'Enter your current password.' : 'Enter the 6-digit code.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.service.turnOffTwoFactor(
+        password: widget.hasPassword ? _secret.text : null,
+        otp: widget.hasPassword ? null : value,
+      );
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = apiErrorMessage(e);
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  /// Build the widget
+  @override
+  Widget build(BuildContext context) {
+    final needsCode = !widget.hasPassword && _sentTo == null;
+    return AlertDialog(
+      title: const Text('Turn off two-factor sign-in?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(widget.hasPassword
+              ? 'Enter your current password to confirm.'
+              : _sentTo == null
+                  ? 'You sign in with Google, so we will email you a code to confirm.'
+                  : 'Enter the code we sent to $_sentTo.'),
+          if (!needsCode)
+            TextField(
+              key: const Key('two-factor-off-input'),
+              controller: _secret,
+              obscureText: widget.hasPassword,
+              keyboardType: widget.hasPassword ? TextInputType.visiblePassword : TextInputType.number,
+              decoration: InputDecoration(labelText: widget.hasPassword ? 'Current password' : '6-digit code'),
+            ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(_error!, style: const TextStyle(color: AppColors.error, fontSize: 13)),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : (needsCode ? _sendCode : _turnOff),
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: Text(needsCode ? 'Email me a code' : 'Turn off'),
+        ),
       ],
     );
   }

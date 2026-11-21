@@ -188,6 +188,7 @@ class LiveMap extends StatelessWidget {
                 markers: [
                   for (final track in tracks.values)
                     if (onlyVehicles == null || onlyVehicles!.contains(track.latest.vehicleId))
+                      if (!track.latest.isOffRoute || track.latest.vehicleId == ridingVehicleId)
                       if (track.positionAt(now) case final point?)
                         track.latest.vehicleId == ridingVehicleId
                             ? Marker(

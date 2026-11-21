@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../config/theme_config.dart';
 import '../../services/boarding_planner.dart' show formatKm;
+import 'crowd_chip.dart';
 import 'route_code_chip.dart';
 
 /// Nearby vehicle card
@@ -18,6 +19,7 @@ class NearbyVehicleCard extends StatelessWidget {
     this.distanceM,
     this.delayed = false,
     this.selected = false,
+    this.crowd,
     this.onTap,
   });
 
@@ -34,6 +36,8 @@ class NearbyVehicleCard extends StatelessWidget {
   final bool delayed;
 
   final bool selected;
+
+  final String? crowd;
   final VoidCallback? onTap;
 
   /// Format distance
@@ -106,6 +110,10 @@ class NearbyVehicleCard extends StatelessWidget {
                           formatDistance(distance),
                           style: const TextStyle(fontSize: 13, color: AppColors.navInactive),
                         ),
+                      ],
+                      if (CrowdChip.labelFor(crowd) != null) ...[
+                        const SizedBox(height: 4),
+                        CrowdChip(level: crowd),
                       ],
                     ],
                   ),

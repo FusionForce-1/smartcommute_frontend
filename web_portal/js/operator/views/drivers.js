@@ -451,9 +451,8 @@ OperatorRouter.register('drivers', {
               const changes = {};
               if (email && email !== d.email) changes.email = email;
               if (password) {
-                if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-                  throw new Error('Password must be at least 8 characters, with a letter and a number.');
-                }
+                const problem = PasswordRule.problem(password);
+                if (problem) throw new Error(problem);
                 changes.password = password;
               }
               if (!Object.keys(changes).length) throw new Error('Change the email or enter a new password.');

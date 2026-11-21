@@ -11,6 +11,7 @@ OperatorRouter.register('fleet', {
     const ALERT_RECENT_MS = 24 * 60 * 60 * 1000;
     const GPS_LIVE_MS = 60 * 1000;
     const MARKER_COLORS = { active: '#27AE60', maintenance: '#F5A623', inactive: '#7D868E', signal_lost: '#D72F33' };
+    const OFF_ROUTE_COLOR = '#F5A623';
     const esc = AdminUi.escapeHtml;
 
     let fleet = [];
@@ -72,11 +73,12 @@ OperatorRouter.register('fleet', {
     };
 
     // Marker icon
-    function markerIcon(status) {
-      const color = MARKER_COLORS[status] || MARKER_COLORS.inactive;
+    function markerIcon(status, offShift = false, offRoute = false) {
+      const color = offRoute && status === 'active' ? OFF_ROUTE_COLOR : MARKER_COLORS[status] || MARKER_COLORS.inactive;
+      const muted = offShift || status === 'signal_lost' || status === 'inactive';
       return L.divIcon({
         className: '',
-        html: `<div class="op-puv${status === 'signal_lost' || status === 'inactive' ? ' op-puv--muted' : ''}">
+        html: `<div class="op-puv${muted ? ' op-puv--muted' : ''}${offRoute ? ' op-puv--off-route' : ''}">
           <img class="op-puv__img" src="../assets/icons/puv.svg" alt="" draggable="false" />
           <span class="op-puv__dot" style="background:${color}"></span></div>`,
         iconSize: [36, 36],
@@ -111,9 +113,14 @@ OperatorRouter.register('fleet', {
         : '';
       const route = routes.find((r) => r.id === v.route_id);
       const hidden = route && !route.is_active
-        ? '<br><span style="color:var(--op-amber);">Route inactive: commuters can\'t see this PUV.</span>' : '';
+        ? '<br><span style="color:var(--op-amber);">Route inactive: commuters can\'t see this PUV.</span>'
+        : v.on_shift === false ? '<br><span style="color:var(--op-muted);">No driver on shift: tracker only.</span>' : '';
+      const flags = OperatorUi.flagChips(v);
+      const offRoute = v.off_route
+        ? `<br><span style="color:var(--op-amber);">${esc(OperatorUi.FLAG_TEXT.off_route)}</span>` : '';
       return `<strong>${esc(v.plate_number)}</strong><br>${esc(routeLabel(v.route_id))}<br>
-        Status: ${esc(v.suspended ? 'suspended' : STATUS_LABEL[markerStatus(v)])}<br>Last GPS: ${esc(ping)}${esc(from)}${hidden}
+        Status: ${esc(v.suspended ? 'suspended' : STATUS_LABEL[markerStatus(v)])}<br>Last GPS: ${esc(ping)}${esc(from)}${hidden}${offRoute}
+        ${flags ? `<div class="op-list__meta" style="margin-top:4px;">${flags}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:6px;">${activity}
           <button type="button" class="btn-sm" data-playback="${esc(v.vehicle_id)}">Playback</button></div>`;
     }
@@ -158,19 +165,20 @@ OperatorRouter.register('fleet', {
         seen.add(v.vehicle_id);
         const latLng = [pos.lat, pos.lng];
         const status = markerStatus(v);
+        const look = `${status}${v.on_shift === false ? ':off' : ''}${v.off_route ? ':away' : ''}`;
         let marker = markers.get(v.vehicle_id);
         if (!marker) {
-          marker = L.marker(latLng, { icon: markerIcon(status) }).addTo(vehicleLayer);
+          marker = L.marker(latLng, { icon: markerIcon(status, v.on_shift === false, v.off_route) }).addTo(vehicleLayer);
           marker.bindPopup(popupHtml(v));
-          marker._opStatus = status;
+          marker._opStatus = look;
           marker._opAnchor = latLng;
           markers.set(v.vehicle_id, marker);
         } else {
           marker.setLatLng(latLng);
           faceTravel(marker, latLng);
-          if (marker._opStatus !== status) {
-            marker.setIcon(markerIcon(status));
-            marker._opStatus = status;
+          if (marker._opStatus !== look) {
+            marker.setIcon(markerIcon(status, v.on_shift === false, v.off_route));
+            marker._opStatus = look;
             applyHeading(marker);
           }
           const html = popupHtml(v);
@@ -210,6 +218,8 @@ OperatorRouter.register('fleet', {
         ['Inactive', count((v) => v.status === 'inactive'), ''],
         ['GPS off', count((v) => !v.suspended && markerStatus(v) === 'signal_lost'), 'red'],
         ['Suspended', count((v) => v.suspended), 'red'],
+        [OperatorUi.FLAG_TEXT.driver_away, count((v) => v.driver_away), 'amber'],
+        ['Off route', count((v) => v.off_route), 'amber'],
       ].filter(([, n]) => n > 0);
 
       vehiclesEl.innerHTML = `
@@ -371,6 +381,8 @@ OperatorRouter.register('fleet', {
         if (typeof msg.lat === 'number' && typeof msg.lng === 'number') {
           vehicle.last_position = { lat: msg.lat, lng: msg.lng, timestamp: msg.ts || new Date().toISOString() };
         }
+        if (typeof msg.on_shift === 'boolean') vehicle.on_shift = msg.on_shift;
+        if (typeof msg.off_route === 'boolean') vehicle.off_route = msg.off_route;
         if (msg.status === 'signal_lost') vehicle.status = 'signal_lost';
         else if (msg.status === 'en_route' && vehicle.status === 'signal_lost') vehicle.status = 'active';
         drawVehicles();
